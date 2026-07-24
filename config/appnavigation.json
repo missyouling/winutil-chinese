@@ -1,83 +1,83 @@
 {
-    "WPFInstall": {
-        "Content": "Install/Upgrade Applications",
-        "Category": "____Actions",
-        "Type": "Button",
-        "Order": "1",
-        "Description": "Install or upgrade the selected applications"
-    },
-    "WPFUninstall": {
-        "Content": "Uninstall Applications",
-        "Category": "____Actions",
-        "Type": "Button",
-        "Order": "2",
-        "Description": "Uninstall the selected applications"
-    },
-    "WPFInstallUpgrade": {
-        "Content": "Upgrade all Applications",
-        "Category": "____Actions",
-        "Type": "Button",
-        "Order": "3",
-        "Description": "Upgrade all applications to the latest version"
-    },
-    "WingetRadioButton": {
-        "Content": "WinGet",
-        "Category": "__Package Manager",
-        "Type": "RadioButton",
-        "GroupName": "PackageManagerGroup",
-        "Checked": true,
-        "Order": "1",
-        "Description": "Use WinGet for package management"
-    },
-    "ChocoRadioButton": {
-        "Content": "Chocolatey",
-        "Category": "__Package Manager",
-        "Type": "RadioButton",
-        "GroupName": "PackageManagerGroup",
-        "Checked": false,
-        "Order": "2",
-        "Description": "Use Chocolatey for package management"
-    },
-    "WPFCollapseAllCategories": {
-        "Content": "Collapse All Categories",
-        "Category": "__Selection",
-        "Type": "Button",
-        "Order": "1",
-        "Description": "Collapse all application categories"
-    },
-    "WPFExpandAllCategories": {
-        "Content": "Expand All Categories",
-        "Category": "__Selection",
-        "Type": "Button",
-        "Order": "2",
-        "Description": "Expand all application categories"
-    },
-    "WPFClearInstallSelection": {
-        "Content": "Clear Selection",
-        "Category": "__Selection",
-        "Type": "Button",
-        "Order": "3",
-        "Description": "Clear the selection of applications"
-    },
-    "WPFGetInstalled": {
-        "Content": "Show Installed Apps",
-        "Category": "__Selection",
-        "Type": "Button",
-        "Order": "4",
-        "Description": "Show installed applications"
-    },
-    "WPFselectedAppsButton": {
-        "Content": "Selected Apps: 0",
-        "Category": "__Selection",
-        "Type": "Button",
-        "Order": "5",
-        "Description": "Show the selected applications"
-    },
-    "WPFInstallFOSSInfo": {
-        "Content": "Free and Open Source Software",
-        "Category": "__Selection",
-        "Type": "Note",
-        "Order": "0",
-        "Description": "Information about the #FOSS label on application entries"
-    }
+  "WPFInstall": {
+    "Content": "安装/升级应用",
+    "Category": "操作",
+    "Type": "Button",
+    "Order": "1",
+    "Description": "安装或升级所选应用"
+  },
+  "WPFUninstall": {
+    "Content": "卸载应用",
+    "Category": "操作",
+    "Type": "Button",
+    "Order": "2",
+    "Description": "卸载所选应用"
+  },
+  "WPFInstallUpgrade": {
+    "Content": "升级所有应用",
+    "Category": "操作",
+    "Type": "Button",
+    "Order": "3",
+    "Description": "将所有应用升级到最新版本"
+  },
+  "WingetRadioButton": {
+    "Content": "WinGet 包管理器",
+    "Category": "包管理器",
+    "Type": "RadioButton",
+    "GroupName": "PackageManagerGroup",
+    "Checked": true,
+    "Order": "1",
+    "Description": "使用 WinGet 进行包管理"
+  },
+  "ChocoRadioButton": {
+    "Content": "Chocolatey 包管理器",
+    "Category": "包管理器",
+    "Type": "RadioButton",
+    "GroupName": "PackageManagerGroup",
+    "Checked": false,
+    "Order": "2",
+    "Description": "使用 Chocolatey 进行包管理"
+  },
+  "WPFCollapseAllCategories": {
+    "Content": "折叠所有分类",
+    "Category": "选择",
+    "Type": "Button",
+    "Order": "1",
+    "Description": "折叠所有应用分类"
+  },
+  "WPFExpandAllCategories": {
+    "Content": "展开所有分类",
+    "Category": "选择",
+    "Type": "Button",
+    "Order": "2",
+    "Description": "展开所有应用分类"
+  },
+  "WPFClearInstallSelection": {
+    "Content": "清除选择",
+    "Category": "选择",
+    "Type": "Button",
+    "Order": "3",
+    "Description": "清除应用选择"
+  },
+  "WPFGetInstalled": {
+    "Content": "显示已安装应用",
+    "Category": "选择",
+    "Type": "Button",
+    "Order": "4",
+    "Description": "显示已安装的应用"
+  },
+  "WPFselectedAppsButton": {
+    "Content": "已选应用：0",
+    "Category": "选择",
+    "Type": "Button",
+    "Order": "5",
+    "Description": "显示已选的应用"
+  },
+  "WPFInstallFOSSInfo": {
+    "Content": "免费开源软件",
+    "Category": "选择",
+    "Type": "Note",
+    "Order": "0",
+    "Description": "关于应用条目上 #FOSS 标签的信息"
+  }
 }

@@ -74,19 +74,19 @@ try {
     $sync["Form"] = [Windows.Markup.XamlReader]::Load( $reader )
     $readerOperationSuccessful = $true
 } catch [System.Management.Automation.MethodInvocationException] {
-    Write-Host "We ran into a problem with the XAML code.  Check the syntax for this control..." -ForegroundColor Red
+    Write-Host "XAML 代码出现问题。请检查此控件的语法..." -ForegroundColor Red
     Write-Host $error[0].Exception.Message -ForegroundColor Red
 
     If ($error[0].Exception.Message -like "*button*") {
         write-Host "Ensure your &lt;button in the `$inputXML does NOT have a Click=ButtonClick property.  PS can't handle this`n`n`n`n" -ForegroundColor Red
     }
 } catch {
-    Write-Host "Unable to load Windows.Markup.XamlReader. Double-check syntax and ensure .net is installed." -ForegroundColor Red
+    Write-Host "无法加载 Windows.Markup.XamlReader。请检查语法并确保已安装 .NET。" -ForegroundColor Red
 }
 
 if (-NOT ($readerOperationSuccessful)) {
-    Write-Host "Failed to parse xaml content using Windows.Markup.XamlReader's Load Method." -ForegroundColor Red
-    Write-Host "Quitting WinUtil..." -ForegroundColor Red
+    Write-Host "使用 Windows.Markup.XamlReader 的 Load 方法解析 XAML 内容失败。" -ForegroundColor Red
+    Write-Host "正在退出 WinUtil..." -ForegroundColor Red
     Close-WinUtilRunspacePool
     [System.GC]::Collect()
     exit 1
@@ -300,7 +300,7 @@ $sync["Form"].Add_ContentRendered({
         $sync.WPFGetInstalled.IsEnabled = $false
 
         # Show offline indicator
-        Write-Host "Offline mode detected - Install tab disabled." -ForegroundColor Yellow
+        Write-Host "检测到离线模式 - 安装选项卡已禁用。" -ForegroundColor Yellow
 
         # Optionally switch to a different tab if install tab was going to be default
         Invoke-WPFTab "WPFTab2BT"  # Switch to Tweaks tab instead

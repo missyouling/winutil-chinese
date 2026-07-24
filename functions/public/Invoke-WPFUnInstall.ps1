@@ -105,7 +105,7 @@ function Invoke-WPFUnInstall {
             }
         } catch {
             Write-Host "==========================================="
-            Write-Host "Error: $_"
+            Write-Host "错误: $_"
             Write-Host "==========================================="
             Write-WinUtilLog -Level "ERROR" -Component "Uninstall" -Message "Uninstall workflow failed: $($_.Exception.Message)"
             if ($hasUI) {

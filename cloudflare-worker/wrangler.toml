@@ -1,0 +1,13 @@
+name = "winutil-zh"
+main = "src/worker.js"
+compatibility_date = "2024-12-01"
+
+# 路由配置（替换为你的域名）
+routes = [
+  { pattern = "mozuiapp.com/win", custom_domain = true },
+]
+
+# 如果需要 KV 存储（大文件场景）
+# [[kv_namespaces]]
+# binding = "WINUTIL_KV"
+# id = "你的KV命名空间ID"

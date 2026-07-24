@@ -21,7 +21,7 @@ function Invoke-WPFUpdatesdisable {
 
     Write-WinUtilLog -Component "Updates" -Message "Disabling Windows Update settings."
 
-    Write-Host "Configuring registry settings..." -ForegroundColor Yellow
+    Write-Host "正在配置注册表设置..." -ForegroundColor Yellow
     Write-WinUtilLog -Component "Updates" -Message "Configuring Windows Update registry policy values for disable mode."
     New-Item -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU" -Force
 
@@ -32,17 +32,17 @@ function Invoke-WPFUpdatesdisable {
     Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\DeliveryOptimization\Config" -Name "DODownloadMode" -Type DWord -Value 0
 
     foreach ($serviceName in @("BITS", "wuauserv", "UsoSvc")) {
-        Write-Host "Stopping and disabling $serviceName service."
+        Write-Host "正在停止并禁用 $serviceName 服务。"
         Write-WinUtilLog -Component "Updates" -Message "Stopping and disabling $serviceName service."
         Stop-Service -Name $serviceName -Force -ErrorAction SilentlyContinue
         Set-Service -Name $serviceName -StartupType Disabled
     }
 
     Remove-Item -Path "C:\Windows\SoftwareDistribution\*" -Recurse -Force -ErrorAction SilentlyContinue
-    Write-Host "Cleared SoftwareDistribution folder."
+    Write-Host "已清除 SoftwareDistribution 文件夹。"
     Write-WinUtilLog -Component "Updates" -Message "Cleared SoftwareDistribution folder."
 
-    Write-Host "Disabling update related scheduled tasks..." -ForegroundColor Yellow
+    Write-Host "正在禁用更新相关的计划任务..." -ForegroundColor Yellow
     Write-WinUtilLog -Component "Updates" -Message "Disabling update related scheduled tasks."
 
     $Tasks =
@@ -61,6 +61,6 @@ function Invoke-WPFUpdatesdisable {
     Write-Host "--- Windows Update Is Disabled ---" -ForegroundColor Green
     Write-Host "=================================" -ForegroundColor Green
 
-    Write-Host "Note: You must restart your system in order for all changes to take effect." -ForegroundColor Yellow
+    Write-Host "注意：您必须重新启动系统才能使所有更改生效。" -ForegroundColor Yellow
     Write-WinUtilLog -Component "Updates" -Message "Windows Update disable workflow completed. Restart required."
 }

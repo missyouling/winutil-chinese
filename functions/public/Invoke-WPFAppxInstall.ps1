@@ -35,7 +35,7 @@ function Invoke-WPFAppxInstall {
                 if ($hasUI) {
                     Set-WinUtilTweaksProgressIndicator -Visible $true -Label "Installing $($app.Content) ($position/$totalPackages)" -Percent $startPercent
                 }
-                Write-Host "Installing $($app.Content)"
+                Write-Host "正在安装 $($app.Content)"
                 Install-WinUtilAPPX -Name $app.PackageId -StoreId $app.StoreId
 
                 $completedPercent = [int](($position / $totalPackages) * 100)
@@ -46,7 +46,7 @@ function Invoke-WPFAppxInstall {
             }
 
             Write-Host "================================="
-            Write-Host "--   AppX Install Finished   ---"
+            Write-Host "--   AppX 安装完成   ---"
             Write-Host "================================="
             Write-WinUtilLog -Component "AppX" -Message "AppX install finished."
             if ($hasUI) {

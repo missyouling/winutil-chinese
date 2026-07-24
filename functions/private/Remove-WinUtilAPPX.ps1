@@ -15,7 +15,7 @@ function Remove-WinUtilAPPX {
         $Name
     )
 
-    Write-Host "Removing $Name"
+    Write-Host "正在移除 $Name"
     Write-WinUtilLog -Component "AppX" -Message "Removing AppX package pattern: $Name"
 
     # We explicitly loop through packages instead of using the pipeline because PowerShell 7 pipeline binding

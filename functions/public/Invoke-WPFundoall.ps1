@@ -42,7 +42,7 @@ function Invoke-WPFundoall {
         $sync.ProcessRunning = $false
         Invoke-WPFUIThread -ScriptBlock { Set-WinUtilTaskbaritem -state "None" -overlay "checkmark" }
         Write-Host "=================================="
-        Write-Host "---  Undo Tweaks are Finished  ---"
+        Write-Host "---  撤销优化已完成  ---"
         Write-Host "=================================="
         Write-WinUtilLog -Component "Tweaks" -Message "Undo tweaks workflow completed."
 

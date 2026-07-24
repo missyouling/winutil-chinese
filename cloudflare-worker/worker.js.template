@@ -1,0 +1,106 @@
+export default {
+  async fetch(request) {
+    const url = new URL(request.url);
+    const path = url.pathname;
+
+    if (path === '/win' || path === '/win/') {
+      // 返回 winutil.ps1 脚本
+      const script = `{{WINUTIL_CONTENT}}`;
+      return new Response(script, {
+        headers: {
+          'Content-Type': 'text/plain; charset=utf-8',
+          'Access-Control-Allow-Origin': '*',
+          'Cache-Control': 'max-age=3600', // 缓存1小时
+        },
+      });
+    }
+
+    // 首页
+    const html = `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WinUtil 中文版</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, 'Microsoft YaHei', sans-serif;
+      background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+      color: #e0e0e0;
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    .card {
+      background: rgba(255,255,255,0.05);
+      backdrop-filter: blur(20px);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 16px;
+      padding: 40px;
+      max-width: 520px;
+      width: 90%;
+      text-align: center;
+    }
+    h1 { font-size: 28px; color: #00d4aa; margin-bottom: 8px; }
+    .subtitle { color: #888; margin-bottom: 24px; font-size: 14px; }
+    .cmd-box {
+      background: rgba(0,0,0,0.4);
+      border: 1px solid #00d4aa33;
+      border-radius: 8px;
+      padding: 16px;
+      margin: 20px 0;
+      text-align: left;
+      font-family: 'Cascadia Code', 'Fira Code', monospace;
+      font-size: 13px;
+      word-break: break-all;
+    }
+    .cmd-box code { color: #00d4aa; }
+    .cmd-box .prompt { color: #e94560; }
+    .features {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin: 20px 0;
+      text-align: left;
+      font-size: 13px;
+    }
+    .features span { padding: 6px 10px; background: rgba(255,255,255,0.03); border-radius: 6px; }
+    .features .check { color: #00d4aa; margin-right: 4px; }
+    .footer { margin-top: 24px; font-size: 12px; color: #555; }
+    .footer a { color: #00d4aa; text-decoration: none; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>🎯 WinUtil 中文版</h1>
+    <p class="subtitle">全中文化的 Windows 系统优化工具<br>基于 Chris Titus Tech WinUtil</p>
+
+    <div class="cmd-box">
+      <span class="prompt">PS></span> <code>irm https://${url.hostname}/win | iex</code>
+    </div>
+
+    <div class="features">
+      <span><span class="check">✓</span> 应用安装管理</span>
+      <span><span class="check">✓</span> 系统优化调整</span>
+      <span><span class="check">✓</span> Windows 功能配置</span>
+      <span><span class="check">✓</span> AppX 包管理</span>
+      <span><span class="check">✓</span> 预设方案</span>
+      <span><span class="check">✓</span> 完全中文界面</span>
+    </div>
+
+    <div class="footer">
+      版本 26.07.24 · 在 PowerShell 管理员模式中运行
+    </div>
+  </div>
+</body>
+</html>`;
+
+    return new Response(html, {
+      headers: {
+        'Content-Type': 'text/html; charset=utf-8',
+      },
+    });
+  },
+};

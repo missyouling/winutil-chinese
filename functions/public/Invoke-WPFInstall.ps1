@@ -82,7 +82,7 @@ function Invoke-WPFInstall {
                 }
             }
             Write-Host "==========================================="
-            Write-Host "--      Installs have finished          ---"
+            Write-Host "--      安装已完成          ---"
             Write-Host "==========================================="
             Write-WinUtilLog -Component "Install" -Message "Install workflow completed."
             if ($hasUI) {
@@ -91,7 +91,7 @@ function Invoke-WPFInstall {
             }
         } catch {
             Write-Host "==========================================="
-            Write-Host "Error: $_"
+            Write-Host "错误: $_"
             Write-Host "==========================================="
             Write-WinUtilLog -Level "ERROR" -Component "Install" -Message "Install workflow failed: $($_.Exception.Message)"
             if ($hasUI) {

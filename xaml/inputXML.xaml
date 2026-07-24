@@ -1082,7 +1082,7 @@
                             Name="SearchBar"
                             Foreground="{DynamicResource MainForegroundColor}" Background="{DynamicResource MainBackgroundColor}"
                             Padding="3,3,30,0"
-                            ToolTip="Press Ctrl-F and type app name to filter application list below. Press Esc to reset the filter">
+                            ToolTip="按 Ctrl-F 输入应用名称过滤列表，按 Esc 重置筛选">
                         </TextBox>
                         <TextBlock
                             Name="SearchBarIcon"
@@ -1113,8 +1113,8 @@
                     HorizontalAlignment="Right" VerticalAlignment="Center"
                     Margin="0,0,2,0"
                     FontFamily="Segoe MDL2 Assets"
-                    Content="N/A"
-                    ToolTip="Change the WinUtil UI Theme"
+                    Content="无"
+                    ToolTip="切换 WinUtil 界面主题"
                 />
                     <Popup Name="ThemePopup"
                     IsOpen="False"
@@ -1124,17 +1124,17 @@
                         <StackPanel Background="{DynamicResource MainBackgroundColor}" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
                             <MenuItem FontSize="{DynamicResource ButtonFontSize}" Header="Auto" Name="AutoThemeMenuItem" Foreground="{DynamicResource MainForegroundColor}">
                                 <MenuItem.ToolTip>
-                                    <ToolTip Content="Follow the Windows Theme"/>
+                                    <ToolTip Content="跟随 Windows 主题"/>
                                 </MenuItem.ToolTip>
                             </MenuItem>
                             <MenuItem FontSize="{DynamicResource ButtonFontSize}" Header="Dark" Name="DarkThemeMenuItem" Foreground="{DynamicResource MainForegroundColor}">
                                 <MenuItem.ToolTip>
-                                    <ToolTip Content="Use Dark Theme"/>
+                                    <ToolTip Content="使用深色主题"/>
                                 </MenuItem.ToolTip>
                             </MenuItem>
                             <MenuItem FontSize="{DynamicResource ButtonFontSize}" Header="Light" Name="LightThemeMenuItem" Foreground="{DynamicResource MainForegroundColor}">
                                 <MenuItem.ToolTip>
-                                    <ToolTip Content="Use Light Theme"/>
+                                    <ToolTip Content="使用浅色主题"/>
                                 </MenuItem.ToolTip>
                             </MenuItem>
                         </StackPanel>
@@ -1152,7 +1152,7 @@
                     Margin="0,0,2,0"
                     FontFamily="Segoe MDL2 Assets"
                     Content="&#xE8D3;"
-                    ToolTip="Adjust Font Scaling for Accessibility"
+                    ToolTip="调整字体缩放以适应辅助功能需求"
                 />
                     <Popup Name="FontScalingPopup"
                     IsOpen="False"
@@ -1195,12 +1195,12 @@
                                        Margin="10,0,10,5"/>
                             <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="10,0,10,10">
                                 <Button Name="FontScalingResetButton"
-                                        Content="Reset"
+                                        Content="重置"
                                         Style="{StaticResource HoverButtonStyle}"
                                         Width="60" Height="25"
                                         Margin="5,0,5,0"/>
                                 <Button Name="FontScalingApplyButton"
-                                        Content="Apply"
+                                        Content="应用"
                                         Style="{StaticResource HoverButtonStyle}"
                                         Width="60" Height="25"
                                         Margin="5,0,5,0"/>
@@ -1228,12 +1228,12 @@
                         <StackPanel Background="{DynamicResource MainBackgroundColor}" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
                             <MenuItem FontSize="{DynamicResource ButtonFontSize}" Header="Import" Name="ImportMenuItem" Foreground="{DynamicResource MainForegroundColor}">
                                 <MenuItem.ToolTip>
-                                    <ToolTip Content="Import Configuration from exported file."/>
+                                    <ToolTip Content="从导出的文件导入配置"/>
                                 </MenuItem.ToolTip>
                             </MenuItem>
                             <MenuItem FontSize="{DynamicResource ButtonFontSize}" Header="Export" Name="ExportMenuItem" Foreground="{DynamicResource MainForegroundColor}">
                                 <MenuItem.ToolTip>
-                                    <ToolTip Content="Export Selected Elements and copy execution command to clipboard."/>
+                                    <ToolTip Content="导出已选项并将命令复制到剪贴板"/>
                                 </MenuItem.ToolTip>
                             </MenuItem>
                             <Separator/>
@@ -1256,7 +1256,7 @@
                         FontFamily="Segoe MDL2 Assets"
                         Foreground="{DynamicResource MainForegroundColor}"
                         FontSize="{DynamicResource CloseIconFontSize}"
-                        ToolTip="Minimize"
+                        ToolTip="最小化"
                         AutomationProperties.Name="Minimize"
                         Name="WPFMinimizeButton" />
                     <Button
@@ -1298,7 +1298,7 @@
                         FontFamily="Segoe MDL2 Assets"
                         Foreground="{DynamicResource MainForegroundColor}"
                         FontSize="{DynamicResource CloseIconFontSize}"
-                        ToolTip="Close"
+                        ToolTip="关闭"
                         AutomationProperties.Name="Close"
                         Name="WPFCloseButton" />
                 </StackPanel>
@@ -1322,16 +1322,16 @@
                                    Background="Transparent"
                                    VerticalAlignment="Center"
                                    Margin="15,0,8,0"/>
-                        <Button Name="WPFSearchChipAll"             Content="All"               Style="{StaticResource FilterChipStyle}"/>
-                        <Button Name="WPFSearchChipBrowsers"        Content="Browsers"          Style="{StaticResource FilterChipStyle}"/>
-                        <Button Name="WPFSearchChipCommunications"  Content="Communications"    Style="{StaticResource FilterChipStyle}"/>
-                        <Button Name="WPFSearchChipDevelopment"     Content="Development"       Style="{StaticResource FilterChipStyle}"/>
-                        <Button Name="WPFSearchChipGames"           Content="Games"             Style="{StaticResource FilterChipStyle}"/>
-                        <Button Name="WPFSearchChipMicrosoftTools"  Content="Microsoft Tools"   Style="{StaticResource FilterChipStyle}"/>
-                        <Button Name="WPFSearchChipMultimediaTools" Content="Multimedia Tools"  Style="{StaticResource FilterChipStyle}"/>
-                        <Button Name="WPFSearchChipProTools"        Content="Pro Tools"         Style="{StaticResource FilterChipStyle}"/>
-                        <Button Name="WPFSearchChipSelfhostedTools" Content="Selfhosted Tools"  Style="{StaticResource FilterChipStyle}"/>
-                        <Button Name="WPFSearchChipUtilities"       Content="Utilities"         Style="{StaticResource FilterChipStyle}"/>
+                        <Button Name="WPFSearchChipAll"             Content="全部"               Style="{StaticResource FilterChipStyle}"/>
+                        <Button Name="WPFSearchChipBrowsers"        Content="浏览器"          Style="{StaticResource FilterChipStyle}"/>
+                        <Button Name="WPFSearchChipCommunications"  Content="通讯"    Style="{StaticResource FilterChipStyle}"/>
+                        <Button Name="WPFSearchChipDevelopment"     Content="开发工具"       Style="{StaticResource FilterChipStyle}"/>
+                        <Button Name="WPFSearchChipGames"           Content="游戏"             Style="{StaticResource FilterChipStyle}"/>
+                        <Button Name="WPFSearchChipMicrosoftTools"  Content="微软工具"   Style="{StaticResource FilterChipStyle}"/>
+                        <Button Name="WPFSearchChipMultimediaTools" Content="多媒体工具"  Style="{StaticResource FilterChipStyle}"/>
+                        <Button Name="WPFSearchChipProTools"        Content="专业工具"         Style="{StaticResource FilterChipStyle}"/>
+                        <Button Name="WPFSearchChipSelfhostedTools" Content="自托管工具"  Style="{StaticResource FilterChipStyle}"/>
+                        <Button Name="WPFSearchChipUtilities"       Content="实用工具"         Style="{StaticResource FilterChipStyle}"/>
                     </WrapPanel>
 
                     <Grid Grid.Row="1" Margin="{DynamicResource TabContentMargin}">
@@ -1367,10 +1367,10 @@
                             <StackPanel Background="{DynamicResource MainBackgroundColor}" Orientation="Vertical" Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="2" Margin="5">
                                 <Label Content="Recommended Selections:" FontSize="{DynamicResource FontSize}" VerticalAlignment="Center" Margin="2"/>
                                 <WrapPanel Orientation="Horizontal" HorizontalAlignment="Left" Margin="0,2,0,0">
-                                    <Button Name="WPFstandard" Content=" Standard " Margin="2" Width="{DynamicResource ButtonWidth}" Height="{DynamicResource ButtonHeight}"/>
-                                    <Button Name="WPFminimal" Content=" Minimal " Margin="2" Width="{DynamicResource ButtonWidth}" Height="{DynamicResource ButtonHeight}"/>
-                                    <Button Name="WPFAdvanced" Content=" Advanced " Margin="2" Width="{DynamicResource ButtonWidth}" Height="{DynamicResource ButtonHeight}"/>
-                                    <Button Name="WPFClearTweaksSelection" Content=" Clear " Margin="2" Width="{DynamicResource ButtonWidth}" Height="{DynamicResource ButtonHeight}"/>
+                                    <Button Name="WPFstandard" Content=" 标准 " Margin="2" Width="{DynamicResource ButtonWidth}" Height="{DynamicResource ButtonHeight}"/>
+                                    <Button Name="WPFminimal" Content=" 精简 " Margin="2" Width="{DynamicResource ButtonWidth}" Height="{DynamicResource ButtonHeight}"/>
+                                    <Button Name="WPFAdvanced" Content=" 高级 " Margin="2" Width="{DynamicResource ButtonWidth}" Height="{DynamicResource ButtonHeight}"/>
+                                    <Button Name="WPFClearTweaksSelection" Content=" 清除 " Margin="2" Width="{DynamicResource ButtonWidth}" Height="{DynamicResource ButtonHeight}"/>
                                     <Button Name="WPFGetInstalledTweaks" Content=" Get Installed Tweaks " Margin="2" Width="{DynamicResource ButtonWidth}" Height="{DynamicResource ButtonHeight}"/>
                                     <Button Name="WPFAppxRemoval" Content=" AppX Removal " Margin="2" Width="{DynamicResource ButtonWidth}" Height="{DynamicResource ButtonHeight}"/>
                                 </WrapPanel>
@@ -1460,7 +1460,7 @@
                                     </StackPanel>
                                     <Button Name="WPFUpdatessecurity"
                                             Grid.Row="2"
-                                            Content="Apply Recommended"
+                                            Content="应用推荐"
                                             FontSize="{DynamicResource ConfigTabButtonFontSize}"
                                             Margin="0,16,0,0"
                                             Padding="10"/>
@@ -1496,7 +1496,7 @@
                                     </StackPanel>
                                     <Button Name="WPFUpdatesdefault"
                                             Grid.Row="2"
-                                            Content="Restore Defaults"
+                                            Content="恢复默认"
                                             FontSize="{DynamicResource ConfigTabButtonFontSize}"
                                             Margin="0,16,0,0"
                                             Padding="10"/>
@@ -1533,7 +1533,7 @@
                                     </StackPanel>
                                     <Button Name="WPFUpdatesdisable"
                                             Grid.Row="2"
-                                            Content="Disable Updates"
+                                            Content="禁用更新"
                                             FontSize="{DynamicResource ConfigTabButtonFontSize}"
                                             Foreground="Red"
                                             Margin="0,16,0,0"
@@ -1599,7 +1599,7 @@
                                                  Background="{DynamicResource MainBackgroundColor}"/>
                                         <Button Grid.Column="1"
                                                 Name="WPFWin11ISOBrowseButton"
-                                                Content="Browse"
+                                                Content="浏览"
                                                 Width="Auto" Padding="12,0"
                                                 Height="{DynamicResource ButtonHeight}"/>
                                     </Grid>
@@ -1642,7 +1642,7 @@
                                             <LineBreak/>- Architecture : 64-bit (x64)
                                         </TextBlock>
                                         <Button Name="WPFWin11ISODownloadLink"
-                                                Content="Open Microsoft Download Page"
+                                                Content="打开微软下载页面"
                                                 HorizontalAlignment="Left"
                                                 Width="Auto" Padding="12,0"
                                                 Height="{DynamicResource ButtonHeight}"/>
@@ -1672,17 +1672,17 @@
                                         install.wim before any modifications are made.
                                     </TextBlock>
                                     <Button Name="WPFWin11ISOMountButton"
-                                            Content="Mount &amp; Verify ISO"
+                                            Content="挂载并验证 ISO"
                                             HorizontalAlignment="Left"
                                             Width="Auto" Padding="12,0"
                                             Height="{DynamicResource ButtonHeight}"/>
                                     <CheckBox Name="WPFWin11ISOInjectDrivers"
-                                              Content="Inject current system drivers"
+                                              Content="注入当前系统驱动"
                                               FontSize="{DynamicResource FontSize}"
                                               Foreground="{DynamicResource MainForegroundColor}"
                                               IsChecked="False"
                                               Margin="0,8,0,0"
-                                              ToolTip="Exports all drivers from this machine and injects them into install.wim and boot.wim. Recommended for systems with unsupported NVMe or network controllers."/>
+                                              ToolTip="从本机导出所有驱动并注入 install.wim 和 boot.wim，推荐用于有不支持 NVMe 或网络控制器的系统。"/>
                                 </StackPanel>
 
                                 <!-- Verification results panel -->
@@ -1735,7 +1735,7 @@
                                     depending on your hardware.
                                 </TextBlock>
                                 <Button Name="WPFWin11ISOModifyButton"
-                                        Content="Run Windows ISO Modification and Creator"
+                                        Content="运行 Windows ISO 修改和创建工具"
                                         HorizontalAlignment="Left"
                                         Width="Auto" Padding="12,0"
                                         Height="{DynamicResource ButtonHeight}"/>
@@ -1759,11 +1759,11 @@
                                     </TextBlock>
                                     <Button Grid.Column="1"
                                             Name="WPFWin11ISOCleanResetButton"
-                                            Content="Clean &amp; Reset"
+                                            Content="清理并重置"
                                             Foreground="OrangeRed"
                                             Width="Auto" Padding="12,0"
                                             Height="{DynamicResource ButtonHeight}"
-                                            ToolTip="Delete the temporary working directory and reset the interface back to Step 1"
+                                            ToolTip="删除临时工作目录并重置回步骤 1"
                                             Margin="12,0,0,0"/>
                                 </Grid>
 
@@ -1776,13 +1776,13 @@
                                     </Grid.ColumnDefinitions>
                                     <Button Grid.Column="0"
                                             Name="WPFWin11ISOChooseISOButton"
-                                            Content="Save as an ISO File"
+                                            Content="保存为 ISO 文件"
                                             HorizontalAlignment="Stretch"
                                             Width="Auto" Padding="12,0"
                                             Height="{DynamicResource ButtonHeight}"/>
                                     <Button Grid.Column="2"
                                             Name="WPFWin11ISOChooseUSBButton"
-                                            Content="Write Directly to a USB Drive (ERASES DRIVE)"
+                                            Content="直接写入 USB 驱动器（会擦除整个磁盘）"
                                             Foreground="OrangeRed"
                                             HorizontalAlignment="Stretch"
                                             Width="Auto" Padding="12,0"
@@ -1816,12 +1816,12 @@
                                                       Margin="0,0,6,0"/>
                                             <Button Grid.Column="1"
                                                     Name="WPFWin11ISORefreshUSBButton"
-                                                    Content="Refresh"
+                                                    Content="刷新"
                                                     Width="Auto" Padding="8,0"
                                                     Height="{DynamicResource ButtonHeight}"/>
                                         </Grid>
                                         <Button Name="WPFWin11ISOWriteUSBButton"
-                                                Content="Erase &amp; Write to USB"
+                                                Content="擦除并写入 USB"
                                                 Foreground="OrangeRed"
                                                 HorizontalAlignment="Stretch"
                                                 Width="Auto" Padding="12,0"

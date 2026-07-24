@@ -37,12 +37,12 @@ function Set-WinUtilRegistry {
         }
 
         if ($Value -ne "<RemoveEntry>") {
-            Write-Host "Set $Path\$Name to $Value"
+            Write-Host "设置 $Path\$Name 为 $Value"
             Write-WinUtilLog -Component "Registry" -Message "Setting $Path\$Name ($Type) to $Value"
             Set-ItemProperty -Path $Path -Name $Name -Type $Type -Value $Value -Force -ErrorAction Stop | Out-Null
         }
         else{
-            Write-Host "Remove $Path\$Name"
+            Write-Host "移除 $Path\$Name"
             Write-WinUtilLog -Component "Registry" -Message "Removing $Path\$Name"
             Remove-ItemProperty -Path $Path -Name $Name -Force -ErrorAction Stop | Out-Null
         }

@@ -6,11 +6,11 @@ function Invoke-WinUtilSSHServer {
 
     # Install the OpenSSH Server feature if not already installed
     if ((Get-WindowsCapability -Name OpenSSH.Server -Online).State -ne "Installed") {
-        Write-Host "Enabling OpenSSH Server... This will take a long time."
+        Write-Host "正在启用 OpenSSH 服务器...这需要较长时间。"
         Add-WindowsCapability -Name OpenSSH.Server -Online
     }
 
-    Write-Host "Starting the services"
+    Write-Host "正在启动服务"
 
     Set-Service -Name sshd -StartupType Automatic
     Start-Service -Name sshd
@@ -19,10 +19,10 @@ function Invoke-WinUtilSSHServer {
     Start-Service -Name ssh-agent
 
     #Adding Firewall rule for port 22
-    Write-Host "Setting up firewall rules"
+    Write-Host "正在设置防火墙规则"
     if (-not ((Get-NetFirewallRule -Name 'sshd').Enabled)) {
         New-NetFirewallRule -Name sshd -DisplayName 'OpenSSH Server (sshd)' -Enabled True -Direction Inbound -Protocol TCP -Action Allow -LocalPort 22
-        Write-Host "Firewall rule for OpenSSH Server created and enabled."
+        Write-Host "OpenSSH 服务器防火墙规则已创建并启用。"
     }
 
     # Check for the authorized_keys file
@@ -30,17 +30,17 @@ function Invoke-WinUtilSSHServer {
     $authorizedKeysPath = "$sshFolderPath\authorized_keys"
 
     if (-not (Test-Path -Path $sshFolderPath)) {
-        Write-Host "Creating ssh directory..."
+        Write-Host "正在创建 ssh 目录..."
         New-Item -Path $sshFolderPath -ItemType Directory -Force
     }
 
     if (-not (Test-Path -Path $authorizedKeysPath)) {
-        Write-Host "Creating authorized_keys file..."
+        Write-Host "正在创建 authorized_keys 文件..."
         New-Item -Path $authorizedKeysPath -ItemType File -Force
         Write-Host "authorized_keys file created at $authorizedKeysPath."
     }
 
-    Write-Host "Configuring sshd_config for standard authorized_keys behavior..."
+    Write-Host "正在配置 sshd_config 以使用标准的 authorized_keys 行为..."
     $sshdConfigPath = "C:\ProgramData\ssh\sshd_config"
 
     $configContent = Get-Content -Path $sshdConfigPath -Raw
@@ -50,11 +50,11 @@ function Invoke-WinUtilSSHServer {
 
     if ($updatedContent -ne $configContent) {
         Set-Content -Path $sshdConfigPath -Value $updatedContent -Force
-        Write-Host "Commented out administrator-specific SSH key configuration in sshd_config"
+        Write-Host "已在 sshd_config 中注释掉管理员特定的 SSH 密钥配置"
         Restart-Service -Name sshd -Force
     }
 
-    Write-Host "OpenSSH server was successfully enabled."
-    Write-Host "The config file can be located at C:\ProgramData\ssh\sshd_config"
-    Write-Host "Add your public keys to this file -> $authorizedKeysPath"
+    Write-Host "OpenSSH 服务器已成功启用。"
+    Write-Host "配置文件位于 C:\ProgramData\ssh\sshd_config"
+    Write-Host "将您的公钥添加到此文件 -> $authorizedKeysPath"
 }

@@ -51,7 +51,7 @@ function Invoke-WPFAppxRemoval {
                     Stop-Process -Name dllhost -Force -Confirm:$false -ErrorAction SilentlyContinue
                 }
 
-                Write-Host "Removing $($app.Content)"
+                Write-Host "正在移除 $($app.Content)"
                 Write-WinUtilLog -Component "AppX" -Message "Removing $($app.Content) ($($app.PackageId))."
                 Remove-WinUtilAPPX -Name $app.PackageId
                 $packageList.Add($app.PackageId)
@@ -77,7 +77,7 @@ function Invoke-WPFAppxRemoval {
             }
 
             Write-Host "================================="
-            Write-Host "--   AppX Removal Finished   ---"
+            Write-Host "--   AppX 移除完成   ---"
             Write-Host "================================="
             Write-WinUtilLog -Component "AppX" -Message "AppX removal finished."
             if ($hasUI) {

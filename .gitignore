@@ -1,20 +1,26 @@
-# winutil
-System.Management.Automation.dll
-Microsoft.PowerShell.ConsoleHost.dll
-
-winutil.exe.config
-winutil.ps1
-binary/
-testResults.xml
-
-# general software/os specific
-desktop.ini
+# 系统
 .DS_Store
+Thumbs.db
 
+# Node.js
+node_modules/
+npm-debug.log*
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# 日志
+*.log
+
+# IDE
 .vscode/
 .idea/
+*.swp
+*.swo
 
-# hugo files
-docs/public/
-docs/.hugo_build.lock
-docs/resources/
+# 凭据
+.git-credentials
+
+# 编译产物（保留 winutil.ps1 作为发布文件，不忽略）

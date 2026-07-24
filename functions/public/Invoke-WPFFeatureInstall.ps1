@@ -33,8 +33,8 @@ function Invoke-WPFFeatureInstall {
         Invoke-WPFUIThread -ScriptBlock { Set-WinUtilTaskbaritem -state "None" -overlay "checkmark" }
 
         Write-Host "==================================="
-        Write-Host "---   Features are Installed    ---"
-        Write-Host "---  A Reboot may be required   ---"
+        Write-Host "---   功能已安装    ---"
+        Write-Host "---  可能需要重启  ---"
         Write-Host "==================================="
     }
 }

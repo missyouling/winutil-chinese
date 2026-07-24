@@ -1,8 +1,8 @@
 {
   "WPFFeaturesdotnet": {
-    "Content": ".NET Framework (Versions 2, 3, 4) - Enable",
-    "Description": ".NET and .NET Framework is a developer platform made up of tools, programming languages, and libraries for building many different types of applications.",
-    "category": "Features",
+    "Content": ".NET Framework (2、3、4 版) - 启用",
+    "Description": ".NET 和 .NET Framework 是一个开发者平台，由工具、编程语言和库组成。",
+    "category": "功能",
     "panel": "1",
     "feature": [
       "NetFx4-AdvSrvs",
@@ -12,9 +12,9 @@
     "link": "https://winutil.christitus.com/dev/features/features/dotnet"
   },
   "WPFFixesNTPPool": {
-    "Content": "NTP Server - Enable",
-    "Description": "Replaces the default Windows NTP server (time.windows.com) with pool.ntp.org for improved time synchronization accuracy and reliability.",
-    "category": "Fixes",
+    "Content": "NTP 服务器 - 启用",
+    "Description": "将默认 Windows NTP 服务器替换为 pool.ntp.org，以提高时间同步的准确性和可靠性。",
+    "category": "修复",
     "panel": "1",
     "Type": "Button",
     "ButtonWidth": "300",
@@ -22,9 +22,9 @@
     "link": "https://winutil.christitus.com/dev/features/fixes/ntppool"
   },
   "WPFFeatureshyperv": {
-    "Content": "Hyper-V - Enable",
-    "Description": "Hyper-V is a hardware virtualization product developed by Microsoft that allows users to create and manage virtual machines.",
-    "category": "Features",
+    "Content": "Hyper-V - 启用",
+    "Description": "Hyper-V 是 Microsoft 开发的硬件虚拟化产品，允许用户创建和管理虚拟机。",
+    "category": "功能",
     "panel": "1",
     "feature": [
       "Microsoft-Hyper-V-All"
@@ -32,9 +32,9 @@
     "link": "https://winutil.christitus.com/dev/features/features/hyperv"
   },
   "WPFFeatureslegacymedia": {
-    "Content": "Legacy Media Components (WMP, DirectPlay) - Enable",
-    "Description": "Enables legacy programs from previous versions of Windows.",
-    "category": "Features",
+    "Content": "旧版媒体组件 (WMP、DirectPlay) - 启用",
+    "Description": "启用来自旧版 Windows 的旧版程序。",
+    "category": "功能",
     "panel": "1",
     "feature": [
       "WindowsMediaPlayer",
@@ -46,9 +46,9 @@
     "link": "https://winutil.christitus.com/dev/features/features/legacymedia"
   },
   "WPFFeaturewsl": {
-    "Content": "Windows Subsystem for Linux (WSL) - Enable",
-    "Description": "Windows Subsystem for Linux is an optional feature of Windows that allows Linux programs to run natively on Windows without the need for a separate virtual machine or dual booting.",
-    "category": "Features",
+    "Content": "Windows Linux 子系统 (WSL) - 启用",
+    "Description": "Windows Linux 子系统是 Windows 的可选功能，允许 Linux 程序在 Windows 上原生运行。",
+    "category": "功能",
     "panel": "1",
     "feature": [
       "VirtualMachinePlatform",
@@ -58,9 +58,9 @@
     "link": "https://winutil.christitus.com/dev/features/features/wsl"
   },
   "WPFFeaturenfs": {
-    "Content": "Network File System (NFS) - Enable",
-    "Description": "Network File System (NFS) is a mechanism for storing files on a network.",
-    "category": "Features",
+    "Content": "网络文件系统 (NFS) - 启用",
+    "Description": "网络文件系统 (NFS) 是一种在网络中存储文件的机制。",
+    "category": "功能",
     "panel": "1",
     "feature": [
       "ServicesForNFS-ClientOnly",
@@ -77,26 +77,20 @@
     "link": "https://winutil.christitus.com/dev/features/features/nfs"
   },
   "WPFFeatureRegBackup": {
-    "Content": "Registry Backup (Daily Task 12:30am) - Enable",
-    "Description": "Enables daily registry backup, previously disabled by Microsoft in Windows 10 1803.",
-    "category": "Features",
+    "Content": "注册表备份 (每日凌晨 12:30 任务) - 启用",
+    "Description": "启用每日注册表备份，此功能在 Windows 10 1803 中被 Microsoft 禁用。",
+    "category": "功能",
     "panel": "1",
     "feature": [],
     "InvokeScript": [
-      "
-      New-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Configuration Manager' -Name 'EnablePeriodicBackup' -Type DWord -Value 1 -Force
-      New-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Configuration Manager' -Name 'BackupCount' -Type DWord -Value 2 -Force
-      $action = New-ScheduledTaskAction -Execute 'schtasks' -Argument '/run /i /tn \"\\Microsoft\\Windows\\Registry\\RegIdleBackup\"'
-      $trigger = New-ScheduledTaskTrigger -Daily -At 00:30
-      Register-ScheduledTask -Action $action -Trigger $trigger -TaskName 'AutoRegBackup' -Description 'Create System Registry Backups' -User 'System'
-      "
+      "      New-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Configuration Manager' -Name 'EnablePeriodicBackup' -Type DWord -Value 1 -Force      New-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Configuration Manager' -Name 'BackupCount' -Type DWord -Value 2 -Force      $action = New-ScheduledTaskAction -Execute 'schtasks' -Argument '/run /i /tn \"\\Microsoft\\Windows\\Registry\\RegIdleBackup\"'      $trigger = New-ScheduledTaskTrigger -Daily -At 00:30      Register-ScheduledTask -Action $action -Trigger $trigger -TaskName 'AutoRegBackup' -Description 'Create System Registry Backups' -User 'System'      "
     ],
     "link": "https://winutil.christitus.com/dev/features/features/regbackup"
   },
   "WPFFeatureEnableLegacyRecovery": {
-    "Content": "Legacy F8 Boot Recovery - Enable",
-    "Description": "Enables Advanced Boot Options screen that lets you start Windows in advanced troubleshooting modes.",
-    "category": "Features",
+    "Content": "旧版 F8 启动恢复 - 启用",
+    "Description": "启用高级启动选项屏幕，让您使用高级故障排除模式启动 Windows。",
+    "category": "功能",
     "panel": "1",
     "feature": [],
     "InvokeScript": [
@@ -105,9 +99,9 @@
     "link": "https://winutil.christitus.com/dev/features/features/enablelegacyrecovery"
   },
   "WPFFeatureDisableLegacyRecovery": {
-    "Content": "Legacy F8 Boot Recovery - Disable",
-    "Description": "Disables Advanced Boot Options screen that lets you start Windows in advanced troubleshooting modes.",
-    "category": "Features",
+    "Content": "旧版 F8 启动恢复 - 禁用",
+    "Description": "禁用允许您使用高级故障排除模式启动 Windows 的高级启动选项屏幕。",
+    "category": "功能",
     "panel": "1",
     "feature": [],
     "InvokeScript": [
@@ -116,9 +110,9 @@
     "link": "https://winutil.christitus.com/dev/features/features/disablelegacyrecovery"
   },
   "WPFFeaturesSandbox": {
-    "Content": "Windows Sandbox - Enable",
-    "Description": "Windows Sandbox is a lightweight virtual machine that provides a temporary desktop environment to safely run applications and programs in isolation.",
-    "category": "Features",
+    "Content": "Windows 沙盒 - 启用",
+    "Description": "Windows 沙盒是一个轻量级虚拟机，提供临时的桌面环境以安全隔离地运行应用程序。",
+    "category": "功能",
     "panel": "1",
     "feature": [
       "Containers-DisposableClientVM"
@@ -126,8 +120,8 @@
     "link": "https://winutil.christitus.com/dev/features/features/sandbox"
   },
   "WPFFeatureInstall": {
-    "Content": "Install Features",
-    "category": "Features",
+    "Content": "安装功能",
+    "category": "功能",
     "panel": "1",
     "Type": "Button",
     "ButtonWidth": "300",
@@ -135,8 +129,8 @@
     "link": "https://winutil.christitus.com/dev/features/features/install"
   },
   "WPFPanelAutologin": {
-    "Content": "AutoLogon - Run",
-    "category": "Fixes",
+    "Content": "自动登录 - 运行",
+    "category": "修复",
     "panel": "1",
     "Type": "Button",
     "ButtonWidth": "300",
@@ -144,8 +138,8 @@
     "link": "https://winutil.christitus.com/dev/features/fixes/autologin"
   },
   "WPFFixesUpdate": {
-    "Content": "Windows Update - Reset",
-    "category": "Fixes",
+    "Content": "Windows 更新 - 重置",
+    "category": "修复",
     "panel": "1",
     "Type": "Button",
     "ButtonWidth": "300",
@@ -153,8 +147,8 @@
     "link": "https://winutil.christitus.com/dev/features/fixes/update"
   },
   "WPFFixesNetwork": {
-    "Content": "Network - Reset",
-    "category": "Fixes",
+    "Content": "网络 - 重置",
+    "category": "修复",
     "panel": "1",
     "Type": "Button",
     "ButtonWidth": "300",
@@ -162,8 +156,8 @@
     "link": "https://winutil.christitus.com/dev/features/fixes/network"
   },
   "WPFPanelDISM": {
-    "Content": "System Corruption Scan - Run",
-    "category": "Fixes",
+    "Content": "系统损坏扫描 - 运行",
+    "category": "修复",
     "panel": "1",
     "Type": "Button",
     "ButtonWidth": "300",
@@ -171,8 +165,8 @@
     "link": "https://winutil.christitus.com/dev/features/fixes/dism"
   },
   "WPFFixesWinget": {
-    "Content": "WinGet - Reinstall",
-    "category": "Fixes",
+    "Content": "WinGet - 重新安装",
+    "category": "修复",
     "panel": "1",
     "Type": "Button",
     "ButtonWidth": "300",
@@ -180,8 +174,8 @@
     "link": "https://winutil.christitus.com/dev/features/fixes/winget"
   },
   "WPFPanelComputer": {
-    "Content": "Computer Management",
-    "category": "Legacy Windows Panels",
+    "Content": "计算机管理",
+    "category": "传统 Windows 面板",
     "panel": "2",
     "Type": "Button",
     "ButtonWidth": "300",
@@ -191,8 +185,8 @@
     "link": "https://winutil.christitus.com/dev/features/legacy-windows-panels/computer"
   },
   "WPFPanelControl": {
-    "Content": "Control Panel",
-    "category": "Legacy Windows Panels",
+    "Content": "控制面板",
+    "category": "传统 Windows 面板",
     "panel": "2",
     "Type": "Button",
     "ButtonWidth": "300",
@@ -202,8 +196,8 @@
     "link": "https://winutil.christitus.com/dev/features/legacy-windows-panels/control"
   },
   "WPFPanelMouse": {
-    "Content": "Mouse Properties",
-    "category": "Legacy Windows Panels",
+    "Content": "鼠标属性",
+    "category": "传统 Windows 面板",
     "panel": "2",
     "Type": "Button",
     "ButtonWidth": "300",
@@ -213,8 +207,8 @@
     "link": "https://winutil.christitus.com/dev/features/legacy-windows-panels/mouse"
   },
   "WPFPanelNetwork": {
-    "Content": "Network Connections",
-    "category": "Legacy Windows Panels",
+    "Content": "网络连接",
+    "category": "传统 Windows 面板",
     "panel": "2",
     "Type": "Button",
     "ButtonWidth": "300",
@@ -224,8 +218,8 @@
     "link": "https://winutil.christitus.com/dev/features/legacy-windows-panels/network"
   },
   "WPFPanelPower": {
-    "Content": "Power Panel",
-    "category": "Legacy Windows Panels",
+    "Content": "电源设置",
+    "category": "传统 Windows 面板",
     "panel": "2",
     "Type": "Button",
     "ButtonWidth": "300",
@@ -235,8 +229,8 @@
     "link": "https://winutil.christitus.com/dev/features/legacy-windows-panels/power"
   },
   "WPFPanelPrinter": {
-    "Content": "Printer Panel",
-    "category": "Legacy Windows Panels",
+    "Content": "打印机设置",
+    "category": "传统 Windows 面板",
     "panel": "2",
     "Type": "Button",
     "ButtonWidth": "300",
@@ -246,8 +240,8 @@
     "link": "https://winutil.christitus.com/dev/features/legacy-windows-panels/printer"
   },
   "WPFPanelPrograms": {
-    "Content": "Programs and Features",
-    "category": "Legacy Windows Panels",
+    "Content": "程序和功能",
+    "category": "传统 Windows 面板",
     "panel": "2",
     "Type": "Button",
     "ButtonWidth": "300",
@@ -257,8 +251,8 @@
     "link": "https://winutil.christitus.com/dev/features/legacy-windows-panels/programs"
   },
   "WPFPanelRegion": {
-    "Content": "Region",
-    "category": "Legacy Windows Panels",
+    "Content": "区域",
+    "category": "传统 Windows 面板",
     "panel": "2",
     "Type": "Button",
     "ButtonWidth": "300",
@@ -268,8 +262,8 @@
     "link": "https://winutil.christitus.com/dev/features/legacy-windows-panels/region"
   },
   "WPFPanelSecurity": {
-    "Content": "Security and Maintenance",
-    "category": "Legacy Windows Panels",
+    "Content": "安全和维护",
+    "category": "传统 Windows 面板",
     "panel": "2",
     "Type": "Button",
     "ButtonWidth": "300",
@@ -279,8 +273,8 @@
     "link": "https://winutil.christitus.com/dev/features/legacy-windows-panels/security"
   },
   "WPFPanelSound": {
-    "Content": "Sound Settings",
-    "category": "Legacy Windows Panels",
+    "Content": "声音设置",
+    "category": "传统 Windows 面板",
     "panel": "2",
     "Type": "Button",
     "ButtonWidth": "300",
@@ -290,8 +284,8 @@
     "link": "https://winutil.christitus.com/dev/features/legacy-windows-panels/sound"
   },
   "WPFPanelSystem": {
-    "Content": "System Properties",
-    "category": "Legacy Windows Panels",
+    "Content": "系统属性",
+    "category": "传统 Windows 面板",
     "panel": "2",
     "Type": "Button",
     "ButtonWidth": "300",
@@ -301,8 +295,8 @@
     "link": "https://winutil.christitus.com/dev/features/legacy-windows-panels/system"
   },
   "WPFPanelTimedate": {
-    "Content": "Time and Date",
-    "category": "Legacy Windows Panels",
+    "Content": "时间和日期",
+    "category": "传统 Windows 面板",
     "panel": "2",
     "Type": "Button",
     "ButtonWidth": "300",
@@ -312,8 +306,8 @@
     "link": "https://winutil.christitus.com/dev/features/legacy-windows-panels/timedate"
   },
   "WPFPanelFirewall": {
-    "Content": "Windows Defender Firewall",
-    "category": "Legacy Windows Panels",
+    "Content": "Windows Defender 防火墙",
+    "category": "传统 Windows 面板",
     "panel": "2",
     "Type": "Button",
     "ButtonWidth": "300",
@@ -323,8 +317,8 @@
     "link": "https://winutil.christitus.com/dev/features/legacy-windows-panels/firewall"
   },
   "WPFPanelRestore": {
-    "Content": "Windows Restore",
-    "category": "Legacy Windows Panels",
+    "Content": "Windows 还原",
+    "category": "传统 Windows 面板",
     "panel": "2",
     "Type": "Button",
     "ButtonWidth": "300",
@@ -334,8 +328,8 @@
     "link": "https://winutil.christitus.com/dev/features/legacy-windows-panels/restore"
   },
   "WPFWinUtilInstallPSProfile": {
-    "Content": "CTT PowerShell Profile - Install",
-    "category": "Powershell Profile Powershell 7+ Only",
+    "Content": "CTT PowerShell 配置文件 - 安装",
+    "category": "PowerShell 配置文件 (仅 PowerShell 7+)",
     "panel": "2",
     "Type": "Button",
     "ButtonWidth": "300",
@@ -343,8 +337,8 @@
     "link": "https://winutil.christitus.com/dev/features/powershell-profile-powershell-7--only/installpsprofile"
   },
   "WPFWinUtilUninstallPSProfile": {
-    "Content": "CTT PowerShell Profile - Remove",
-    "category": "Powershell Profile Powershell 7+ Only",
+    "Content": "CTT PowerShell 配置文件 - 移除",
+    "category": "PowerShell 配置文件 (仅 PowerShell 7+)",
     "panel": "2",
     "Type": "Button",
     "ButtonWidth": "300",
@@ -352,8 +346,8 @@
     "link": "https://winutil.christitus.com/dev/features/powershell-profile-powershell-7--only/uninstallpsprofile"
   },
   "WPFWinUtilSSHServer": {
-    "Content": "OpenSSH Server - Enable",
-    "category": "Remote Access",
+    "Content": "OpenSSH 服务器 - 启用",
+    "category": "远程访问",
     "panel": "2",
     "Type": "Button",
     "ButtonWidth": "300",

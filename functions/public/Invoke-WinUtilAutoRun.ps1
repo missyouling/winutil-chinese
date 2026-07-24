@@ -13,28 +13,28 @@ function Invoke-WinUtilAutoRun {
     }
 
     if ($sync.selectedTweaks.Count -gt 0) {
-        Write-Host "Applying tweaks..."
+        Write-Host "正在应用优化..."
         Invoke-WPFtweaksbutton
         BusyWait
     }
 
     if ($sync.selectedFeatures.Count -gt 0) {
-        Write-Host "Applying features..."
+        Write-Host "正在应用功能..."
         Invoke-WPFFeatureInstall
         BusyWait
     }
 
     if ($sync.selectedApps.Count -gt 0) {
-        Write-Host "Installing applications..."
+        Write-Host "正在安装应用..."
         Invoke-WPFInstall
         BusyWait
     }
 
     if ($sync.selectedAppx.Count -gt 0) {
-        Write-Host "Removing AppX packages..."
+        Write-Host "正在移除 AppX 包..."
         Invoke-WPFAppxRemoval
         BusyWait
     }
 
-    Write-Host "Done."
+    Write-Host "完成。"
 }

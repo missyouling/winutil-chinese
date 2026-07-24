@@ -19,12 +19,12 @@ if ($Offline) {
 }
 
 if ($ExecutionContext.SessionState.LanguageMode -ne 'FullLanguage') {
-    Write-Host "WinUtil is unable to run on your system. PowerShell execution is restricted by security policies." -ForegroundColor Red
+    Write-Host "WinUtil 无法在您的系统上运行。PowerShell 执行被安全策略限制。" -ForegroundColor Red
     return
 }
 
 if (!([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-    Write-Output "WinUtil needs to be run as Administrator. Attempting to relaunch."
+    Write-Output "WinUtil 需要以管理员身份运行。正在尝试重新启动。"
     $argList = @()
 
     $PSBoundParameters.GetEnumerator() | ForEach-Object {

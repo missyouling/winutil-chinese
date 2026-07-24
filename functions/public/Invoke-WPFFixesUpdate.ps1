@@ -31,7 +31,7 @@ function Invoke-WPFFixesUpdate {
 
     Write-Progress -Id 0 -Activity "Repairing Windows Update" -PercentComplete 0
     Set-WinUtilTaskbaritem -state "Indeterminate" -overlay "logo"
-    Write-Host "Starting Windows Update Repair..."
+    Write-Host "正在修复 Windows 更新..."
     # Wait for the first progress bar to show, otherwise the second one won't show
     Start-Sleep -Milliseconds 200
 
@@ -124,16 +124,16 @@ function Invoke-WPFFixesUpdate {
     Write-Progress -Id 0 -Activity "Repairing Windows Update" -Status "Removing Group Policy Windows Update settings..." -PercentComplete 60
     Write-Progress -Id 7 -ParentId 0 -Activity "Removing Group Policy Windows Update settings" -PercentComplete 0
     Remove-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate" -Name "ExcludeWUDriversInQualityUpdate" -ErrorAction SilentlyContinue
-    Write-Host "Defaulting driver offering through Windows Update..."
+    Write-Host "正在默认通过 Windows 更新提供驱动..."
     Remove-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Device Metadata" -Name "PreventDeviceMetadataFromNetwork" -ErrorAction SilentlyContinue
     Remove-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\DriverSearching" -Name "DontPromptForWindowsUpdate" -ErrorAction SilentlyContinue
     Remove-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\DriverSearching" -Name "DontSearchWindowsUpdate" -ErrorAction SilentlyContinue
     Remove-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\DriverSearching" -Name "DriverUpdateWizardWuSearchEnabled" -ErrorAction SilentlyContinue
     Remove-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate" -Name "ExcludeWUDriversInQualityUpdate" -ErrorAction SilentlyContinue
-    Write-Host "Defaulting Windows Update automatic restart..."
+    Write-Host "正在默认 Windows 更新自动重启..."
     Remove-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU" -Name "NoAutoRebootWithLoggedOnUsers" -ErrorAction SilentlyContinue
     Remove-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU" -Name "AUPowerManagement" -ErrorAction SilentlyContinue
-    Write-Host "Clearing ANY Windows Update Policy settings..."
+    Write-Host "正在清除所有 Windows 更新策略设置..."
     Remove-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\WindowsUpdate\UX\Settings" -Name "BranchReadinessLevel" -ErrorAction SilentlyContinue
     Remove-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\WindowsUpdate\UX\Settings" -Name "DeferFeatureUpdatesPeriodInDays" -ErrorAction SilentlyContinue
     Remove-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\WindowsUpdate\UX\Settings" -Name "DeferQualityUpdatesPeriodInDays" -ErrorAction SilentlyContinue
@@ -208,7 +208,7 @@ function Invoke-WPFFixesUpdate {
 
     [System.Windows.MessageBox]::Show($Messageboxbody, $MessageboxTitle, $ButtonType, $MessageIcon)
     Write-Host "==============================================="
-    Write-Host "-- Reset All Windows Update Settings to Stock -"
+    Write-Host "-- 将所有 Windows 更新设置重置为默认 -"
     Write-Host "==============================================="
 
     # Remove the progress bars

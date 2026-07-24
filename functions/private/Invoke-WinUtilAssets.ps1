@@ -165,7 +165,7 @@ C 21.36,47.14 28.67,50.71 30.01,52.63
           $canvas.Children.Add($roundedRectangle) | Out-Null
       }
       default {
-          Write-Host "Invalid type: $type"
+          Write-Host "无效类型: $type"
       }
   }
 

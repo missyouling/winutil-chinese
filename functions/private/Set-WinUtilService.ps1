@@ -19,14 +19,14 @@ Function Set-WinUtilService {
         $StartupType
     )
     try {
-        Write-Host "Setting Service $Name to $StartupType"
+        Write-Host "正在将服务 $Name 设置为 $StartupType"
         Write-WinUtilLog -Component "Service" -Message "Setting service $Name startup type to $StartupType"
 
         # Check if the service exists
         $service = Get-Service -Name $Name -ErrorAction Stop
 
         if (($service.PSObject.Properties.Name -contains "StartType") -and ([string]$service.StartType -eq [string]$StartupType) ) {
-            Write-Host "Service $Name is already set to $StartupType"
+            Write-Host "服务 $Name 已经设置为 $StartupType"
             Write-WinUtilLog -Component "Service" -Message "Service $Name startup type is already $StartupType; no change needed."
             return
         }

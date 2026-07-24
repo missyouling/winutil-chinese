@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WinUtil 中文版</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, 'Microsoft YaHei', sans-serif;
+      background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+      color: #e0e0e0;
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    .card {
+      background: rgba(255,255,255,0.05);
+      backdrop-filter: blur(20px);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 16px;
+      padding: 40px;
+      max-width: 520px;
+      width: 90%;
+      text-align: center;
+    }
+    h1 { font-size: 28px; color: #00d4aa; margin-bottom: 8px; }
+    .subtitle { color: #888; margin-bottom: 24px; font-size: 14px; }
+    .cmd-box {
+      background: rgba(0,0,0,0.4);
+      border: 1px solid #00d4aa33;
+      border-radius: 8px;
+      padding: 16px;
+      margin: 20px 0;
+      text-align: left;
+      font-family: monospace;
+      font-size: 13px;
+      word-break: break-all;
+    }
+    .cmd-box .prompt { color: #e94560; }
+    .cmd-box code { color: #00d4aa; }
+    .features {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+      margin: 20px 0; text-align: left; font-size: 13px;
+    }
+    .features span { padding: 6px 10px; background: rgba(255,255,255,0.03); border-radius: 6px; }
+    .features .check { color: #00d4aa; }
+    .footer { margin-top: 24px; font-size: 12px; color: #555; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>🎯 WinUtil 中文版</h1>
+    <p class="subtitle">全中文化的 Windows 系统优化工具</p>
+    <div class="cmd-box">
+      <span class="prompt">PS></span> <code>irm https://mozuiapp.com/win | iex</code>
+    </div>
+    <div class="features">
+      <span><span class="check">✓</span> 应用安装</span>
+      <span><span class="check">✓</span> 系统优化</span>
+      <span><span class="check">✓</span> 功能配置</span>
+      <span><span class="check">✓</span> AppX 管理</span>
+      <span><span class="check">✓</span> 预设方案</span>
+      <span><span class="check">✓</span> 完全中文</span>
+    </div>
+    <div class="footer">在 PowerShell 管理员模式中运行</div>
+  </div>
+</body>
+</html>

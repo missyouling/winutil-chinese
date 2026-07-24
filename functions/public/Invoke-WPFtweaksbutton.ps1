@@ -49,7 +49,7 @@ function Invoke-WPFtweaksbutton {
       $sync.ProcessRunning = $false
       Invoke-WPFUIThread -ScriptBlock { Set-WinUtilTaskbaritem -state "None" -overlay "checkmark" }
       Write-Host "================================="
-      Write-Host "--     Tweaks are Finished    ---"
+      Write-Host "--     优化已完成    ---"
       Write-Host "================================="
       Write-WinUtilLog -Component "Tweaks" -Message "Tweaks workflow completed after restore point."
       return
@@ -85,7 +85,7 @@ function Invoke-WPFtweaksbutton {
     $sync.ProcessRunning = $false
     Invoke-WPFUIThread -ScriptBlock { Set-WinUtilTaskbaritem -state "None" -overlay "checkmark" }
     Write-Host "================================="
-    Write-Host "--     Tweaks are Finished    ---"
+    Write-Host "--     优化已完成    ---"
     Write-Host "================================="
     Write-WinUtilLog -Component "Tweaks" -Message "Tweaks workflow completed."
   }

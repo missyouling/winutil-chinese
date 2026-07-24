@@ -21,7 +21,7 @@ function Invoke-WinUtilScript {
     )
 
     try {
-        Write-Host "Running Script for $Name"
+        Write-Host "正在运行 $Name 的脚本"
         Write-WinUtilLog -Component "Script" -Message "Running script for $Name"
         Invoke-Command $scriptblock -ErrorAction Stop
         Write-WinUtilLog -Component "Script" -Message "Completed script for $Name"

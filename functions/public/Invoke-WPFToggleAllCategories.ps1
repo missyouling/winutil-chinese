@@ -19,7 +19,7 @@ function Invoke-WPFToggleAllCategories {
 
     try {
         if ($null -eq $sync.ItemsControl) {
-            Write-Warning "ItemsControl not initialized"
+            Write-Warning "ItemsControl 未初始化"
             return
         }
 
