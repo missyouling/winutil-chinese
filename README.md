@@ -1,88 +1,166 @@
-# Chris Titus Tech's Windows Utility
+# 🎯 WinUtil 中文版 / Chinese Edition
 
-[![Version](https://img.shields.io/github/v/release/ChrisTitusTech/winutil?color=%230567ff&label=Latest%20Release&style=for-the-badge)](https://github.com/ChrisTitusTech/winutil/releases/latest)
-![Downloads](https://img.shields.io/github/downloads/ChrisTitusTech/winutil/winutil.ps1?label=Total%20Downloads&style=for-the-badge)
-[![Discord](https://dcbadge.limes.pink/api/server/https://discord.gg/RUbZUZyByQ?theme=default-inverted&style=for-the-badge)](https://discord.gg/RUbZUZyByQ)
-
-A curated compilation of Windows system tasks streamline **installs**, debloat with **tweaks**, troubleshoot with **config**, and configure **Windows updates**. Run it fresh on every new Windows install.
-
-![Title Screen](/docs/assets/images/Title-Screen.png)
+> 全中文化的 Windows 系统优化工具 — 基于 [Chris Titus Tech WinUtil](https://github.com/ChrisTitusTech/winutil)
+>
+> Fully localized Chinese edition of the Windows Utility Toolbox
 
 ---
 
-## Quick Start
+## 🚀 快速使用 / Quick Start
 
-> **WinUtil must be run as Administrator** Because it performs system-wide changes.
+### 中文
 
-Open PowerShell or Terminal as admin, then run:
-
-**Stable Branch (recommended)**
-```ps1
-irm https://christitus.com/win | iex
-```
-
-**Development Branch**
-```ps1
-irm https://christitus.com/windev | iex
-```
-
-### How to open an admin terminal
-
-- **Start menu:** Right-click Start → *Windows PowerShell (Admin)* or *Terminal (Admin)*
-- **Search:** Press the `Windows key`, and type `PowerShell` or `Terminal`, then `Ctrl + Shift + Enter`
-
----
-
-## Automation / Presets
-
-Apply a predefined configuration without manual selection:
+在 **Windows PowerShell（管理员身份）** 中运行以下命令：
 
 ```powershell
-& ([ScriptBlock]::Create((irm https://christitus.com/win))) -Preset Standard
+irm https://win.mozuiapp.cn/ | iex
 ```
 
-| Preset | Description |
-|--------|-------------|
-| `Standard` | Balanced defaults for most users |
-| `Minimal` | Minimal changes to suit every user |
-| `Advanced` | Deep tweaks for power users |
+### English
 
-To view exactly what each preset does, see:
-https://github.com/ChrisTitusTech/winutil/blob/main/config/preset.json
+Run the following command in **Windows PowerShell (as Administrator)**:
 
----
+```powershell
+irm https://win.mozuiapp.cn/ | iex
+```
 
-## Build & Develop
-
-See https://github.com/ChrisTitusTech/winutil/blob/main/.github/CONTRIBUTING.md
+> **注意**：需要将域名 `win.mozuiapp.cn` 替换为你实际绑定的域名
+>
+> **Note**: Replace `win.mozuiapp.cn` with your actual domain
 
 ---
 
-## Resources
+## 📦 功能特性 / Features
 
-- [Official Documentation](https://winutil.christitus.com/)
-- [YouTube Tutorial](https://www.youtube.com/watch?v=6UQZ5oQg8XA)
-- [ChrisTitus.com Article](https://christitus.com/windows-tool/)
-- [Known Issues](https://winutil.christitus.com/knownissues/)
-- [Report an Issue](https://github.com/ChrisTitusTech/winutil/issues)
+### 中文
+
+| 功能 | 说明 |
+|:---|:---|
+| 🖥️ **应用安装** | 一键安装常用软件（浏览器、开发工具、多媒体工具等） |
+| ⚙️ **系统优化** | 调整 Windows 设置，优化系统性能与隐私 |
+| 📋 **功能配置** | 启用或禁用 Windows 功能 |
+| 📱 **AppX 管理** | 管理 Windows 内置应用包 |
+| 🎯 **预设方案** | Standard / Minimal / Advanced 一键应用 |
+| 🌙 **主题切换** | 自动 / 深色 / 浅色主题 |
+| 🌐 **完全中文** | 界面、按钮、提示全部中文化 |
+
+### English
+
+| Feature | Description |
+|:---|:---|
+| 🖥️ **App Install** | One-click install of popular apps (browsers, dev tools, media tools, etc.) |
+| ⚙️ **Tweaks** | Adjust Windows settings, optimize performance & privacy |
+| 📋 **Config** | Enable or disable Windows features |
+| 📱 **AppX Manager** | Manage built-in Windows app packages |
+| 🎯 **Presets** | Standard / Minimal / Advanced — apply with one click |
+| 🌙 **Theme** | Auto / Dark / Light mode |
+| 🌐 **Chinese UI** | Full Chinese localization |
 
 ---
 
-## Support
+## 🛠️ 部署说明 / Deployment
 
-- Leave a ⭐ to show support!
-- EXE Wrapper for $10 @ https://www.cttstore.com/windows-toolbox
+### Cloudflare Workers
 
-## Sponsors
+```bash
+# 1. 复制 worker.js 内容
+cat cloudflare-worker/src/worker.js
 
-These are the sponsors that help keep this project alive with monthly contributions.
+# 2. 在 Cloudflare Dashboard 创建 Worker 并粘贴代码
+# 3. 绑定自定义域名，如 win.mozuiapp.cn
+# 4. 用户即可通过以下命令使用：
+#    irm https://你的域名/ | iex
+```
 
-<!-- sponsors --><a href="https://github.com/ysaito8015"><img src="https:&#x2F;&#x2F;github.com&#x2F;ysaito8015.png" width="60px" alt="User avatar: Yusuke Saito" /></a><a href="https://github.com/dwelfusius"><img src="https:&#x2F;&#x2F;github.com&#x2F;dwelfusius.png" width="60px" alt="User avatar: " /></a><a href="https://github.com/mews-se"><img src="https:&#x2F;&#x2F;github.com&#x2F;mews-se.png" width="60px" alt="User avatar: Martin Stockzell" /></a><a href="https://github.com/jdiegmueller"><img src="https:&#x2F;&#x2F;github.com&#x2F;jdiegmueller.png" width="60px" alt="User avatar: Jason A. Diegmueller" /></a><a href="https://github.com/robertsandrock"><img src="https:&#x2F;&#x2F;github.com&#x2F;robertsandrock.png" width="60px" alt="User avatar: RMS" /></a><a href="https://github.com/paulsheets"><img src="https:&#x2F;&#x2F;github.com&#x2F;paulsheets.png" width="60px" alt="User avatar: Paul" /></a><a href="https://github.com/djones369"><img src="https:&#x2F;&#x2F;github.com&#x2F;djones369.png" width="60px" alt="User avatar: Dave J  (WhamGeek)" /></a><a href="https://github.com/anthonymendez"><img src="https:&#x2F;&#x2F;github.com&#x2F;anthonymendez.png" width="60px" alt="User avatar: Anthony Mendez" /></a><a href="https://github.com/FatBastard0"><img src="https:&#x2F;&#x2F;github.com&#x2F;FatBastard0.png" width="60px" alt="User avatar: " /></a><a href="https://github.com/DursleyGuy"><img src="https:&#x2F;&#x2F;github.com&#x2F;DursleyGuy.png" width="60px" alt="User avatar: DursleyGuy" /></a><a href="https://github.com/DwayneTheRockLobster1"><img src="https:&#x2F;&#x2F;github.com&#x2F;DwayneTheRockLobster1.png" width="60px" alt="User avatar: " /></a><a href="https://github.com/KieraKujisawa"><img src="https:&#x2F;&#x2F;github.com&#x2F;KieraKujisawa.png" width="60px" alt="User avatar: Kiera Meredith" /></a><a href="https://github.com/andrewpayne68"><img src="https:&#x2F;&#x2F;github.com&#x2F;andrewpayne68.png" width="60px" alt="User avatar: Andrew P" /></a><a href="https://github.com/johanwildeboer"><img src="https:&#x2F;&#x2F;github.com&#x2F;johanwildeboer.png" width="60px" alt="User avatar: " /></a><a href="https://github.com/lukas346"><img src="https:&#x2F;&#x2F;github.com&#x2F;lukas346.png" width="60px" alt="User avatar: Wook" /></a><a href="https://github.com/tsv31"><img src="https:&#x2F;&#x2F;github.com&#x2F;tsv31.png" width="60px" alt="User avatar: Sorin" /></a><a href="https://github.com/seanh1995"><img src="https:&#x2F;&#x2F;github.com&#x2F;seanh1995.png" width="60px" alt="User avatar: Sean (ANGRYxScotsman)" /></a><!-- sponsors -->
+### Cloudflare Pages
+
+```bash
+# 1. 在 Cloudflare Pages 中连接此 GitHub 仓库
+# 2. 部署设置：无需构建命令，直接部署
+# 3. 绑定自定义域名
+```
 
 ---
 
-## Contributors
+## 📁 项目结构 / Project Structure
 
-[![Contributors](https://contrib.rocks/image?repo=ChrisTitusTech/winutil)](https://github.com/ChrisTitusTech/winutil/graphs/contributors)
+```
+├── winutil.ps1                  # 编译好的完整脚本（660KB）
+├── xaml/
+│   └── inputXML.xaml            # 中文化 XAML 界面（1923 行）
+├── config/
+│   ├── applications.json        # 应用配置（已翻译）
+│   ├── tweaks.json              # 优化配置（已翻译）
+│   ├── feature.json             # 功能配置（已翻译）
+│   ├── appx.json                # AppX 配置（已翻译）
+│   ├── preset.json              # 预设方案（已翻译）
+│   └── ...
+├── functions/
+│   ├── public/                  # 公开函数
+│   └── private/                 # 私有函数（提示信息已中文化）
+├── scripts/
+│   ├── main.ps1                 # 主入口
+│   └── start.ps1                # 启动脚本
+├── cloudflare-worker/           # Cloudflare Workers 部署文件
+│   ├── src/worker.js            # 含嵌入脚本的 Worker（702KB）
+│   ├── worker.js.template       # Worker 模板
+│   ├── wrangler.toml            # Wrangler 配置
+│   └── deploy.sh                # 部署脚本
+├── cloudflare-pages/            # Cloudflare Pages 部署文件
+│   ├── functions/index.js       # Pages Function
+│   ├── winutil.ps1              # 中文脚本副本
+│   └── index.html               # 欢迎页
+├── compile.py                   # Linux 编译脚本
+└── server.js                    # 本地测试服务器
+```
 
-Thanks to everyone who has contributed time and effort to this project. Keep rocking 🍻
+---
+
+## 🔧 本地开发 / Local Development
+
+### 中文
+
+```bash
+# 编译脚本
+python3 compile.py
+
+# 本地测试
+node server.js
+# 访问 http://localhost:8080/
+```
+
+### English
+
+```bash
+# Compile the script
+python3 compile.py
+
+# Local test server
+node server.js
+# Visit http://localhost:8080/
+```
+
+---
+
+## 📜 翻译范围 / Translation Scope
+
+| 文件 / File | 行数 / Lines | 翻译项 / Items |
+|:---|:---:|:---:|
+| `xaml/inputXML.xaml` | 1,923 | 按钮标签、工具提示全部中文化 |
+| `config/*.json` (×8) | — | 970 个 Content/Description 字段 |
+| `functions/*.ps1` | — | ~40 条 Write-Host 提示信息 |
+
+---
+
+## 🙏 致谢 / Credits
+
+- **[Chris Titus Tech](https://github.com/ChrisTitusTech)** — 原始 WinUtil 作者
+- **[MyDrift-user](https://github.com/MyDrift-user)** — UI 贡献
+- **[Marterich](https://github.com/Marterich)** — 优化与运行空间
+- **[DeveloperDurp](https://github.com/DeveloperDurp)** — 运行空间架构
+
+---
+
+## 📄 许可证 / License
+
+MIT License — 与 [ChrisTitusTech/winutil](https://github.com/ChrisTitusTech/winutil) 一致
