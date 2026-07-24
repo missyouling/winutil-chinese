@@ -90,7 +90,7 @@ def compile_winutil(source_dir: str, output_path: str):
         + "    This file is Base64-encoded to avoid encoding corruption\n"
         + "    when using `irm | iex` on non-English systems.\n"
         + "#>\n"
-        + "# Base64 encoded body → decoded to temp file → dot-sourced\n"
+        + "# Base64 encoded body => decoded to temp file => dot-sourced\n"
         + "$__b64 = @'\n"
         + body_b64
         + "\n'@\n"
