@@ -97,9 +97,9 @@ def compile_winutil(source_dir: str, output_path: str):
     lines.append(content)
     print("✅ scripts/main.ps1")
     
-    # 写入输出文件
+    # 写入输出文件（UTF-8 BOM）
     output = "\n".join(lines)
-    with open(output_path, "w", encoding="utf-8") as f:
+    with open(output_path, "w", encoding="utf-8-sig") as f:
         f.write(output)
     
     size_kb = len(output) / 1024

@@ -20,7 +20,7 @@ function Set-WinUtilDNS {
 
     try {
         $Adapters = Get-NetAdapter | Where-Object {$_.Status -eq "Up"}
-        Write-Host "正在确保以下接口的 DNS 设置为 $DNSProvider:"
+        Write-Host "正在确保以下接口的 DNS 设置为 ${DNSProvider}:"
         Write-Host $($Adapters | Out-String)
         Write-WinUtilLog -Component "DNS" -Message "Setting DNS provider to $DNSProvider for $(@($Adapters).Count) active adapter(s)."
 
