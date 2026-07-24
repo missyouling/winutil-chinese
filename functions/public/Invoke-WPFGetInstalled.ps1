@@ -43,7 +43,9 @@ function Invoke-WPFGetInstalled {
                 Reset-WPFCheckBoxes -checkboxfilterpattern "WPFInstall*"
             } else {
                 foreach ($checkboxName in $completedOperation.Checkboxes) {
-                    $sync.$checkboxName.ischecked = $True
+                    if ($sync.ContainsKey($checkboxName) -and $null -ne $sync.$checkboxName) {
+                        $sync.$checkboxName.IsChecked = $True
+                    }
                 }
             }
         } finally {

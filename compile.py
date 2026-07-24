@@ -1,14 +1,9 @@
 #!/usr/bin/env python3
 """WinUtil 中文版 — 编译脚本（Linux 版）
-所有含中文的嵌入内容（XAML + JSON 配置）均 Base64 编码，
-绕过 PowerShell 5.x `irm | iex` 管线编码问题。"""
+所有含中文的嵌入内容（XAML + JSON 配置）均 Base64 编码。"""
 
 import json, os, glob, sys, base64
 from datetime import datetime
-
-def b64_encode_json(data: str) -> str:
-    """JSON 字符串 → Base64"""
-    return base64.b64encode(data.encode("utf-8")).decode("ascii")
 
 def compile_winutil(source_dir: str, output_path: str):
     version = datetime.now().strftime("%y.%m.%d")
@@ -23,12 +18,14 @@ def compile_winutil(source_dir: str, output_path: str):
     print("✅ scripts/start.ps1")
 
     # 2. functions/
+    func_count = 0
     for root, _, files in os.walk(os.path.join(source_dir, "functions")):
         for f in sorted(files):
             if f.endswith(".ps1"):
                 with open(os.path.join(root, f), "r", encoding="utf-8") as fh:
                     lines.append(fh.read())
-    print("✅ functions/ — 84 个文件")
+                func_count += 1
+    print(f"✅ functions/ — {func_count} 个文件")
 
     # 3. config/*.json → Base64 嵌入 + 显式 UTF-8 解码
     config_dir = os.path.join(source_dir, "config")
@@ -45,7 +42,7 @@ def compile_winutil(source_dir: str, output_path: str):
 
     lines.append("$sync.configs = @{}\n")
     for name, data in configs.items():
-        b64 = b64_encode_json(data)
+        b64 = base64.b64encode(data.encode("utf-8")).decode("ascii")
         lines.append(
             f'$sync.configs.{name} = [System.Text.Encoding]::UTF8.GetString('
             f'[System.Convert]::FromBase64String(\'{b64}\')) | ConvertFrom-Json\n'

@@ -86,7 +86,7 @@ function Invoke-WPFInstall {
             Write-Host "==========================================="
             Write-WinUtilLog -Component "Install" -Message "Install workflow completed."
             if ($hasUI) {
-                Set-WinUtilTweaksProgressIndicator -Visible $true -Label "应用安装完成" -Percent 100
+                Set-WinUtilTweaksProgressIndicator -Visible $true -Label $sync.configs.strings.msgInstallFinished -Percent 100
                 Invoke-WPFUIThread -ScriptBlock { Set-WinUtilTaskbaritem -state "None" -overlay "checkmark" }
             }
         } catch {

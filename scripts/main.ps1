@@ -366,15 +366,15 @@ $sync["SearchBar"].Add_TextChanged({
 
 # Quick Category Search Chips
 $sync["WPFSearchChipAll"].Add_Click({ Set-WinUtilAppCategoryFilter })
-$sync["WPFSearchChipBrowsers"].Add_Click({ Set-WinUtilAppCategoryFilter -Category "浏览器" })
-$sync["WPFSearchChipCommunications"].Add_Click({ Set-WinUtilAppCategoryFilter -Category "通讯工具" })
-$sync["WPFSearchChipDevelopment"].Add_Click({ Set-WinUtilAppCategoryFilter -Category "开发工具" })
-$sync["WPFSearchChipGames"].Add_Click({ Set-WinUtilAppCategoryFilter -Category "游戏" })
-$sync["WPFSearchChipMicrosoftTools"].Add_Click({ Set-WinUtilAppCategoryFilter -Category "微软工具" })
-$sync["WPFSearchChipMultimediaTools"].Add_Click({ Set-WinUtilAppCategoryFilter -Category "多媒体工具" })
-$sync["WPFSearchChipProTools"].Add_Click({ Set-WinUtilAppCategoryFilter -Category "专业工具" })
-$sync["WPFSearchChipSelfhostedTools"].Add_Click({ Set-WinUtilAppCategoryFilter -Category "自托管工具" })
-$sync["WPFSearchChipUtilities"].Add_Click({ Set-WinUtilAppCategoryFilter -Category "工具类" })
+$sync["WPFSearchChipBrowsers"].Add_Click({ Set-WinUtilAppCategoryFilter -Category $sync.configs.strings.filterBrowsers })
+$sync["WPFSearchChipCommunications"].Add_Click({ Set-WinUtilAppCategoryFilter -Category $sync.configs.strings.filterCommunications })
+$sync["WPFSearchChipDevelopment"].Add_Click({ Set-WinUtilAppCategoryFilter -Category $sync.configs.strings.filterDevelopment })
+$sync["WPFSearchChipGames"].Add_Click({ Set-WinUtilAppCategoryFilter -Category $sync.configs.strings.filterGames })
+$sync["WPFSearchChipMicrosoftTools"].Add_Click({ Set-WinUtilAppCategoryFilter -Category $sync.configs.strings.filterMicrosoftTools })
+$sync["WPFSearchChipMultimediaTools"].Add_Click({ Set-WinUtilAppCategoryFilter -Category $sync.configs.strings.filterMultimediaTools })
+$sync["WPFSearchChipProTools"].Add_Click({ Set-WinUtilAppCategoryFilter -Category $sync.configs.strings.filterProTools })
+$sync["WPFSearchChipSelfhostedTools"].Add_Click({ Set-WinUtilAppCategoryFilter -Category $sync.configs.strings.filterSelfhostedTools })
+$sync["WPFSearchChipUtilities"].Add_Click({ Set-WinUtilAppCategoryFilter -Category $sync.configs.strings.filterUtilities })
 
 $sync["Form"].Add_Loaded({
     param($e)
