@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-"""WinUtil 中文版 — 编译脚本（Linux 版）
-所有含中文的嵌入内容（XAML + JSON 配置）均 Base64 编码。"""
+"""WinUtil 中文版 — 终极编译脚本
+将整个 PowerShell 脚本彻底 Base64 编码，输出为纯 ASCII 文件，
+完全绕过 `irm` ANSI 解码对中文的破坏。"""
 
 import json, os, glob, sys, base64
 from datetime import datetime
@@ -10,11 +11,11 @@ def compile_winutil(source_dir: str, output_path: str):
     print(f"编译 WinUtil 中文版 v{version}")
     print(f"源目录: {source_dir} → {output_path}\n")
 
-    lines = []
+    body_parts = []
 
-    # 1. start.ps1
+    # 1. scripts/start.ps1
     with open(os.path.join(source_dir, "scripts", "start.ps1"), "r", encoding="utf-8") as f:
-        lines.append(f.read().replace("#{replaceme}", version))
+        body_parts.append(f.read().replace("#{replaceme}", version))
     print("✅ scripts/start.ps1")
 
     # 2. functions/
@@ -23,11 +24,11 @@ def compile_winutil(source_dir: str, output_path: str):
         for f in sorted(files):
             if f.endswith(".ps1"):
                 with open(os.path.join(root, f), "r", encoding="utf-8") as fh:
-                    lines.append(fh.read())
+                    body_parts.append(fh.read())
                 func_count += 1
     print(f"✅ functions/ — {func_count} 个文件")
 
-    # 3. config/*.json → Base64 嵌入 + 显式 UTF-8 解码
+    # 3. config/*.json → Base64 内嵌
     config_dir = os.path.join(source_dir, "config")
     configs = {}
     for jf in sorted(glob.glob(os.path.join(config_dir, "*.json"))):
@@ -40,10 +41,10 @@ def compile_winutil(source_dir: str, output_path: str):
             data = json.dumps(wpfformat, ensure_ascii=False, indent=2)
         configs[name] = data
 
-    lines.append("$sync.configs = @{}\n")
+    body_parts.append("$sync.configs = @{}\n")
     for name, data in configs.items():
         b64 = base64.b64encode(data.encode("utf-8")).decode("ascii")
-        lines.append(
+        body_parts.append(
             f'$sync.configs.{name} = [System.Text.Encoding]::UTF8.GetString('
             f'[System.Convert]::FromBase64String(\'{b64}\')) | ConvertFrom-Json\n'
         )
@@ -53,7 +54,7 @@ def compile_winutil(source_dir: str, output_path: str):
     with open(os.path.join(source_dir, "xaml", "inputXML.xaml"), "rb") as f:
         xaml_bytes = f.read()
     xaml_b64 = base64.b64encode(xaml_bytes).decode("ascii")
-    lines.append(
+    body_parts.append(
         '$inputXML = [System.Text.Encoding]::UTF8.GetString('
         f'[System.Convert]::FromBase64String(\'{xaml_b64}\'))\n'
     )
@@ -64,21 +65,53 @@ def compile_winutil(source_dir: str, output_path: str):
     if os.path.exists(aupath):
         with open(aupath, "r", encoding="utf-8") as f:
             autounattend = f.read()
-        lines.append(f"\n$WinUtilAutounattendXml = @'\n{autounattend}\n'@\n")
+        body_parts.append(f"\n$WinUtilAutounattendXml = @'\n{autounattend}\n'@\n")
         print("✅ tools/autounattend.xml")
 
-    # 6. main.ps1
+    # 6. scripts/main.ps1
     with open(os.path.join(source_dir, "scripts", "main.ps1"), "r", encoding="utf-8") as f:
-        lines.append(f.read())
+        body_parts.append(f.read())
     print("✅ scripts/main.ps1")
 
-    # 写入 UTF-8 BOM
-    output = "\n".join(lines)
+    # 7. 合并 body → Base64 → 纯 ASCII 输出
+    body = "\n".join(body_parts)
+    body_b64 = base64.b64encode(body.encode("utf-8")).decode("ascii")
+
+    # 纯 ASCII 包装：here-string + 脚本块执行
+    output = (
+        "<#\n"
+        + ".NOTES\n"
+        + "    Author         : Chris Titus @christitustech\n"
+        + "    Runspace Author: @DeveloperDurp\n"
+        + "    GitHub         : https://github.com/ChrisTitusTech\n"
+        + "    Chinese Edition: https://github.com/missyouling/winutil-chinese\n"
+        + f"    Version        : {version}\n"
+        + ".DESCRIPTION\n"
+        + "    This file is Base64-encoded to avoid encoding corruption\n"
+        + "    when using `irm | iex` on non-English systems.\n"
+        + "#>\n"
+        + "# Base64 encoded body (pure ASCII)\n"
+        + "$__b64 = @'\n"
+        + body_b64
+        + "\n'@\n"
+        + "$__script = [ScriptBlock]::Create([System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($__b64)))\n"
+        + "& $__script\n"
+    )
+
     with open(output_path, "w", encoding="utf-8-sig") as f:
         f.write(output)
 
     kb = len(output) / 1024
+    has_non_ascii = any(ord(c) > 127 for c in output)
     print(f"\n✅ 编译完成！{output_path} ({kb:.1f} KB)")
+    print(f"   Body Base64: {len(body_b64)} 字符 ({len(body_b64)*3//4} 字节原始)")
+    print(f"   输出文件含非 ASCII 字符: {has_non_ascii}")
+    if has_non_ascii:
+        # 找出哪些行有非 ASCII 字符
+        for i, line in enumerate(output.split("\n"), 1):
+            if any(ord(c) > 127 for c in line):
+                print(f"   L{i}: {line[:80]}")
+
 
 if __name__ == "__main__":
     s = sys.argv[1] if len(sys.argv) > 1 else "/opt/data/winutil-zh"
