@@ -50,7 +50,7 @@ function Invoke-WPFAppxInstall {
             Write-Host "================================="
             Write-WinUtilLog -Component "AppX" -Message "AppX install finished."
             if ($hasUI) {
-                Set-WinUtilTweaksProgressIndicator -Visible $true -Label "AppX install finished" -Percent 100
+                Set-WinUtilTweaksProgressIndicator -Visible $true -Label "AppX 安装完成" -Percent 100
                 Invoke-WPFUIThread -ScriptBlock { Set-WinUtilTaskbaritem -state "None" -overlay "checkmark" }
             }
         }

@@ -12,7 +12,20 @@ function Initialize-WinUtilTabContent {
         return
     }
 
-    switch ($TabName) {
+    # Map Chinese tab names to internal switch labels
+    $tabMap = @{
+        "应用安装"       = "Install"
+        "系统优化"       = "Tweaks"
+        "功能配置"       = "Config"
+        "Windows 更新"  = "Updates"
+        "Win11 创建工具" = "Win11ISO"
+        "AppX 移除"     = "AppX"
+        "AppX"          = "AppX"
+    }
+
+    $normalizedTab = if ($tabMap.ContainsKey($TabName)) { $tabMap[$TabName] } else { $TabName }
+
+    switch ($normalizedTab) {
         "Install" {
             Invoke-WPFUIElements -configVariable $sync.configs.appnavigation -targetGridName "appscategory" -columncount 1
             Initialize-WPFUI -targetGridName "appscategory"

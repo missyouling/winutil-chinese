@@ -1160,7 +1160,7 @@
                     HorizontalAlignment="Right" VerticalAlignment="Top">
                     <Border Background="{DynamicResource MainBackgroundColor}" BorderBrush="{DynamicResource MainForegroundColor}" BorderThickness="1" CornerRadius="0" Margin="0">
                         <StackPanel Background="{DynamicResource MainBackgroundColor}" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" MinWidth="200">
-                            <TextBlock Text="Font Scaling"
+                            <TextBlock Text="字体缩放"
                                        FontSize="{DynamicResource ButtonFontSize}"
                                        Foreground="{DynamicResource MainForegroundColor}"
                                        HorizontalAlignment="Center"
@@ -1168,7 +1168,7 @@
                                        FontWeight="Bold"/>
                             <Separator Margin="5,0,5,5"/>
                             <StackPanel Orientation="Horizontal" Margin="10,5,10,10">
-                                <TextBlock Text="Small"
+                                <TextBlock Text="小"
                                            FontSize="{DynamicResource ButtonFontSize}"
                                            Foreground="{DynamicResource MainForegroundColor}"
                                            VerticalAlignment="Center"
@@ -1181,7 +1181,7 @@
                                         IsSnapToTickEnabled="True"
                                         Width="120"
                                         VerticalAlignment="Center"/>
-                                <TextBlock Text="Large"
+                                <TextBlock Text="大"
                                            FontSize="{DynamicResource ButtonFontSize}"
                                            Foreground="{DynamicResource MainForegroundColor}"
                                            VerticalAlignment="Center"
@@ -1315,7 +1315,7 @@
 
                     <!-- Quick Category Search Chips -->
                     <WrapPanel Grid.Row="0" Orientation="Horizontal" Margin="5,5,5,5" Name="WPFSearchChips">
-                        <TextBlock Text="Filters"
+                        <TextBlock Text="筛选"
                                    FontSize="{DynamicResource HeaderFontSize}"
                                    FontFamily="{DynamicResource HeaderFontFamily}"
                                    Foreground="{DynamicResource LabelboxForegroundColor}"
@@ -1383,8 +1383,8 @@
                             <Border Grid.ColumnSpan="2" Grid.Row="2" Grid.Column="0" Style="{StaticResource BorderStyle}">
                                 <StackPanel Background="{DynamicResource MainBackgroundColor}" Orientation="Horizontal" HorizontalAlignment="Left">
                                     <TextBlock Padding="10">
-                                        Note: Hover over items to get a better description. Please be careful as many of these tweaks will heavily modify your system.
-                                        <LineBreak/>Recommended selections are for normal users and if you are unsure do NOT check anything else!
+                                        注意：悬停查看详细说明。谨慎操作，许多优化将大幅修改系统。
+                                        <LineBreak/>推荐选项适用于普通用户，不确定请不要勾选其他选项！
                                     </TextBlock>
                                 </StackPanel>
                             </Border>
@@ -1414,11 +1414,11 @@
                         </Grid.RowDefinitions>
 
                         <StackPanel Grid.Row="0" Margin="10,10,10,14">
-                            <TextBlock Text="Windows Update Profiles"
+                            <TextBlock Text="Windows 更新配置文件"
                                        FontSize="24"
                                        FontWeight="Bold"
                                        Foreground="{DynamicResource MainForegroundColor}"/>
-                            <TextBlock Text="Choose how Windows receives updates. Each profile replaces the Windows Update settings managed by WinUtil."
+                            <TextBlock Text="选择 Windows 接收更新的方式。每个配置将替换 WinUtil 管理的更新设置。"
                                        Margin="0,6,0,0"
                                        FontSize="13"
                                        TextWrapping="Wrap"
@@ -1438,21 +1438,21 @@
                                         <RowDefinition Height="Auto"/>
                                     </Grid.RowDefinitions>
                                     <StackPanel Grid.Row="0" Margin="0,0,0,14">
-                                        <TextBlock Text="Recommended"
+                                        <TextBlock Text="推荐配置"
                                                    FontSize="20"
                                                    FontWeight="Bold"
                                                    Foreground="{DynamicResource MainForegroundColor}"/>
-                                        <TextBlock Text="Balanced security and stability"
+                                        <TextBlock Text="平衡安全与稳定"
                                                    Margin="0,4,0,0"
                                                    FontSize="13"
                                                    Foreground="{DynamicResource MainForegroundColor}"/>
                                     </StackPanel>
                                     <StackPanel Grid.Row="1">
-                                        <TextBlock Text="- Defers feature updates for 365 days" TextWrapping="Wrap" Margin="0,0,0,7" Foreground="{DynamicResource MainForegroundColor}"/>
-                                        <TextBlock Text="- Defers quality updates for 4 days" TextWrapping="Wrap" Margin="0,0,0,7" Foreground="{DynamicResource MainForegroundColor}"/>
-                                        <TextBlock Text="- Excludes drivers from quality updates" TextWrapping="Wrap" Margin="0,0,0,7" Foreground="{DynamicResource MainForegroundColor}"/>
-                                        <TextBlock Text="- Prevents automatic restarts while a user is signed in" TextWrapping="Wrap" Margin="0,0,0,12" Foreground="{DynamicResource MainForegroundColor}"/>
-                                        <TextBlock Text="Available on Windows Pro, Enterprise, and Education editions."
+                                        <TextBlock Text="- 推迟功能更新 365 天" TextWrapping="Wrap" Margin="0,0,0,7" Foreground="{DynamicResource MainForegroundColor}"/>
+                                        <TextBlock Text="- 推迟质量更新 4 天" TextWrapping="Wrap" Margin="0,0,0,7" Foreground="{DynamicResource MainForegroundColor}"/>
+                                        <TextBlock Text="- 从质量更新中排除驱动" TextWrapping="Wrap" Margin="0,0,0,7" Foreground="{DynamicResource MainForegroundColor}"/>
+                                        <TextBlock Text="- 登录时阻止自动重启" TextWrapping="Wrap" Margin="0,0,0,12" Foreground="{DynamicResource MainForegroundColor}"/>
+                                        <TextBlock Text="适用于 Win 专业版/企业版/教育版。"
                                                    FontSize="11"
                                                    FontStyle="Italic"
                                                    TextWrapping="Wrap"
@@ -1475,20 +1475,20 @@
                                         <RowDefinition Height="Auto"/>
                                     </Grid.RowDefinitions>
                                     <StackPanel Grid.Row="0" Margin="0,0,0,14">
-                                        <TextBlock Text="Windows Default"
+                                        <TextBlock Text="Windows 默认"
                                                    FontSize="20"
                                                    FontWeight="Bold"
                                                    Foreground="{DynamicResource MainForegroundColor}"/>
-                                        <TextBlock Text="Return control to Windows"
+                                        <TextBlock Text="交还控制权给 Windows"
                                                    Margin="0,4,0,0"
                                                    FontSize="13"
                                                    Foreground="{DynamicResource MainForegroundColor}"/>
                                     </StackPanel>
                                     <StackPanel Grid.Row="1">
-                                        <TextBlock Text="- Removes Windows Update policies applied by WinUtil" TextWrapping="Wrap" Margin="0,0,0,7" Foreground="{DynamicResource MainForegroundColor}"/>
-                                        <TextBlock Text="- Restores update service startup settings" TextWrapping="Wrap" Margin="0,0,0,7" Foreground="{DynamicResource MainForegroundColor}"/>
-                                        <TextBlock Text="- Re-enables update scheduled tasks" TextWrapping="Wrap" Margin="0,0,0,12" Foreground="{DynamicResource MainForegroundColor}"/>
-                                        <TextBlock Text="Use this to undo the Recommended or Disable profile."
+                                        <TextBlock Text="- 移除 WinUtil 应用的更新策略" TextWrapping="Wrap" Margin="0,0,0,7" Foreground="{DynamicResource MainForegroundColor}"/>
+                                        <TextBlock Text="- 恢复更新服务启动设置" TextWrapping="Wrap" Margin="0,0,0,7" Foreground="{DynamicResource MainForegroundColor}"/>
+                                        <TextBlock Text="- 重新启用更新计划任务" TextWrapping="Wrap" Margin="0,0,0,12" Foreground="{DynamicResource MainForegroundColor}"/>
+                                        <TextBlock Text="用于撤销推荐或禁用配置。"
                                                    FontSize="11"
                                                    FontStyle="Italic"
                                                    TextWrapping="Wrap"
@@ -1511,21 +1511,21 @@
                                         <RowDefinition Height="Auto"/>
                                     </Grid.RowDefinitions>
                                     <StackPanel Grid.Row="0" Margin="0,0,0,14">
-                                        <TextBlock Text="Disable Updates"
+                                        <TextBlock Text="禁用更新"
                                                    FontSize="20"
                                                    FontWeight="Bold"
                                                    Foreground="Red"/>
-                                        <TextBlock Text="Advanced use only"
+                                        <TextBlock Text="仅限高级用户"
                                                    Margin="0,4,0,0"
                                                    FontSize="13"
                                                    FontWeight="SemiBold"
                                                    Foreground="Red"/>
                                     </StackPanel>
                                     <StackPanel Grid.Row="1">
-                                        <TextBlock Text="- Disables automatic update policy" TextWrapping="Wrap" Margin="0,0,0,7" Foreground="{DynamicResource MainForegroundColor}"/>
-                                        <TextBlock Text="- Stops update services and scheduled tasks" TextWrapping="Wrap" Margin="0,0,0,7" Foreground="{DynamicResource MainForegroundColor}"/>
-                                        <TextBlock Text="- Clears downloaded update files" TextWrapping="Wrap" Margin="0,0,0,12" Foreground="{DynamicResource MainForegroundColor}"/>
-                                        <TextBlock Text="Security updates will not be installed while this profile is active."
+                                        <TextBlock Text="- 禁用自动更新策略" TextWrapping="Wrap" Margin="0,0,0,7" Foreground="{DynamicResource MainForegroundColor}"/>
+                                        <TextBlock Text="- 停止更新服务和计划任务" TextWrapping="Wrap" Margin="0,0,0,7" Foreground="{DynamicResource MainForegroundColor}"/>
+                                        <TextBlock Text="- 清除已下载更新文件" TextWrapping="Wrap" Margin="0,0,0,12" Foreground="{DynamicResource MainForegroundColor}"/>
+                                        <TextBlock Text="此配置激活期间不安装安全更新。"
                                                    FontSize="11"
                                                    FontStyle="Italic"
                                                    TextWrapping="Wrap"
@@ -1543,7 +1543,7 @@
                         </UniformGrid>
 
                         <Border Grid.Row="2" Style="{StaticResource BorderStyle}" Margin="8,14,8,8" Padding="12">
-                            <TextBlock Text="Changes apply system-wide. Restart Windows after switching profiles. Use Restore Defaults to undo WinUtil update policies."
+                            <TextBlock Text="更改作用于全系统。切换配置后重启 Windows。使用恢复默认可撤销策略。"
                                        TextWrapping="Wrap"
                                        HorizontalAlignment="Center"
                                        Foreground="{DynamicResource MainForegroundColor}"/>
@@ -1572,16 +1572,16 @@
                                 <StackPanel Grid.Column="0" Margin="5,5,15,5">
                                     <TextBlock FontSize="{DynamicResource FontSize}" FontWeight="Bold"
                                                Foreground="{DynamicResource MainForegroundColor}" Margin="0,0,0,8">
-                                        Step 1 - Select Windows 11 ISO
+                                        步骤 1 - 选择 Windows 11 ISO
                                     </TextBlock>
                                     <TextBlock FontSize="{DynamicResource FontSize}" Foreground="{DynamicResource MainForegroundColor}"
                                                TextWrapping="Wrap" Margin="0,0,0,6">
-                                        Browse to your locally saved Windows 11 ISO file. Only official ISOs
-                                        downloaded from Microsoft are supported.
+                                        浏览本地的 Windows 11 ISO 文件。仅支持
+                                        从 Microsoft 下载的官方 ISO。
                                     </TextBlock>
                                     <TextBlock FontSize="{DynamicResource FontSize}" Foreground="{DynamicResource MainForegroundColor}"
                                                TextWrapping="Wrap" Margin="0,0,0,12" FontStyle="Italic">
-                                        <Run FontWeight="Bold">NOTE:</Run> This is only meant for Fresh and New Windows installs.
+                                        <Run FontWeight="Bold">注意：</Run> 仅适用于全新 Windows 安装。
                                     </TextBlock>
                                     <Grid>
                                         <Grid.ColumnDefinitions>
@@ -1594,7 +1594,7 @@
                                                  VerticalAlignment="Center"
                                                  Padding="6,4"
                                                  Margin="0,0,6,0"
-                                                 Text="No ISO selected..."
+                                                 Text="未选择 ISO..."
                                                  Foreground="{DynamicResource MainForegroundColor}"
                                                  Background="{DynamicResource MainBackgroundColor}"/>
                                         <Button Grid.Column="1"
@@ -1620,26 +1620,26 @@
                                     <StackPanel>
                                         <TextBlock FontSize="{DynamicResource FontSize}" FontWeight="Bold"
                                                    Foreground="OrangeRed" Margin="0,0,0,10">
-                                            !!WARNING!! You must use an official Microsoft ISO
+                                            !!警告！！ 必须使用官方 Microsoft ISO
                                         </TextBlock>
                                         <TextBlock FontSize="{DynamicResource FontSize}"
                                                    Foreground="{DynamicResource MainForegroundColor}"
                                                    TextWrapping="Wrap" Margin="0,0,0,8">
-                                            Download the Windows 11 ISO directly from Microsoft.com.
-                                            Third-party, pre-modified, or unofficial images are not supported
-                                            and may produce broken results.
+                                            直接从 Microsoft.com 下载 Windows 11 ISO。
+                                            不支持第三方、预先修改或非官方映像
+                                            可能导致损坏结果。
                                         </TextBlock>
                                         <TextBlock FontSize="{DynamicResource FontSize}"
                                                    Foreground="{DynamicResource MainForegroundColor}"
                                                    TextWrapping="Wrap" Margin="0,0,0,6">
-                                            On the Microsoft download page, choose:
+                                            在 Microsoft 下载页面选择：
                                         </TextBlock>
                                         <TextBlock FontSize="{DynamicResource FontSize}"
                                                    Foreground="{DynamicResource MainForegroundColor}"
                                                    TextWrapping="Wrap" Margin="12,0,0,12">
-                                            - Edition  : Windows 11
-                                            <LineBreak/>- Language : your preferred language
-                                            <LineBreak/>- Architecture : 64-bit (x64)
+                                            - 版本：Windows 11
+                                            <LineBreak/>- 语言：首选语言
+                                            <LineBreak/>- 架构：64-bit
                                         </TextBlock>
                                         <Button Name="WPFWin11ISODownloadLink"
                                                 Content="打开微软下载页面"
@@ -1668,8 +1668,8 @@
                                     <TextBlock FontSize="{DynamicResource FontSize}"
                                                Foreground="{DynamicResource MainForegroundColor}"
                                                TextWrapping="Wrap" Margin="0,0,0,12" MaxWidth="320">
-                                        Mount the ISO and confirm it contains a valid Windows 11
-                                        install.wim before any modifications are made.
+                                        挂载 ISO 并确认包含有效的 Windows 11
+                                        install.wim，然后再修改。
                                     </TextBlock>
                                     <Button Name="WPFWin11ISOMountButton"
                                             Content="挂载并验证 ISO"
@@ -1705,7 +1705,7 @@
                                         <TextBlock FontSize="{DynamicResource FontSize}" FontWeight="Bold"
                                                    Foreground="{DynamicResource MainForegroundColor}"
                                                    Margin="0,6,0,4">
-                                            Select Edition:
+                                            选择版本：
                                         </TextBlock>
                                         <ComboBox Name="WPFWin11ISOEditionComboBox"
                                                   FontSize="{DynamicResource FontSize}"
@@ -1729,10 +1729,10 @@
                                 <TextBlock FontSize="{DynamicResource FontSize}"
                                            Foreground="{DynamicResource MainForegroundColor}"
                                            TextWrapping="Wrap" Margin="0,0,0,12">
-                                    The ISO contents will be extracted to a temporary working directory,
-                                    install.wim will be modified (components removed, tweaks applied),
-                                    and the result will be repackaged. This process may take several minutes
-                                    depending on your hardware.
+                                    ISO 内容将提取到临时工作目录，
+                                    install.wim 将被修改（移除组件、应用优化），
+                                    然后重新打包。此过程可能需要数分钟，
+                                    具体取决于硬件。
                                 </TextBlock>
                                 <Button Name="WPFWin11ISOModifyButton"
                                         Content="运行 Windows ISO 修改和创建工具"
@@ -1755,7 +1755,7 @@
                                     <TextBlock Grid.Column="0" FontSize="{DynamicResource FontSize}" FontWeight="Bold"
                                                Foreground="{DynamicResource MainForegroundColor}"
                                                VerticalAlignment="Center">
-                                        Step 4 - Output: What would you like to do with the modified image?
+                                        步骤 4 - 输出：如何处理修改后的映像？
                                     </TextBlock>
                                     <Button Grid.Column="1"
                                             Name="WPFWin11ISOCleanResetButton"
@@ -1798,9 +1798,9 @@
                                         <TextBlock FontSize="{DynamicResource FontSize}"
                                                    Foreground="{DynamicResource MainForegroundColor}"
                                                    TextWrapping="Wrap" Margin="0,0,0,8">
-                                            <Run FontWeight="Bold" Foreground="OrangeRed">!! All data on the selected USB drive will be permanently erased !!</Run>
+                                            <Run FontWeight="Bold" Foreground="OrangeRed">!! 所选 U 盘上的所有数据将被永久擦除 !!</Run>
                                             <LineBreak/>
-                                            Select a removable USB drive below, then click Erase &amp; Write.
+                                            选择下方的可移动 U 盘，然后点击擦除和写入。
                                         </TextBlock>
                                         <!-- USB drive selector row -->
                                         <Grid Margin="0,0,0,8">
@@ -1833,7 +1833,7 @@
 
                     </StackPanel>
 
-                    <!-- Status Log (fills remaining height) -->
+                    <!-- 状态日志 (fills remaining height) -->
                     <Grid Grid.Row="1" Margin="5">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/>
@@ -1843,7 +1843,7 @@
                                    FontSize="{DynamicResource FontSize}" FontWeight="Bold"
                                    Foreground="{DynamicResource MainForegroundColor}"
                                    Margin="0,0,0,4">
-                            Status Log
+                            状态日志
                         </TextBlock>
                         <TextBox Grid.Row="1"
                                  Name="WPFWin11ISOStatusLog"
@@ -1856,7 +1856,7 @@
                                  Foreground="{DynamicResource MainForegroundColor}"
                                  BorderBrush="{DynamicResource BorderColor}"
                                  BorderThickness="1"
-                                 Text="Ready. Please select a Windows 11 ISO to begin."/>
+                                 Text="就绪。请选择 Windows 11 ISO 开始。"/>
                     </Grid>
 
                 </Grid>
@@ -1892,9 +1892,9 @@
                             <Border Grid.Row="2" Style="{StaticResource BorderStyle}" Margin="5,15,5,5">
                                 <StackPanel Background="{DynamicResource MainBackgroundColor}" Orientation="Horizontal" HorizontalAlignment="Left">
                                     <TextBlock Padding="10" TextWrapping="Wrap" Foreground="{DynamicResource MainForegroundColor}">
-                                        Note: Select the Windows AppX packages you wish to install or remove.
-                                        <LineBreak/>Install Selected registers a local manifest when available, then falls back to the Microsoft Store.
-                                        <LineBreak/>Remove Selected removes packages for the current user and all new user profiles.
+                                        注意：选择要安装或移除的 Windows AppX 包。
+                                        <LineBreak/>安装选中将在可用时注册本地清单，否则回退到 Microsoft Store。
+                                        <LineBreak/>移除选中将移除当前和所有新用户的包。
                                     </TextBlock>
                                 </StackPanel>
                             </Border>

@@ -28,21 +28,17 @@ function Invoke-WPFTab {
         }
     }
     $sync.currentTab = $sync.$tabNav.Items[$tabNumber].Header
+    $sync.tabManager = @{ currentTab = $tabNumber }
     Initialize-WinUtilTabContent -TabName $sync.currentTab
 
-    # Always reset the filter for the current tab
-    if ($sync.currentTab -eq "Install") {
-        # Reset Install tab filter
+    # Tab indexes: 0=应用安装, 1=系统优化, 2=功能配置, 3=Windows更新, 4=Win11创建工具, 5=AppX移除
+    if ($tabNumber -eq 0) {
         Find-AppsByNameOrDescription -SearchString ""
-    } elseif ($sync.currentTab -eq "Tweaks") {
-        # Reset Tweaks tab filter
-        Find-TweaksByNameOrDescription -SearchString ""
-    } elseif ($sync.currentTab -eq "AppX") {
-        # Reset AppX tab filter
+    } elseif ($tabNumber -eq 1 -or $tabNumber -eq 5) {
         Find-TweaksByNameOrDescription -SearchString ""
     }
 
-    # Show search bar in Install, Tweaks, and AppX tabs
+    # Show search bar in Install(index 0), Tweaks(index 1), and AppX(index 5) tabs
     if ($tabNumber -eq 0 -or $tabNumber -eq 1 -or $tabNumber -eq 5) {
         $sync.SearchBar.Visibility = "Visible"
         $searchIcon = ($sync.Form.FindName("SearchBar").Parent.Children | Where-Object { $_ -is [System.Windows.Controls.TextBlock] -and $_.Text -eq [char]0xE721 })[0]

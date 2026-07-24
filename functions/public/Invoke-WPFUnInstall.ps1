@@ -10,7 +10,7 @@ function Invoke-WPFUnInstall {
     #>
 
     if($sync.ProcessRunning) {
-        $msg = "[Invoke-WPFUnInstall] Install process is currently running"
+        $msg = "[Invoke-WPFUnInstall]安装过程正在进行中。
         Show-WinUtilMessage -Message $msg -Title "Winutil" -Button "OK" -Icon "Warning"
         return
     }
@@ -100,7 +100,7 @@ function Invoke-WPFUnInstall {
             Write-Host "==========================================="
             Write-WinUtilLog -Component "Uninstall" -Message "Uninstall workflow completed."
             if ($hasUI) {
-                Set-WinUtilTweaksProgressIndicator -Visible $true -Label "App uninstall finished" -Percent 100
+                Set-WinUtilTweaksProgressIndicator -Visible $true -Label "应用卸载完成" -Percent 100
                 Invoke-WPFUIThread -ScriptBlock { Set-WinUtilTaskbaritem -state "None" -overlay "checkmark" }
             }
         } catch {
