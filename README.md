@@ -16,7 +16,7 @@
 irm https://win.mozuiapp.com/win | iex
 ```
 
-> `https://win.mozuiapp.com/` 为欢迎页面（浏览器访问）
+> `https://win.mozuiapp.com/` 为欢迎页面（浏览器访问）— 采用 **macOS 风格毛玻璃设计**，自动适配 Bing 每日壁纸背景
 >
 > `https://win.mozuiapp.com/win` 返回 PowerShell 脚本（`irm` 专用）
 
@@ -28,7 +28,7 @@ Run the following command in **Windows PowerShell (as Administrator)**:
 irm https://win.mozuiapp.com/win | iex
 ```
 
-> `https://win.mozuiapp.com/` serves a welcome page (for browsers)
+> `https://win.mozuiapp.com/` serves a welcome page (for browsers) — **macOS-style glassmorphism design** with Bing daily wallpaper background
 >
 > `https://win.mozuiapp.com/win` serves the PowerShell script (for `irm`)
 
@@ -126,7 +126,7 @@ python3 -m http.server 8080 --bind 0.0.0.0
 │   ├── wrangler.toml            # Wrangler 配置
 │   └── deploy.sh                # 本地编译部署脚本
 ├── cloudflare-pages/            # Pages 部署
-│   ├── index.html               # 欢迎页（含一键复制按钮）
+│   ├── index.html               # macOS 风格欢迎页（毛玻璃设计）
 │   ├── _redirects               # 路由规则
 │   ├── _headers                 # 响应头（UTF-8 + CORS）
 │   └── winutil.ps1              # 脚本副本

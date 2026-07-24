@@ -3,102 +3,408 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>WinUtil 中文版</title>
+  <title>WinUtil 中文版 — 全中文 Windows 优化工具箱</title>
   <style>
+    :root {
+      --app-text: #1D1D1F;
+      --app-secondary: #86868B;
+      --apple-blue: #007AFF;
+      --apple-blue-hover: #0062CC;
+      --apple-green: #34C759;
+      --border-color: rgba(0,0,0,0.1);
+      --radius-lg: 20px;
+      --radius-sm: 10px;
+    }
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
-      font-family: -apple-system, 'Microsoft YaHei', sans-serif;
-      background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
-      color: #e0e0e0;
+      font-family: -apple-system, "SF Pro Display", "PingFang SC", "Microsoft YaHei", sans-serif;
+      margin: 0; padding: 20px;
+      color: var(--app-text);
       min-height: 100vh;
       display: flex;
+      flex-direction: column;
+      align-items: center;
       justify-content: center;
-      align-items: center;
+      background-image: url('https://bing.img.run/rand.php');
+      background-size: cover;
+      background-position: center;
+      background-attachment: fixed;
+      overflow-x: hidden;
     }
-    .card {
-      background: rgba(255,255,255,0.05);
-      backdrop-filter: blur(20px);
-      border: 1px solid rgba(255,255,255,0.1);
-      border-radius: 16px;
-      padding: 40px;
-      max-width: 560px;
-      width: 90%;
-      text-align: center;
+
+    /* macOS 风格分段导航 */
+    .nav {
+      margin-bottom: 24px;
+      display: inline-flex;
+      background: rgba(255, 255, 255, 0.65);
+      backdrop-filter: blur(30px) saturate(180%);
+      -webkit-backdrop-filter: blur(30px) saturate(180%);
+      padding: 5px;
+      border-radius: 12px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.08), inset 0 1px 1px rgba(255,255,255,0.8);
+      z-index: 10;
+      border: 0.5px solid rgba(255,255,255,0.5);
     }
-    h1 { font-size: 28px; color: #00d4aa; margin-bottom: 8px; }
-    .subtitle { color: #888; margin-bottom: 24px; font-size: 14px; }
-    .cmd-box {
-      background: rgba(0,0,0,0.4);
-      border: 1px solid #00d4aa33;
-      border-radius: 8px;
-      padding: 16px;
-      margin: 20px 0;
-      text-align: left;
-      font-family: monospace;
+    .nav-tab {
+      padding: 7px 28px;
       font-size: 13px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
+      font-weight: 600;
+      cursor: pointer;
+      border-radius: 8px;
+      transition: all 0.2s cubic-bezier(0.25, 0.8, 0.25, 1);
+      color: #1D1D1F;
+      opacity: 0.6;
+      user-select: none;
     }
-    .cmd-box code { color: #00d4aa; word-break: break-all; flex: 1; }
-    .cmd-box .prompt { color: #e94560; }
+    .nav-tab.active {
+      background: #fff;
+      opacity: 1;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+      color: var(--apple-blue);
+    }
+    .nav-tab:hover:not(.active) { opacity: 0.8; }
+
+    .container {
+      width: 100%;
+      max-width: 680px;
+    }
+
+    .glass-panel {
+      background: rgba(255, 255, 255, 0.75);
+      backdrop-filter: blur(40px) saturate(180%);
+      -webkit-backdrop-filter: blur(40px) saturate(180%);
+      padding: 40px;
+      border-radius: var(--radius-lg);
+      border: 0.5px solid rgba(255, 255, 255, 0.8);
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+      width: 100%;
+      box-sizing: border-box;
+      position: relative;
+      overflow: hidden;
+      min-height: 300px;
+    }
+
+    .tab-content { display: none; animation: fadeIn 0.25s ease; }
+    .tab-content.active { display: block; }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* 首页 — WinUtil */
+    .hero-icon {
+      font-size: 48px;
+      text-align: center;
+      margin-bottom: 8px;
+    }
+    h1 {
+      font-size: 30px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      text-align: center;
+      margin-bottom: 6px;
+      color: var(--app-text);
+    }
+    .subtitle {
+      text-align: center;
+      color: var(--app-secondary);
+      font-size: 14px;
+      margin-bottom: 28px;
+      font-weight: 400;
+    }
+
+    .cmd-box {
+      background: rgba(0,0,0,0.05);
+      border: 0.5px solid var(--border-color);
+      border-radius: var(--radius-sm);
+      padding: 14px 18px;
+      margin-bottom: 24px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .cmd-box .prompt { color: var(--apple-blue); font-weight: 600; }
+    .cmd-box code {
+      flex: 1;
+      font-size: 13px;
+      font-family: "SF Mono", "Cascadia Code", monospace;
+      color: var(--app-text);
+      word-break: break-all;
+      user-select: all;
+    }
     .copy-btn {
-      background: #00d4aa33;
-      border: 1px solid #00d4aa66;
-      color: #00d4aa;
+      background: var(--apple-blue);
+      color: #fff;
+      border: none;
       padding: 6px 14px;
       border-radius: 6px;
+      font-size: 12px;
+      font-weight: 500;
       cursor: pointer;
-      font-size: 13px;
-      font-family: inherit;
-      margin-left: 12px;
-      white-space: nowrap;
       transition: all 0.2s;
+      white-space: nowrap;
+      font-family: inherit;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.05);
     }
-    .copy-btn:hover { background: #00d4aa55; }
-    .copy-btn.copied { background: #00d4aa; color: #000; }
+    .copy-btn:hover { background: var(--apple-blue-hover); }
+    .copy-btn:active { transform: scale(0.97); }
+    .copy-btn.copied { background: var(--apple-green); }
+
     .features {
-      display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
-      margin: 20px 0; text-align: left; font-size: 13px;
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 20px;
     }
-    .features span { padding: 6px 10px; background: rgba(255,255,255,0.03); border-radius: 6px; }
-    .features .check { color: #00d4aa; }
-    .footer { margin-top: 24px; font-size: 12px; color: #555; }
+    .feature-item {
+      background: rgba(255,255,255,0.6);
+      border: 0.5px solid var(--border-color);
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--app-text);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .feature-item .icon { font-size: 15px; }
+
+    .warning-note {
+      background: rgba(255, 149, 0, 0.1);
+      border: 0.5px solid rgba(255, 149, 0, 0.2);
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 12px;
+      color: #C93400;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .warning-note .icon { font-size: 16px; }
+
+    /* 关于页 */
+    .about-section h2 {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 16px;
+      color: var(--app-text);
+    }
+    .about-section p {
+      font-size: 14px;
+      line-height: 1.7;
+      color: var(--app-secondary);
+      margin-bottom: 16px;
+    }
+    .about-section a {
+      color: var(--apple-blue);
+      text-decoration: none;
+      font-weight: 500;
+    }
+    .about-section a:hover { text-decoration: underline; }
+
+    .version-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(0,122,255,0.1);
+      color: var(--apple-blue);
+      font-size: 12px;
+      font-weight: 600;
+      padding: 4px 12px;
+      border-radius: 20px;
+      margin-bottom: 20px;
+    }
+
+    .footer {
+      margin-top: 20px;
+      text-align: center;
+      font-size: 12px;
+      color: rgba(255,255,255,0.8);
+      text-shadow: 0 1px 5px rgba(0,0,0,0.4);
+      font-weight: 500;
+    }
+    .footer a {
+      color: #fff;
+      text-decoration: none;
+      transition: opacity 0.2s;
+    }
+    .footer a:hover { opacity: 0.8; text-decoration: underline; }
+
+    /* Toast */
+    #toastRoot {
+      position: fixed;
+      top: 100px;
+      right: 20px;
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      align-items: flex-end;
+      pointer-events: none;
+    }
+    .toast-message {
+      background: rgba(255, 255, 255, 0.85);
+      backdrop-filter: blur(30px) saturate(180%);
+      border: 0.5px solid rgba(0,0,0,0.1);
+      box-shadow: 0 4px 14px rgba(0,0,0,0.1);
+      border-radius: 10px;
+      padding: 10px 16px;
+      font-size: 13px;
+      font-weight: 500;
+      color: #1D1D1F;
+      display: flex;
+      align-items: center;
+      animation: slideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+      max-width: 300px;
+      pointer-events: auto;
+    }
+    .toast-message.hide {
+      animation: slideOut 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+    @keyframes slideIn {
+      from { transform: translateX(120%); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+    @keyframes slideOut {
+      from { transform: translateX(0); opacity: 1; }
+      to { transform: translateX(120%); opacity: 0; }
+    }
+
+    @media (max-width: 600px) {
+      body { padding: 12px; }
+      .glass-panel { padding: 24px; border-radius: 16px; }
+      h1 { font-size: 24px; }
+      .features { grid-template-columns: 1fr 1fr; }
+      .cmd-box { flex-wrap: wrap; }
+      .nav-tab { padding: 7px 18px; font-size: 12px; }
+    }
   </style>
 </head>
 <body>
-  <div class="card">
-    <h1>🎯 WinUtil 中文版</h1>
-    <p class="subtitle">全中文化的 Windows 系统优化工具</p>
-    <div class="cmd-box">
-      <code><span class="prompt">PS></span> irm https://win.mozuiapp.com/win | iex</code>
-      <button class="copy-btn" onclick="copyCmd()" id="copyBtn">复制</button>
-    </div>
-    <div class="features">
-      <span><span class="check">✓</span> 应用安装</span>
-      <span><span class="check">✓</span> 系统优化</span>
-      <span><span class="check">✓</span> 功能配置</span>
-      <span><span class="check">✓</span> AppX 管理</span>
-      <span><span class="check">✓</span> 预设方案</span>
-      <span><span class="check">✓</span> 完全中文</span>
-    </div>
-    <div class="footer">在 PowerShell 管理员模式中运行</div>
+  <div id="toastRoot"></div>
+
+  <div class="nav">
+    <div class="nav-tab active" onclick="switchTab('winutil')">WinUtil</div>
+    <div class="nav-tab" onclick="switchTab('about')">关于</div>
   </div>
+
+  <div class="container">
+    <div class="glass-panel">
+
+      <!-- WinUtil Tab -->
+      <div id="winutilUI" class="tab-content active">
+        <div class="hero-icon">🎯</div>
+        <h1>WinUtil 中文版</h1>
+        <p class="subtitle">全中文的 Windows 系统优化工具箱 — 源自 Chris Titus Tech</p>
+
+        <div class="cmd-box">
+          <span class="prompt">PS&gt;</span>
+          <code>irm https://win.mozuiapp.com/win | iex</code>
+          <button class="copy-btn" onclick="copyCmd()" id="copyBtn">复制</button>
+        </div>
+
+        <div class="features">
+          <div class="feature-item"><span class="icon">📦</span> 应用安装</div>
+          <div class="feature-item"><span class="icon">⚡</span> 系统优化</div>
+          <div class="feature-item"><span class="icon">⚙️</span> 功能配置</div>
+          <div class="feature-item"><span class="icon">🗑️</span> AppX 管理</div>
+          <div class="feature-item"><span class="icon">📋</span> 预设方案</div>
+          <div class="feature-item"><span class="icon">🇨🇳</span> 完全中文</div>
+        </div>
+
+        <div class="warning-note">
+          <span class="icon">⚠️</span>
+          <span>请在 <strong>PowerShell 管理员模式</strong> 中运行上述命令</span>
+        </div>
+      </div>
+
+      <!-- About Tab -->
+      <div id="aboutUI" class="tab-content">
+        <h1 style="margin-bottom:4px;">💡 关于 WinUtil</h1>
+        <p class="subtitle" style="margin-bottom:24px;">项目介绍与版本信息</p>
+
+        <div class="version-badge">🔄 v26.07.24 · 持续更新</div>
+
+        <div class="about-section">
+          <h2>📖 什么是 WinUtil？</h2>
+          <p>
+            WinUtil（Windows Utility）是由 <a href="https://github.com/ChrisTitusTech/winutil" target="_blank">Chris Titus Tech</a> 开发的
+            开源 Windows 系统管理工具箱。本项目在原始基础上进行了 <strong>完整中文化</strong>，
+            包含界面、菜单、日志、预设方案在内的全部内容。
+          </p>
+
+          <h2>✨ 核心功能</h2>
+          <p>
+            • <strong>应用安装</strong> — 一键批量安装常用软件（Winget / Chocolatey）<br>
+            • <strong>系统优化</strong> — 数十项系统级优化开关，一键应用预设方案<br>
+            • <strong>功能配置</strong> — 灵活配置 Windows 隐藏功能与隐私选项<br>
+            • <strong>AppX 管理</strong> — 批量卸载预装应用，清理系统臃肿<br>
+            • <strong>Windows 更新控制</strong> — 精细管理更新策略与行为<br>
+            • <strong>Win11 创建工具</strong> — 一键生成绕过 TPM/CPU 检查的 ISO
+          </p>
+
+          <h2>🔗 相关链接</h2>
+          <p>
+            <a href="https://github.com/missyouling/winutil-chinese" target="_blank">📦 GitHub 仓库</a>
+            &nbsp;·&nbsp;
+            <a href="https://github.com/missyouling/mozui-img" target="_blank">🖼️ MOZUI 图床</a>
+          </p>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="footer">
+      <a href="https://github.com/missyouling/winutil-chinese" target="_blank">missyouling/winutil-chinese</a>
+    </div>
+  </div>
+
   <script>
+    function showToast(msg) {
+      const root = document.getElementById('toastRoot');
+      const toast = document.createElement('div');
+      toast.className = 'toast-message';
+      toast.innerHTML = msg;
+      root.appendChild(toast);
+      setTimeout(() => {
+        toast.classList.add('hide');
+        setTimeout(() => toast.remove(), 300);
+      }, 2500);
+    }
+
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+      document.querySelectorAll('.nav-tab').forEach(el => el.classList.remove('active'));
+      document.getElementById(tabId + 'UI').classList.add('active');
+      const target = document.querySelector('.nav-tab[onclick*="' + tabId + '"]');
+      if (target) target.classList.add('active');
+    }
+
     function copyCmd() {
       const cmd = "irm https://win.mozuiapp.com/win | iex";
-      navigator.clipboard.writeText(cmd).then(() => {
-        const b = document.getElementById('copyBtn');
-        b.textContent = '已复制 ✓'; b.classList.add('copied');
-        setTimeout(() => { b.textContent = '复制'; b.classList.remove('copied'); }, 2000);
-      }).catch(() => {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(cmd).then(() => {
+          const b = document.getElementById('copyBtn');
+          b.textContent = '已复制 ✓'; b.classList.add('copied');
+          showToast('✅ 命令已复制，请在 PowerShell(管理员) 中粘贴');
+          setTimeout(() => { b.textContent = '复制'; b.classList.remove('copied'); }, 2500);
+        }).catch(fallbackCopy);
+      } else { fallbackCopy(); }
+
+      function fallbackCopy() {
         const t = document.createElement('textarea');
-        t.value = cmd; document.body.appendChild(t); t.select();
-        document.execCommand('copy'); document.body.removeChild(t);
-        const b = document.getElementById('copyBtn');
-        b.textContent = '已复制 ✓'; b.classList.add('copied');
-        setTimeout(() => { b.textContent = '复制'; b.classList.remove('copied'); }, 2000);
-      });
+        t.value = cmd; t.style.position = 'fixed'; t.style.opacity = '0';
+        document.body.appendChild(t); t.select();
+        try {
+          document.execCommand('copy');
+          const b = document.getElementById('copyBtn');
+          b.textContent = '已复制 ✓'; b.classList.add('copied');
+          showToast('✅ 命令已复制');
+          setTimeout(() => { b.textContent = '复制'; b.classList.remove('copied'); }, 2500);
+        } catch(e) { showToast('❌ 复制失败，请手动选择复制'); }
+        document.body.removeChild(t);
+      }
     }
   </script>
 </body>
