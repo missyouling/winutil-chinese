@@ -57,7 +57,7 @@ function Set-WinUtilRegistry {
        Write-WinUtilLog -Level "ERROR" -Component "Registry" -Message "Unauthorized while changing $Path\$Name`: $($psitem.Exception.Message)"
     } catch {
         Write-Warning "Unable to set $Name due to unhandled exception."
-        Write-Warning $psitem.Exception.StackTrace
+        Write-Warning $([string]$psitem.Exception.StackTrace)
         Write-WinUtilLog -Level "ERROR" -Component "Registry" -Message "Unhandled exception while changing $Path\$Name`: $($psitem.Exception.Message)"
     }
 }

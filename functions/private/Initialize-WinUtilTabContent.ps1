@@ -4,15 +4,8 @@ function Initialize-WinUtilTabContent {
         [string]$TabName
     )
 
-    if ($null -eq $sync.InitializedTabs) {
-        $sync.InitializedTabs = @{}
-    }
-
-    if ($sync.InitializedTabs[$TabName]) {
-        return
-    }
-
-    # Map Chinese tab names to internal switch labels
+    # 先做名称归一化，再检查缓存，避免 main.ps1 用英文名初始化后
+    # 用户点击中文标签再次初始化（产生重复无功能的按钮）
     $tabMap = @{
         $sync.configs.strings.tabInstall = "Install"
         $sync.configs.strings.tabTweaks = "Tweaks"
@@ -24,6 +17,14 @@ function Initialize-WinUtilTabContent {
     }
 
     $normalizedTab = if ($tabMap.ContainsKey($TabName)) { $tabMap[$TabName] } else { $TabName }
+
+    if ($null -eq $sync.InitializedTabs) {
+        $sync.InitializedTabs = @{}
+    }
+
+    if ($sync.InitializedTabs[$normalizedTab]) {
+        return
+    }
 
     switch ($normalizedTab) {
         "Install" {
@@ -48,5 +49,5 @@ function Initialize-WinUtilTabContent {
         }
     }
 
-    $sync.InitializedTabs[$TabName] = $true
+    $sync.InitializedTabs[$normalizedTab] = $true
 }

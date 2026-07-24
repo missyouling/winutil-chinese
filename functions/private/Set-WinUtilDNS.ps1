@@ -49,7 +49,7 @@ function Set-WinUtilDNS {
         Write-WinUtilLog -Component "DNS" -Message "DNS provider change completed: $DNSProvider"
     } catch {
         Write-Warning "Unable to set DNS Provider due to an unhandled exception."
-        Write-Warning $psitem.Exception.StackTrace
+        Write-Warning $([string]$psitem.Exception.StackTrace)
         Write-WinUtilLog -Level "ERROR" -Component "DNS" -Message "Unable to set DNS provider $DNSProvider`: $($psitem.Exception.Message)"
     }
 }
