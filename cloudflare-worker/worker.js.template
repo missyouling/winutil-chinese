@@ -3,8 +3,8 @@ export default {
     const url = new URL(request.url);
     const path = url.pathname;
 
-    // 根路径 / 和 /win 都返回 winutil.ps1 脚本
-    if (path === '/' || path === '/win' || path === '/win/') {
+    // /win 返回 winutil.ps1 脚本
+    if (path === '/win' || path === '/win/') {
       const script = `{{WINUTIL_CONTENT}}`;
       return new Response(script, {
         headers: {
@@ -15,7 +15,8 @@ export default {
       });
     }
 
-    // /about 显示欢迎页
+    // 根路径 / 返回欢迎页（含一键复制按钮）
+    const domain = url.hostname;
     const html = `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -39,7 +40,7 @@ export default {
       border: 1px solid rgba(255,255,255,0.1);
       border-radius: 16px;
       padding: 40px;
-      max-width: 520px;
+      max-width: 560px;
       width: 90%;
       text-align: center;
     }
@@ -52,17 +53,43 @@ export default {
       padding: 16px;
       margin: 20px 0;
       text-align: left;
-      font-family: monospace;
+      font-family: 'Cascadia Code', 'Fira Code', monospace;
+      font-size: 13px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .cmd-box code {
+      color: #00d4aa;
+      word-break: break-all;
+      flex: 1;
+    }
+    .cmd-box .prompt { color: #e94560; }
+    .copy-btn {
+      background: #00d4aa33;
+      border: 1px solid #00d4aa66;
+      color: #00d4aa;
+      padding: 6px 14px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      font-family: inherit;
+      margin-left: 12px;
+      white-space: nowrap;
+      transition: all 0.2s;
+    }
+    .copy-btn:hover { background: #00d4aa55; }
+    .copy-btn.copied { background: #00d4aa; color: #000; }
+    .features {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin: 20px 0;
+      text-align: left;
       font-size: 13px;
     }
-    .cmd-box code { color: #00d4aa; }
-    .cmd-box .prompt { color: #e94560; }
-    .features {
-      display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
-      margin: 20px 0; text-align: left; font-size: 13px;
-    }
     .features span { padding: 6px 10px; background: rgba(255,255,255,0.03); border-radius: 6px; }
-    .features .check { color: #00d4aa; }
+    .features .check { color: #00d4aa; margin-right: 4px; }
     .footer { margin-top: 24px; font-size: 12px; color: #555; }
   </style>
 </head>
@@ -71,7 +98,8 @@ export default {
     <h1>🎯 WinUtil 中文版</h1>
     <p class="subtitle">全中文化的 Windows 系统优化工具</p>
     <div class="cmd-box">
-      <span class="prompt">PS&gt;</span> <code>irm https://${url.hostname}/ | iex</code>
+      <code><span class="prompt">PS&gt;</span> irm https://${domain}/win | iex</code>
+      <button class="copy-btn" onclick="copyCmd()" id="copyBtn">复制</button>
     </div>
     <div class="features">
       <span><span class="check">✓</span> 应用安装</span>
@@ -81,7 +109,31 @@ export default {
       <span><span class="check">✓</span> 预设方案</span>
       <span><span class="check">✓</span> 完全中文</span>
     </div>
+    <div class="footer">在 PowerShell 管理员模式中运行 · 基于 Chris Titus Tech WinUtil</div>
   </div>
+  <script>
+    function copyCmd() {
+      const cmd = "irm https://${domain}/win | iex";
+      navigator.clipboard.writeText(cmd).then(() => {
+        const btn = document.getElementById('copyBtn');
+        btn.textContent = '已复制 ✓';
+        btn.classList.add('copied');
+        setTimeout(() => { btn.textContent = '复制'; btn.classList.remove('copied'); }, 2000);
+      }).catch(() => {
+        // Fallback for older browsers
+        const textarea = document.createElement('textarea');
+        textarea.value = cmd;
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+        const btn = document.getElementById('copyBtn');
+        btn.textContent = '已复制 ✓';
+        btn.classList.add('copied');
+        setTimeout(() => { btn.textContent = '复制'; btn.classList.remove('copied'); }, 2000);
+      });
+    }
+  </script>
 </body>
 </html>`;
 
