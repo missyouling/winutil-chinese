@@ -73,11 +73,11 @@ def compile_winutil(source_dir: str, output_path: str):
         body_parts.append(f.read())
     print("✅ scripts/main.ps1")
 
-    # 7. 合并 body，加 UTF-8 BOM → Base64 → 纯 ASCII 输出
-    body = "\ufeff" + "\n".join(body_parts)
+    # 7. 合并 body → Base64 → 纯 ASCII 输出
+    body = "\n".join(body_parts)
     body_b64 = base64.b64encode(body.encode("utf-8")).decode("ascii")
 
-    # 纯 ASCII 包装：Base64 → 临时文件 → 点引用执行
+    # 纯 ASCII 包装：Base64 → iex（等效 irm|iex 原始方式）
     output = (
         "<#\n"
         + ".NOTES\n"
@@ -90,14 +90,11 @@ def compile_winutil(source_dir: str, output_path: str):
         + "    This file is Base64-encoded to avoid encoding corruption\n"
         + "    when using `irm | iex` on non-English systems.\n"
         + "#>\n"
-        + "# Base64 encoded body => decoded to temp file => dot-sourced\n"
+        + "# Base64 => iex (same scope as original irm|iex)\n"
         + "$__b64 = @'\n"
         + body_b64
         + "\n'@\n"
-        + "$__temp = [System.IO.Path]::GetTempFileName() + '.ps1'\n"
-        + "[System.IO.File]::WriteAllBytes($__temp, [System.Convert]::FromBase64String($__b64))\n"
-        + ". $__temp\n"
-        + "Remove-Item $__temp -Force\n"
+        + "[System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($__b64)) | iex\n"
     )
 
     with open(output_path, "w", encoding="utf-8") as f:
