@@ -42,7 +42,8 @@ def compile_winutil(source_dir: str, output_path: str):
         lines.append("\n")
     print(f"✅ functions/ — {len(ps1_files)} 个文件")
     
-    # 3. 嵌入 config/*.json 到 $sync.configs 对象
+    # 3. 嵌入 config/*.json — 使用 PowerShell here-string + ConvertFrom-Json
+    #    这样每个 config 都是 PSCustomObject，而非字符串
     config_dir = os.path.join(source_dir, "config")
     configs = {}
     for json_file in sorted(glob.glob(os.path.join(config_dir, "*.json"))):
@@ -51,32 +52,28 @@ def compile_winutil(source_dir: str, output_path: str):
             data = f.read()
         configs[name] = data
     
+    # 初始化 $sync.configs
+    lines.append("$sync.configs = @{}\n\n")
+    
     for name, data in configs.items():
         if name == "applications":
-            # Special-case: keys get WPFInstall prefix in compiled config
+            # Special-case: keys get WPFInstall prefix
             parsed = json.loads(data)
             wpfformat = {}
             for key, value in parsed.items():
                 wpfformat[f"WPFInstall{key}"] = value
-            configs[name] = json.dumps(wpfformat, ensure_ascii=False, indent=2)
-    
-    # Write configs as PowerShell hashtable with proper escaping
-    lines.append("$sync.configs = @{\n")
-    for name, data in configs.items():
+            data = json.dumps(wpfformat, ensure_ascii=False, indent=2)
+        
         key = name.replace("applications", "WPFInstall")
-        # Escape single quotes for PowerShell single-quoted strings
-        escaped = data.replace("'", "''")
-        lines.append(f'    "{name}" = \'{escaped}\'\n')
-    lines.append("}\n")
-    lines.append("\n")
+        # Embed via here-string + ConvertFrom-Json (PSCustomObject)
+        lines.append(f"$sync.configs.{name} = @'\n{data}\n'@ | ConvertFrom-Json\n\n")
+    
     print(f"✅ config/ — {len(configs)} 个文件")
     
     # 4. 嵌入 xaml/inputXML.xaml
     xaml_path = os.path.join(source_dir, "xaml", "inputXML.xaml")
     with open(xaml_path, "r", encoding="utf-8") as f:
         xaml_content = f.read()
-    # Escape for PowerShell string
-    xaml_escaped = xaml_content.replace("'", "''")
     lines.append(f"$inputXML = @'\n{xaml_content}\n'@\n")
     lines.append("\n")
     print(f"✅ xaml/inputXML.xaml ({len(xaml_content)} 字符)")
@@ -88,7 +85,7 @@ def compile_winutil(source_dir: str, output_path: str):
             autounattend_content = f.read()
         lines.append(f"$WinUtilAutounattendXml = @'\n{autounattend_content}\n'@\n")
         lines.append("\n")
-        print(f"✅ tools/autounattend.xml")
+        print("✅ tools/autounattend.xml")
     
     # 6. 追加 scripts/main.ps1
     main_path = os.path.join(source_dir, "scripts", "main.ps1")

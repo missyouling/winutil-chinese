@@ -7549,9 +7549,11 @@ function Invoke-WinUtilAutoRun {
 
 
 
-$sync.configs = @{
+$sync.configs = @{}
 
-    "applications" = '{
+
+$sync.configs.applications = @'
+{
   "WPFInstall1password": {
     "category": "工具类",
     "choco": "1password",
@@ -9387,9 +9389,12 @@ $sync.configs = @{
     "link": "https://github.com/rjpcomputing/luaforwindows",
     "foss": true
   }
-}'
+}
+'@ | ConvertFrom-Json
 
-    "appnavigation" = '{
+
+$sync.configs.appnavigation = @'
+{
   "WPFInstall": {
     "Content": "安装/升级应用",
     "Category": "操作",
@@ -9471,9 +9476,12 @@ $sync.configs = @{
     "Order": "0",
     "Description": "关于应用条目上 #FOSS 标签的信息"
   }
-}'
+}
+'@ | ConvertFrom-Json
 
-    "appx" = '{
+
+$sync.configs.appx = @'
+{
   "WPFAppxMicrosoft_WindowsFeedbackHub": {
     "Category": "微软应用",
     "Content": "反馈中心",
@@ -9735,9 +9743,12 @@ $sync.configs = @{
     "Panel": "1",
     "PackageId": "Microsoft.MicrosoftSolitaireCollection"
   }
-}'
+}
+'@ | ConvertFrom-Json
 
-    "dns" = '{
+
+$sync.configs.dns = @'
+{
   "Google": {
     "Primary": "8.8.8.8",
     "Secondary": "8.8.4.4",
@@ -9786,9 +9797,12 @@ $sync.configs = @{
     "Primary6": "2a10:50c0::bad1:ff",
     "Secondary6": "2a10:50c0::bad2:ff"
   }
-}'
+}
+'@ | ConvertFrom-Json
 
-    "feature" = '{
+
+$sync.configs.feature = @'
+{
   "WPFFeaturesdotnet": {
     "Content": ".NET Framework (2、3、4 版) - 启用",
     "Description": ".NET 和 .NET Framework 是一个开发者平台，由工具、编程语言和库组成。",
@@ -9859,8 +9873,8 @@ $sync.configs = @{
     ],
     "InvokeScript": [
       "nfsadmin client stop",
-      "Set-ItemProperty -Path ''HKLM:\\SOFTWARE\\Microsoft\\ClientForNFS\\CurrentVersion\\Default'' -Name ''AnonymousUID'' -Type DWord -Value 0",
-      "Set-ItemProperty -Path ''HKLM:\\SOFTWARE\\Microsoft\\ClientForNFS\\CurrentVersion\\Default'' -Name ''AnonymousGID'' -Type DWord -Value 0",
+      "Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\ClientForNFS\\CurrentVersion\\Default' -Name 'AnonymousUID' -Type DWord -Value 0",
+      "Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\ClientForNFS\\CurrentVersion\\Default' -Name 'AnonymousGID' -Type DWord -Value 0",
       "nfsadmin client start",
       "nfsadmin client localhost config fileaccess=755 SecFlavors=+sys -krb5 -krb5i"
     ],
@@ -9873,7 +9887,7 @@ $sync.configs = @{
     "panel": "1",
     "feature": [],
     "InvokeScript": [
-      "      New-ItemProperty -Path ''HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Configuration Manager'' -Name ''EnablePeriodicBackup'' -Type DWord -Value 1 -Force      New-ItemProperty -Path ''HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Configuration Manager'' -Name ''BackupCount'' -Type DWord -Value 2 -Force      $action = New-ScheduledTaskAction -Execute ''schtasks'' -Argument ''/run /i /tn \"\\Microsoft\\Windows\\Registry\\RegIdleBackup\"''      $trigger = New-ScheduledTaskTrigger -Daily -At 00:30      Register-ScheduledTask -Action $action -Trigger $trigger -TaskName ''AutoRegBackup'' -Description ''Create System Registry Backups'' -User ''System''      "
+      "      New-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Configuration Manager' -Name 'EnablePeriodicBackup' -Type DWord -Value 1 -Force      New-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Configuration Manager' -Name 'BackupCount' -Type DWord -Value 2 -Force      $action = New-ScheduledTaskAction -Execute 'schtasks' -Argument '/run /i /tn \"\\Microsoft\\Windows\\Registry\\RegIdleBackup\"'      $trigger = New-ScheduledTaskTrigger -Daily -At 00:30      Register-ScheduledTask -Action $action -Trigger $trigger -TaskName 'AutoRegBackup' -Description 'Create System Registry Backups' -User 'System'      "
     ],
     "link": "https://winutil.christitus.com/dev/features/features/regbackup"
   },
@@ -10025,7 +10039,7 @@ $sync.configs = @{
     "Type": "Button",
     "ButtonWidth": "300",
     "InvokeScript": [
-      "Start-Process ''shell:::{A8A91A66-3A7D-4424-8D24-04E180695C7A}''"
+      "Start-Process 'shell:::{A8A91A66-3A7D-4424-8D24-04E180695C7A}'"
     ],
     "link": "https://winutil.christitus.com/dev/features/legacy-windows-panels/printer"
   },
@@ -10144,9 +10158,12 @@ $sync.configs = @{
     "function": "Invoke-WPFSSHServer",
     "link": "https://winutil.christitus.com/dev/features/remote-access/sshserver"
   }
-}'
+}
+'@ | ConvertFrom-Json
 
-    "preset" = '{
+
+$sync.configs.preset = @'
+{
   "Standard": [
     "WPFTweaksActivity",
     "WPFTweaksConsumerFeatures",
@@ -10206,9 +10223,12 @@ $sync.configs = @{
     "WPFAppxMicrosoft_Copilot",
     "WPFAppxMicrosoft_BingSearch"
   ]
-}'
+}
+'@ | ConvertFrom-Json
 
-    "themes" = '{
+
+$sync.configs.themes = @'
+{
   "shared": {
     "AppEntryWidth": "220",
     "AppEntryFontSize": "13.2",
@@ -10332,9 +10352,12 @@ $sync.configs = @{
     "BorderColor": "#2F373D",
     "BorderOpacity": "0.2"
   }
-}'
+}
+'@ | ConvertFrom-Json
 
-    "tweaks" = '{
+
+$sync.configs.tweaks = @'
+{
   "WPFTweaksActivity": {
     "Content": "活动历史记录 - 禁用",
     "Description": "清除最近的文档、剪贴板和运行历史记录。",
@@ -10859,10 +10882,10 @@ $sync.configs = @{
       }
     ],
     "InvokeScript": [
-      "      # Disable Defender Auto Sample Submission      Set-MpPreference -SubmitSamplesConsent 2      # Disable (Connected User Experiences and Telemetry) Service      Set-Service -Name diagtrack -StartupType Disabled      # Disable (Windows Error Reporting Manager) Service      Set-Service -Name wermgr -StartupType Disabled      # Disable PowerShell 7 telemetry      [Environment]::SetEnvironmentVariable(''POWERSHELL_TELEMETRY_OPTOUT'', ''1'', ''Machine'')      Remove-ItemProperty -Path \"HKCU:\\Software\\Microsoft\\Siuf\\Rules\" -Name PeriodInNanoSeconds      "
+      "      # Disable Defender Auto Sample Submission      Set-MpPreference -SubmitSamplesConsent 2      # Disable (Connected User Experiences and Telemetry) Service      Set-Service -Name diagtrack -StartupType Disabled      # Disable (Windows Error Reporting Manager) Service      Set-Service -Name wermgr -StartupType Disabled      # Disable PowerShell 7 telemetry      [Environment]::SetEnvironmentVariable('POWERSHELL_TELEMETRY_OPTOUT', '1', 'Machine')      Remove-ItemProperty -Path \"HKCU:\\Software\\Microsoft\\Siuf\\Rules\" -Name PeriodInNanoSeconds      "
     ],
     "UndoScript": [
-      "      # Enable Defender Auto Sample Submission      Set-MpPreference -SubmitSamplesConsent 1      # Enable (Connected User Experiences and Telemetry) Service      Set-Service -Name diagtrack -StartupType Automatic      # Enable (Windows Error Reporting Manager) Service      Set-Service -Name wermgr -StartupType Automatic      # Enable PowerShell 7 telemetry      [Environment]::SetEnvironmentVariable(''POWERSHELL_TELEMETRY_OPTOUT'', '''', ''Machine'')      "
+      "      # Enable Defender Auto Sample Submission      Set-MpPreference -SubmitSamplesConsent 1      # Enable (Connected User Experiences and Telemetry) Service      Set-Service -Name diagtrack -StartupType Automatic      # Enable (Windows Error Reporting Manager) Service      Set-Service -Name wermgr -StartupType Automatic      # Enable PowerShell 7 telemetry      [Environment]::SetEnvironmentVariable('POWERSHELL_TELEMETRY_OPTOUT', '', 'Machine')      "
     ],
     "link": "https://winutil.christitus.com/dev/tweaks/essential-tweaks/telemetry"
   },
@@ -10930,7 +10953,7 @@ $sync.configs = @{
     "category": "高级优化 - 谨慎操作",
     "panel": "1",
     "InvokeScript": [
-      "      # Deny permission to remove OneDrive folder      icacls $Env:OneDrive /deny \"Administrators:(D,DC)\"      Write-Host \"Uninstalling OneDrive...\"      Start-Process -FilePath (Join-Path $Env:SystemRoot \"System32\\OneDriveSetup.exe\") -ArgumentList ''/uninstall'' -Wait      # Some of OneDrive files use explorer, and OneDrive uses FileCoAuth      Write-Host \"Removing leftover OneDrive Files...\"      Stop-Process -Name FileCoAuth,Explorer      Remove-Item \"$Env:LocalAppData\\Microsoft\\OneDrive\" -Recurse -Force      Remove-Item \"$Env:ProgramData\\Microsoft OneDrive\" -Recurse -Force      # Grant back permission to access OneDrive folder      icacls $Env:OneDrive /grant \"Administrators:(D,DC)\"      if (-not (Get-ChildItem -Path $Env:OneDrive)) {          Remove-Item -Path $Env:OneDrive -Recurse          [Environment]::SetEnvironmentVariable(''OneDrive'', $null, ''User'')      }      # Disable OneSyncSvc      Set-Service -Name OneSyncSvc -StartupType Disabled      "
+      "      # Deny permission to remove OneDrive folder      icacls $Env:OneDrive /deny \"Administrators:(D,DC)\"      Write-Host \"Uninstalling OneDrive...\"      Start-Process -FilePath (Join-Path $Env:SystemRoot \"System32\\OneDriveSetup.exe\") -ArgumentList '/uninstall' -Wait      # Some of OneDrive files use explorer, and OneDrive uses FileCoAuth      Write-Host \"Removing leftover OneDrive Files...\"      Stop-Process -Name FileCoAuth,Explorer      Remove-Item \"$Env:LocalAppData\\Microsoft\\OneDrive\" -Recurse -Force      Remove-Item \"$Env:ProgramData\\Microsoft OneDrive\" -Recurse -Force      # Grant back permission to access OneDrive folder      icacls $Env:OneDrive /grant \"Administrators:(D,DC)\"      if (-not (Get-ChildItem -Path $Env:OneDrive)) {          Remove-Item -Path $Env:OneDrive -Recurse          [Environment]::SetEnvironmentVariable('OneDrive', $null, 'User')      }      # Disable OneSyncSvc      Set-Service -Name OneSyncSvc -StartupType Disabled      "
     ],
     "UndoScript": [
       "      Write-Host \"Installing OneDrive\"      winget install Microsoft.Onedrive --source winget      # Enabled OneSyncSvc      Set-Service -Name OneSyncSvc -StartupType Automatic      "
@@ -11247,10 +11270,10 @@ $sync.configs = @{
     "category": "高级优化 - 谨慎操作",
     "panel": "1",
     "InvokeScript": [
-      "      $hostsUrl = Invoke-RestMethod -Uri https://github.com/Ruddernation-Designs/Adobe-URL-Block-List/raw/refs/heads/master/hosts      Add-Content -Path \"$Env:SystemRoot\\System32\\drivers\\etc\\hosts\" -Value $hostsUrl      ipconfig /flushdns      Write-Host ''Added Adobe url block list from host file''      "
+      "      $hostsUrl = Invoke-RestMethod -Uri https://github.com/Ruddernation-Designs/Adobe-URL-Block-List/raw/refs/heads/master/hosts      Add-Content -Path \"$Env:SystemRoot\\System32\\drivers\\etc\\hosts\" -Value $hostsUrl      ipconfig /flushdns      Write-Host 'Added Adobe url block list from host file'      "
     ],
     "UndoScript": [
-      "      Set-Content \"$Env:SystemRoot\\System32\\drivers\\etc\\hosts\" (          (Get-Content \"$Env:SystemRoot\\System32\\drivers\\etc\\hosts\") -join \"`n\" -replace ''(?s)#New Ver.*'', ''''      )      ipconfig /flushdns      Write-Host ''Removed Adobe url block list from host file''      "
+      "      Set-Content \"$Env:SystemRoot\\System32\\drivers\\etc\\hosts\" (          (Get-Content \"$Env:SystemRoot\\System32\\drivers\\etc\\hosts\") -join \"`n\" -replace '(?s)#New Ver.*', ''      )      ipconfig /flushdns      Write-Host 'Removed Adobe url block list from host file'      "
     ],
     "link": "https://winutil.christitus.com/dev/tweaks/z--advanced-tweaks---caution/blockadobenet"
   },
@@ -11999,10 +12022,8 @@ $sync.configs = @{
     "ButtonWidth": "300",
     "link": "https://winutil.christitus.com/dev/tweaks/performance-plans---not-for-laptops/removeultperf"
   }
-}'
-
 }
-
+'@ | ConvertFrom-Json
 
 
 $inputXML = @'
