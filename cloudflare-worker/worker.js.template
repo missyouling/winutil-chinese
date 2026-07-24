@@ -3,19 +3,19 @@ export default {
     const url = new URL(request.url);
     const path = url.pathname;
 
-    if (path === '/win' || path === '/win/') {
-      // 返回 winutil.ps1 脚本
+    // 根路径 / 和 /win 都返回 winutil.ps1 脚本
+    if (path === '/' || path === '/win' || path === '/win/') {
       const script = `{{WINUTIL_CONTENT}}`;
       return new Response(script, {
         headers: {
           'Content-Type': 'text/plain; charset=utf-8',
           'Access-Control-Allow-Origin': '*',
-          'Cache-Control': 'max-age=3600', // 缓存1小时
+          'Cache-Control': 'max-age=3600',
         },
       });
     }
 
-    // 首页
+    // /about 显示欢迎页
     const html = `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -52,46 +52,34 @@ export default {
       padding: 16px;
       margin: 20px 0;
       text-align: left;
-      font-family: 'Cascadia Code', 'Fira Code', monospace;
+      font-family: monospace;
       font-size: 13px;
-      word-break: break-all;
     }
     .cmd-box code { color: #00d4aa; }
     .cmd-box .prompt { color: #e94560; }
     .features {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 8px;
-      margin: 20px 0;
-      text-align: left;
-      font-size: 13px;
+      display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+      margin: 20px 0; text-align: left; font-size: 13px;
     }
     .features span { padding: 6px 10px; background: rgba(255,255,255,0.03); border-radius: 6px; }
-    .features .check { color: #00d4aa; margin-right: 4px; }
+    .features .check { color: #00d4aa; }
     .footer { margin-top: 24px; font-size: 12px; color: #555; }
-    .footer a { color: #00d4aa; text-decoration: none; }
   </style>
 </head>
 <body>
   <div class="card">
     <h1>🎯 WinUtil 中文版</h1>
-    <p class="subtitle">全中文化的 Windows 系统优化工具<br>基于 Chris Titus Tech WinUtil</p>
-
+    <p class="subtitle">全中文化的 Windows 系统优化工具</p>
     <div class="cmd-box">
-      <span class="prompt">PS></span> <code>irm https://${url.hostname}/win | iex</code>
+      <span class="prompt">PS&gt;</span> <code>irm https://${url.hostname}/ | iex</code>
     </div>
-
     <div class="features">
-      <span><span class="check">✓</span> 应用安装管理</span>
-      <span><span class="check">✓</span> 系统优化调整</span>
-      <span><span class="check">✓</span> Windows 功能配置</span>
-      <span><span class="check">✓</span> AppX 包管理</span>
+      <span><span class="check">✓</span> 应用安装</span>
+      <span><span class="check">✓</span> 系统优化</span>
+      <span><span class="check">✓</span> 功能配置</span>
+      <span><span class="check">✓</span> AppX 管理</span>
       <span><span class="check">✓</span> 预设方案</span>
-      <span><span class="check">✓</span> 完全中文界面</span>
-    </div>
-
-    <div class="footer">
-      版本 26.07.24 · 在 PowerShell 管理员模式中运行
+      <span><span class="check">✓</span> 完全中文</span>
     </div>
   </div>
 </body>
