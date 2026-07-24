@@ -73,8 +73,8 @@ def compile_winutil(source_dir: str, output_path: str):
         body_parts.append(f.read())
     print("✅ scripts/main.ps1")
 
-    # 7. 合并 body → Base64 → 纯 ASCII 输出
-    body = "\n".join(body_parts)
+    # 7. 合并 body，加 UTF-8 BOM → Base64 → 纯 ASCII 输出
+    body = "\ufeff" + "\n".join(body_parts)
     body_b64 = base64.b64encode(body.encode("utf-8")).decode("ascii")
 
     # 纯 ASCII 包装：Base64 → 临时文件 → 点引用执行
@@ -100,7 +100,7 @@ def compile_winutil(source_dir: str, output_path: str):
         + "Remove-Item $__temp -Force\n"
     )
 
-    with open(output_path, "w", encoding="utf-8-sig") as f:
+    with open(output_path, "w", encoding="utf-8") as f:
         f.write(output)
 
     kb = len(output) / 1024
