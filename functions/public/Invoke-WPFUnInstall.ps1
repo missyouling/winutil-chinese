@@ -10,7 +10,7 @@ function Invoke-WPFUnInstall {
     #>
 
     if($sync.ProcessRunning) {
-        $msg = "[Invoke-WPFUnInstall]安装过程正在进行中。
+        $msg = "[Invoke-WPFUnInstall]安装过程正在进行中。"
         Show-WinUtilMessage -Message $msg -Title "Winutil" -Button "OK" -Icon "Warning"
         return
     }
