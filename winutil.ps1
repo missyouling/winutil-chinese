@@ -82,7 +82,2516 @@ Start-Transcript -Path $sync.logPath -Append -NoClobber | Out-Null
 $Host.UI.RawUI.WindowTitle = "WinUtil"
 Clear-Host
 
+function Initialize-WPFUI {
+    [OutputType([void])]
+    param(
+        [Parameter(Mandatory)]
+        [string]$TargetGridName
+    )
 
+    switch ($TargetGridName) {
+        "appscategory"{
+            # TODO
+            # Switch UI generation of the sidebar to this function
+            # $sync.ItemsControl = Initialize-InstallAppArea -TargetElement $TargetGridName
+            # ...
+
+            # Create and configure a popup for displaying selected apps
+            $selectedAppsPopup = New-Object Windows.Controls.Primitives.Popup
+            $selectedAppsPopup.IsOpen = $false
+            $selectedAppsPopup.PlacementTarget = $sync.WPFselectedAppsButton
+            $selectedAppsPopup.Placement = [System.Windows.Controls.Primitives.PlacementMode]::Bottom
+            $selectedAppsPopup.AllowsTransparency = $true
+
+            # Style the popup with a border and background
+            $selectedAppsBorder = New-Object Windows.Controls.Border
+            $selectedAppsBorder.SetResourceReference([Windows.Controls.Control]::BackgroundProperty, "MainBackgroundColor")
+            $selectedAppsBorder.SetResourceReference([Windows.Controls.Control]::BorderBrushProperty, "MainForegroundColor")
+            $selectedAppsBorder.SetResourceReference([Windows.Controls.Control]::BorderThicknessProperty, "ButtonBorderThickness")
+            $selectedAppsBorder.Width = 200
+            $selectedAppsBorder.Padding = 5
+            $selectedAppsPopup.Child = $selectedAppsBorder
+            $sync.selectedAppsPopup = $selectedAppsPopup
+
+            # Add a stack panel inside the popup's border to organize its child elements
+            $sync.selectedAppsstackPanel = New-Object Windows.Controls.StackPanel
+            $selectedAppsBorder.Child = $sync.selectedAppsstackPanel
+
+            # Close selectedAppsPopup when mouse leaves both button and selectedAppsPopup
+            $sync.WPFselectedAppsButton.Add_MouseLeave({
+                if (-not $sync.selectedAppsPopup.IsMouseOver) {
+                    $sync.selectedAppsPopup.IsOpen = $false
+                }
+            })
+            $selectedAppsPopup.Add_MouseLeave({
+                if (-not $sync.WPFselectedAppsButton.IsMouseOver) {
+                    $sync.selectedAppsPopup.IsOpen = $false
+                }
+            })
+
+            # Creates the popup that is displayed when the user right-clicks on an app entry
+            # This popup contains buttons for installing, uninstalling, and viewing app information
+
+            $appPopup = New-Object Windows.Controls.Primitives.Popup
+            $appPopup.StaysOpen = $false
+            $appPopup.Placement = [System.Windows.Controls.Primitives.PlacementMode]::Bottom
+            $appPopup.AllowsTransparency = $true
+            # Store the popup globally so the position can be set later
+            $sync.appPopup = $appPopup
+
+            $appPopupStackPanel = New-Object Windows.Controls.StackPanel
+            $appPopupStackPanel.Orientation = "Horizontal"
+            $appPopupStackPanel.Add_MouseLeave({
+                $sync.appPopup.IsOpen = $false
+            })
+            $appPopup.Child = $appPopupStackPanel
+
+            $appButtons = @(
+            [PSCustomObject]@{ Name = "Install";    Icon = [char]0xE118 },
+            [PSCustomObject]@{ Name = "Uninstall";  Icon = [char]0xE74D },
+            [PSCustomObject]@{ Name = "Info";       Icon = [char]0xE946 }
+            )
+            foreach ($button in $appButtons) {
+                $newButton = New-Object Windows.Controls.Button
+                $newButton.Style = $sync.Form.Resources.AppEntryButtonStyle
+                $newButton.Content = $button.Icon
+                $appPopupStackPanel.Children.Add($newButton) | Out-Null
+
+                # Dynamically load the selected app object so the buttons can be reused and do not need to be created for each app
+                switch ($button.Name) {
+                    "Install" {
+                        $newButton.Add_MouseEnter({
+                            $appObject = $sync.configs.applicationsHashtable.$($sync.appPopupSelectedApp)
+                            $this.ToolTip = "Install or Upgrade $($appObject.content)"
+                        })
+                        $newButton.Add_Click({
+                            $appObject = $sync.configs.applicationsHashtable.$($sync.appPopupSelectedApp)
+                            Invoke-WPFInstall -PackagesToInstall $appObject
+                        })
+                    }
+                    "Uninstall" {
+                        $newButton.Add_MouseEnter({
+                            $appObject = $sync.configs.applicationsHashtable.$($sync.appPopupSelectedApp)
+                            $this.ToolTip = "Uninstall $($appObject.content)"
+                        })
+                        $newButton.Add_Click({
+                            $appObject = $sync.configs.applicationsHashtable.$($sync.appPopupSelectedApp)
+                            Invoke-WPFUnInstall -PackagesToUninstall $appObject
+                        })
+                    }
+                    "Info" {
+                        $newButton.Add_MouseEnter({
+                            $appObject = $sync.configs.applicationsHashtable.$($sync.appPopupSelectedApp)
+                            $this.ToolTip = "Open the application's website in your default browser`n$($appObject.link)"
+                        })
+                        $newButton.Add_Click({
+                            $appObject = $sync.configs.applicationsHashtable.$($sync.appPopupSelectedApp)
+                            Start-Process $appObject.link
+                        })
+                    }
+                }
+            }
+        }
+        "appspanel" {
+            $sync.ItemsControl = Initialize-InstallAppArea -TargetElement $TargetGridName
+            Initialize-InstallCategoryAppList -TargetElement $sync.ItemsControl -Apps $sync.configs.applicationsHashtable
+        }
+        default {
+            Write-Output "$TargetGridName not yet implemented"
+        }
+    }
+}
+
+
+function Invoke-WPFAppxInstall {
+    if ($sync.ProcessRunning) {
+        Show-WinUtilMessage -Message "An AppX process is currently running." -Title "WinUtil" -Button "OK" -Icon "Warning"
+        return
+    }
+
+    if ($null -eq $sync.selectedAppx -or $sync.selectedAppx.Count -eq 0) {
+        Show-WinUtilMessage -Message "No AppX Package selected" -Title "Error" -Button "OK" -Icon "Error"
+        return
+    }
+
+    $selected = @($sync.selectedAppx)
+    $apps = $sync.configs.appxHashtable
+
+    $sync.ProcessRunning = $true
+    Invoke-WPFRunspace -ParameterList @(("selected", $selected), ("apps", $apps)) -ScriptBlock {
+        param($selected, $apps)
+
+        $totalPackages = @($selected).Count
+        $hasUI = $null -ne $sync.Form -and $null -ne $sync.Form.Dispatcher
+
+        try {
+            Write-WinUtilLog -Component "AppX" -Message "Starting AppX install for $totalPackages selected package(s)."
+            if ($hasUI) {
+                Set-WinUtilTweaksProgressIndicator -Visible $true -Label "Preparing AppX install (0/$totalPackages)" -Percent 0
+                Invoke-WPFUIThread -ScriptBlock { Set-WinUtilTaskbaritem -state "Normal" -value 0.01 -overlay "logo" }
+            }
+
+            for ($index = 0; $index -lt $totalPackages; $index++) {
+                $key = $selected[$index]
+                $app = $apps[$key]
+                $position = $index + 1
+                $startPercent = [int](($index / $totalPackages) * 100)
+
+                if ($hasUI) {
+                    Set-WinUtilTweaksProgressIndicator -Visible $true -Label "Installing $($app.Content) ($position/$totalPackages)" -Percent $startPercent
+                }
+                Write-Host "正在安装 $($app.Content)"
+                Install-WinUtilAPPX -Name $app.PackageId -StoreId $app.StoreId
+
+                $completedPercent = [int](($position / $totalPackages) * 100)
+                if ($hasUI) {
+                    Set-WinUtilTweaksProgressIndicator -Visible $true -Label "Installed $($app.Content) ($position/$totalPackages)" -Percent $completedPercent
+                    Invoke-WPFUIThread -ScriptBlock { Set-WinUtilTaskbaritem -value ($completedPercent / 100) }
+                }
+            }
+
+            Write-Host "================================="
+            Write-Host "--   AppX 安装完成   ---"
+            Write-Host "================================="
+            Write-WinUtilLog -Component "AppX" -Message "AppX install finished."
+            if ($hasUI) {
+                Set-WinUtilTweaksProgressIndicator -Visible $true -Label "AppX install finished" -Percent 100
+                Invoke-WPFUIThread -ScriptBlock { Set-WinUtilTaskbaritem -state "None" -overlay "checkmark" }
+            }
+        }
+        catch {
+            Write-WinUtilLog -Level "ERROR" -Component "AppX" -Message "AppX install failed: $($_.Exception.Message)"
+            if ($hasUI) {
+                Set-WinUtilTweaksProgressIndicator -Visible $true -Label "AppX install failed" -Percent 100
+                Invoke-WPFUIThread -ScriptBlock { Set-WinUtilTaskbaritem -state "Error" -overlay "warning" }
+            }
+        }
+        finally {
+            $sync.ProcessRunning = $false
+        }
+    }
+}
+
+function Invoke-WPFAppxRemoval {
+    if ($sync.ProcessRunning) {
+        Show-WinUtilMessage -Message "An AppX process is currently running." -Title "WinUtil" -Button "OK" -Icon "Warning"
+        return
+    }
+
+    if ($null -eq $sync.selectedAppx -or $sync.selectedAppx.Count -eq 0) {
+        Show-WinUtilMessage -Message "No AppX Package selected" -Title "Error" -Button "OK" -Icon "Error"
+        return
+    }
+
+    $selected = @($sync.selectedAppx)
+    $apps = $sync.configs.appxHashtable
+
+    $sync.ProcessRunning = $true
+    Invoke-WPFRunspace -ParameterList @(("selected", $selected), ("apps", $apps)) -ScriptBlock {
+        param($selected, $apps)
+
+        $totalPackages = @($selected).Count
+        $hasUI = $null -ne $sync.Form -and $null -ne $sync.Form.Dispatcher
+        $packageList = [System.Collections.Generic.List[string]]::new()
+
+        try {
+            Write-WinUtilLog -Component "AppX" -Message "Starting AppX removal for $totalPackages selected package(s)."
+            if ($hasUI) {
+                Set-WinUtilTweaksProgressIndicator -Visible $true -Label "Preparing AppX removal (0/$totalPackages)" -Percent 0
+                Invoke-WPFUIThread -ScriptBlock { Set-WinUtilTaskbaritem -state "Normal" -value 0.01 -overlay "logo" }
+            }
+
+            for ($index = 0; $index -lt $totalPackages; $index++) {
+                $key = $selected[$index]
+                $app = $apps[$key]
+                $position = $index + 1
+                $startPercent = [int](($index / $totalPackages) * 90)
+                if ($hasUI) {
+                    Set-WinUtilTweaksProgressIndicator -Visible $true -Label "Removing $($app.Content) ($position/$totalPackages)" -Percent $startPercent
+                }
+
+                if ($key -eq "WPFAppxMicrosoft_XboxGamingOverlay") {
+                    # Making sure Game Bar isn't running
+                    Write-WinUtilLog -Component "AppX" -Message "Stopping GameBarFTServer before removing Xbox Gaming Overlay."
+                    Stop-Process -Name GameBarFTServer -Force -Confirm:$false -ErrorAction SilentlyContinue
+
+                    # This stops annoying ms-gamebar popup when launching games.
+                    Write-WinUtilLog -Component "AppX" -Message "Disabling Game DVR capture before removing Xbox Gaming Overlay."
+                    Set-ItemProperty -Path HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\GameDVR -Name AppCaptureEnabled -Value 0
+                }
+
+                if ($key -eq "WPFAppxMicrosoft_WindowsNotepad") {
+                    Write-WinUtilLog -Component "AppX" -Message "Stopping dllhost before removing Notepad."
+                    Stop-Process -Name dllhost -Force -Confirm:$false -ErrorAction SilentlyContinue
+                }
+
+                Write-Host "正在移除 $($app.Content)"
+                Write-WinUtilLog -Component "AppX" -Message "Removing $($app.Content) ($($app.PackageId))."
+                Remove-WinUtilAPPX -Name $app.PackageId
+                $packageList.Add($app.PackageId)
+
+                if ($key -eq "WPFAppxMSTeams") {
+                    # Uninstalls Microsoft Teams Meeting Add-in for Microsoft Office
+                    Write-WinUtilLog -Component "AppX" -Message "Uninstalling Microsoft Teams meeting add-in package."
+                    Get-Package -Name "Microsoft Teams*" -ErrorAction SilentlyContinue | Uninstall-Package -Force
+                }
+
+                $completedPercent = [int](($position / $totalPackages) * 90)
+                if ($hasUI) {
+                    Set-WinUtilTweaksProgressIndicator -Visible $true -Label "Removed $($app.Content) ($position/$totalPackages)" -Percent $completedPercent
+                    Invoke-WPFUIThread -ScriptBlock { Set-WinUtilTaskbaritem -value ($completedPercent / 100) }
+                }
+            }
+
+            if ($packageList.Count -gt 0) {
+                if ($hasUI) {
+                    Set-WinUtilTweaksProgressIndicator -Visible $true -Label "Removing provisioned AppX packages" -Percent 90
+                }
+                Remove-WinUtilProvisionedAPPX -PackageList $packageList.ToArray()
+            }
+
+            Write-Host "================================="
+            Write-Host "--   AppX 移除完成   ---"
+            Write-Host "================================="
+            Write-WinUtilLog -Component "AppX" -Message "AppX removal finished."
+            if ($hasUI) {
+                Set-WinUtilTweaksProgressIndicator -Visible $true -Label "AppX removal finished" -Percent 100
+                Invoke-WPFUIThread -ScriptBlock { Set-WinUtilTaskbaritem -state "None" -overlay "checkmark" }
+            }
+        }
+        catch {
+            Write-WinUtilLog -Level "ERROR" -Component "AppX" -Message "AppX removal failed: $($_.Exception.Message)"
+            if ($hasUI) {
+                Set-WinUtilTweaksProgressIndicator -Visible $true -Label "AppX removal failed" -Percent 100
+                Invoke-WPFUIThread -ScriptBlock { Set-WinUtilTaskbaritem -state "Error" -overlay "warning" }
+            }
+        }
+        finally {
+            $sync.ProcessRunning = $false
+        }
+
+    }
+}
+
+function Invoke-WPFButton {
+
+    <#
+
+    .SYNOPSIS
+        Invokes the function associated with the clicked button
+
+    .PARAMETER Button
+        The name of the button that was clicked
+
+    #>
+
+    Param ([string]$Button)
+
+    # Use this to get the name of the button
+    #[System.Windows.MessageBox]::Show("$Button","Chris Titus Tech's Windows Utility","OK","Info")
+    if (-not $sync.ProcessRunning -and -not $sync.Win11ISOProcessRunning) {
+        Set-WinUtilTweaksProgressIndicator -Visible $false
+    }
+
+    # Check if button is defined in feature config with function or InvokeScript
+    if ($sync.configs.feature.$Button) {
+        $buttonConfig = $sync.configs.feature.$Button
+
+        # If button has a function defined, call it
+        if ($buttonConfig.function) {
+            $functionName = $buttonConfig.function
+            if (Get-Command $functionName -ErrorAction SilentlyContinue) {
+                & $functionName
+                return
+            }
+        }
+
+        # If button has InvokeScript defined, execute the scripts
+        if ($buttonConfig.InvokeScript -and $buttonConfig.InvokeScript.Count -gt 0) {
+            foreach ($script in $buttonConfig.InvokeScript) {
+                if (-not [string]::IsNullOrWhiteSpace($script)) {
+                    Invoke-Command -ScriptBlock ([scriptblock]::Create($script)) -ErrorAction Stop
+                }
+            }
+            return
+        }
+    }
+
+    # Fallback to hard-coded switch for buttons not in feature.json
+    Switch -Wildcard ($Button) {
+        "WPFTab?BT" {Invoke-WPFTab $Button}
+        "WPFInstall" {Invoke-WPFInstall}
+        "WPFUninstall" {Invoke-WPFUnInstall}
+        "WPFInstallUpgrade" {Invoke-WPFInstallUpgrade}
+        "WPFCollapseAllCategories" {Invoke-WPFToggleAllCategories -Action "Collapse"}
+        "WPFExpandAllCategories" {Invoke-WPFToggleAllCategories -Action "Expand"}
+        "WPFStandard" {Invoke-WPFPresets "Standard" -checkboxfilterpattern "WPFTweak*"}
+        "WPFMinimal" {Invoke-WPFPresets "Minimal" -checkboxfilterpattern "WPFTweak*"}
+        "WPFAdvanced" {Invoke-WPFPresets "Advanced" -checkboxfilterpattern "WPFTweak*"}
+        "WPFClearTweaksSelection" {Invoke-WPFPresets -imported $true -checkboxfilterpattern "WPFTweak*"}
+        "WPFClearInstallSelection" {Invoke-WPFPresets -imported $true -checkboxfilterpattern "WPFInstall*"}
+        "WPFtweaksbutton" {Invoke-WPFtweaksbutton}
+        "WPFOOSUbutton" {Invoke-WPFOOSU}
+        "WPFAddUltPerf" {Invoke-WPFUltimatePerformance -Enable}
+        "WPFRemoveUltPerf" {Invoke-WPFUltimatePerformance}
+        "WPFundoall" {Invoke-WPFundoall}
+        "WPFUpdatesdefault" {Invoke-WPFUpdatesdefault}
+        "WPFUpdatesdisable" {Invoke-WPFUpdatesdisable}
+        "WPFUpdatessecurity" {Invoke-WPFUpdatessecurity}
+        "WPFGetInstalled" {Invoke-WPFGetInstalled -CheckBox "winget"}
+        "WPFGetInstalledTweaks" {Invoke-WPFGetInstalled -CheckBox "tweaks"}
+        "WPFAppxRemoval" {Invoke-WPFTab "WPFTab6BT"}
+        "WPFBackToTweaks" {Invoke-WPFTab "WPFTab2BT"}
+        "WPFInstallSelectedAppx" {Invoke-WPFAppxInstall}
+        "WPFRemoveSelectedAppx" {Invoke-WPFAppxRemoval}
+        "WPFDefaultAppxSelection" {Invoke-WPFPresets "AppxDefault" -checkboxfilterpattern "WPFAppx*"}
+        "WPFSelectAllAppx" {
+            $sync.configs.appxHashtable.Keys | ForEach-Object {$sync.$_.IsChecked = $true}
+        }
+        "WPFClearAppxSelection" {
+            $sync.configs.appxHashtable.Keys | ForEach-Object {$sync.$_.IsChecked = $false}
+        }
+        "WPFGetInstalledAppx" {
+            $installedAppxPackages = Get-WinUtilInstalledAPPX
+            foreach ($appx in $sync.configs.appxHashtable.GetEnumerator()) {
+                if ($appx.Value.PackageId -in $installedAppxPackages) {
+                    $sync.$($appx.Key).IsChecked = $true
+                }
+            }
+        }
+        "WPFCloseButton" {$sync.Form.Close(); Write-Host "再见！"}
+        "WPFMinimizeButton" {$sync.Form.WindowState = [Windows.WindowState]::Minimized}
+        "WPFMaximizeButton" {
+            if ($sync.Form.WindowState -eq [Windows.WindowState]::Normal) {
+                $sync.Form.WindowState = [Windows.WindowState]::Maximized
+            } else {
+                $sync.Form.WindowState = [Windows.WindowState]::Normal
+            }
+        }
+        "WPFselectedAppsButton" {$sync.selectedAppsPopup.IsOpen = -not $sync.selectedAppsPopup.IsOpen}
+    }
+}
+
+function Invoke-WPFFeatureInstall {
+    <#
+
+    .SYNOPSIS
+        Installs selected Windows Features
+
+    #>
+
+    if($sync.ProcessRunning) {
+        $msg = "[Invoke-WPFFeatureInstall] Install process is currently running."
+        [System.Windows.MessageBox]::Show($msg, "Winutil", [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Warning)
+        return
+    }
+
+    Invoke-WPFRunspace -ScriptBlock {
+        $Features = $sync.selectedFeatures
+        $sync.ProcessRunning = $true
+        if ($Features.count -eq 1) {
+            Invoke-WPFUIThread -ScriptBlock { Set-WinUtilTaskbaritem -state "Indeterminate" -value 0.01 -overlay "logo" }
+        } else {
+            Invoke-WPFUIThread -ScriptBlock { Set-WinUtilTaskbaritem -state "Normal" -value 0.01 -overlay "logo" }
+        }
+
+        $x = 0
+
+        $Features | ForEach-Object {
+            Invoke-WinUtilFeatureInstall $_
+            $X++
+            Invoke-WPFUIThread -ScriptBlock { Set-WinUtilTaskbaritem -value ($x/$Features.Count) }
+        }
+
+        $sync.ProcessRunning = $false
+        Invoke-WPFUIThread -ScriptBlock { Set-WinUtilTaskbaritem -state "None" -overlay "checkmark" }
+
+        Write-Host "==================================="
+        Write-Host "---   功能已安装    ---"
+        Write-Host "---  可能需要重启  ---"
+        Write-Host "==================================="
+    }
+}
+
+function Invoke-WPFFixesNTPPool {
+    <#
+    .SYNOPSIS
+        Configures Windows to use pool.ntp.org for NTP synchronization
+
+    .DESCRIPTION
+        Replaces the default Windows NTP server (time.windows.com) with
+        pool.ntp.org for improved time synchronization accuracy and reliability.
+    #>
+
+    Start-Service w32time
+    w32tm /config /update /manualpeerlist:"pool.ntp.org,0x8" /syncfromflags:MANUAL
+
+    Restart-Service w32time
+    w32tm /resync
+
+    Write-Host "================================="
+    Write-Host "-- NTP 配置完成 ---"
+    Write-Host "================================="
+}
+
+function Invoke-WPFFixesNetwork {
+    netsh winsock reset
+    netsh int ip reset
+    Write-Host "网络配置已重置。请重新启动计算机。"
+}
+
+function Invoke-WPFFixesUpdate {
+
+    <#
+
+    .SYNOPSIS
+        Performs various tasks in an attempt to repair Windows Update
+
+    .DESCRIPTION
+        1. (Aggressive Only) Scans the system for corruption using the Invoke-WPFSystemRepair function
+        2. Stops Windows Update Services
+        3. Remove the QMGR Data file, which stores BITS jobs
+        4. (Aggressive Only) Renames the DataStore and CatRoot2 folders
+            DataStore - Contains the Windows Update History and Log Files
+            CatRoot2 - Contains the Signatures for Windows Update Packages
+        5. Renames the Windows Update Download Folder
+        6. Deletes the Windows Update Log
+        7. (Aggressive Only) Resets the Security Descriptors on the Windows Update Services
+        8. Reregisters the BITS and Windows Update DLLs
+        9. Removes the WSUS client settings
+        10. Resets WinSock
+        11. Gets and deletes all BITS jobs
+        12. Sets the startup type of the Windows Update Services then starts them
+        13. Forces Windows Update to check for updates
+
+    .PARAMETER Aggressive
+        If specified, the script will take additional steps to repair Windows Update that are more dangerous, take a significant amount of time, or are generally unnecessary
+
+    #>
+
+    param($Aggressive = $false)
+
+    Write-Progress -Id 0 -Activity "Repairing Windows Update" -PercentComplete 0
+    Set-WinUtilTaskbaritem -state "Indeterminate" -overlay "logo"
+    Write-Host "正在修复 Windows 更新..."
+    # Wait for the first progress bar to show, otherwise the second one won't show
+    Start-Sleep -Milliseconds 200
+
+    if ($Aggressive) {
+        Invoke-WPFSystemRepair
+    }
+
+
+    Write-Progress -Id 0 -Activity "Repairing Windows Update" -Status "Stopping Windows Update Services..." -PercentComplete 10
+    # Stop the Windows Update Services
+    Write-Progress -Id 2 -ParentId 0 -Activity "Stopping Services" -Status "Stopping BITS..." -PercentComplete 0
+    Stop-Service -Name BITS -Force
+    Write-Progress -Id 2 -ParentId 0 -Activity "Stopping Services" -Status "Stopping wuauserv..." -PercentComplete 20
+    Stop-Service -Name wuauserv -Force
+    Write-Progress -Id 2 -ParentId 0 -Activity "Stopping Services" -Status "Stopping appidsvc..." -PercentComplete 40
+    Stop-Service -Name appidsvc -Force
+    Write-Progress -Id 2 -ParentId 0 -Activity "Stopping Services" -Status "Stopping cryptsvc..." -PercentComplete 60
+    Stop-Service -Name cryptsvc -Force
+    Write-Progress -Id 2 -ParentId 0 -Activity "Stopping Services" -Status "Completed" -PercentComplete 100
+
+
+    # Remove the QMGR Data file
+    Write-Progress -Id 0 -Activity "Repairing Windows Update" -Status "Renaming/Removing Files..." -PercentComplete 20
+    Write-Progress -Id 3 -ParentId 0 -Activity "Renaming/Removing Files" -Status "Removing QMGR Data files..." -PercentComplete 0
+    Remove-Item "$env:allusersprofile\Application Data\Microsoft\Network\Downloader\qmgr*.dat" -ErrorAction SilentlyContinue
+
+
+    if ($Aggressive) {
+        # Rename the Windows Update Log and Signature Folders
+        Write-Progress -Id 3 -ParentId 0 -Activity "Renaming/Removing Files" -Status "Renaming the Windows Update Log, Download, and Signature Folder..." -PercentComplete 20
+        Rename-Item $env:systemroot\SoftwareDistribution\DataStore DataStore.bak -ErrorAction SilentlyContinue
+        Rename-Item $env:systemroot\System32\Catroot2 catroot2.bak -ErrorAction SilentlyContinue
+    }
+
+    # Rename the Windows Update Download Folder
+    Write-Progress -Id 3 -ParentId 0 -Activity "Renaming/Removing Files" -Status "Renaming the Windows Update Download Folder..." -PercentComplete 20
+    Rename-Item $env:systemroot\SoftwareDistribution\Download Download.bak -ErrorAction SilentlyContinue
+
+    # Delete the legacy Windows Update Log
+    Write-Progress -Id 3 -ParentId 0 -Activity "Renaming/Removing Files" -Status "Removing the old Windows Update log..." -PercentComplete 80
+    Remove-Item $env:systemroot\WindowsUpdate.log -ErrorAction SilentlyContinue
+    Write-Progress -Id 3 -ParentId 0 -Activity "Renaming/Removing Files" -Status "Completed" -PercentComplete 100
+
+
+    if ($Aggressive) {
+        # Reset the Security Descriptors on the Windows Update Services
+        Write-Progress -Id 0 -Activity "Repairing Windows Update" -Status "Resetting the WU Service Security Descriptors..." -PercentComplete 25
+        Write-Progress -Id 4 -ParentId 0 -Activity "Resetting the WU Service Security Descriptors" -Status "Resetting the BITS Security Descriptor..." -PercentComplete 0
+        Start-Process -NoNewWindow -FilePath "sc.exe" -ArgumentList "sdset", "bits", "D:(A;;CCLCSWRPWPDTLOCRRC;;;SY)(A;;CCDCLCSWRPWPDTLOCRSDRCWDWO;;;BA)(A;;CCLCSWLOCRRC;;;AU)(A;;CCLCSWRPWPDTLOCRRC;;;PU)" -Wait
+        Write-Progress -Id 4 -ParentId 0 -Activity "Resetting the WU Service Security Descriptors" -Status "Resetting the wuauserv Security Descriptor..." -PercentComplete 50
+        Start-Process -NoNewWindow -FilePath "sc.exe" -ArgumentList "sdset", "wuauserv", "D:(A;;CCLCSWRPWPDTLOCRRC;;;SY)(A;;CCDCLCSWRPWPDTLOCRSDRCWDWO;;;BA)(A;;CCLCSWLOCRRC;;;AU)(A;;CCLCSWRPWPDTLOCRRC;;;PU)" -Wait
+        Write-Progress -Id 4 -ParentId 0 -Activity "Resetting the WU Service Security Descriptors" -Status "Completed" -PercentComplete 100
+    }
+
+
+    # Reregister the BITS and Windows Update DLLs
+    Write-Progress -Id 0 -Activity "Repairing Windows Update" -Status "Reregistering DLLs..." -PercentComplete 40
+    $oldLocation = Get-Location
+    Set-Location $env:systemroot\system32
+    $i = 0
+    $DLLs = @(
+        "atl.dll", "urlmon.dll", "mshtml.dll", "shdocvw.dll", "browseui.dll",
+        "jscript.dll", "vbscript.dll", "scrrun.dll", "msxml.dll", "msxml3.dll",
+        "msxml6.dll", "actxprxy.dll", "softpub.dll", "wintrust.dll", "dssenh.dll",
+        "rsaenh.dll", "gpkcsp.dll", "sccbase.dll", "slbcsp.dll", "cryptdlg.dll",
+        "oleaut32.dll", "ole32.dll", "shell32.dll", "initpki.dll", "wuapi.dll",
+        "wuaueng.dll", "wuaueng1.dll", "wucltui.dll", "wups.dll", "wups2.dll",
+        "wuweb.dll", "qmgr.dll", "qmgrprxy.dll", "wucltux.dll", "muweb.dll", "wuwebv.dll"
+    )
+    foreach ($dll in $DLLs) {
+        Write-Progress -Id 5 -ParentId 0 -Activity "Reregistering DLLs" -Status "Registering $dll..." -PercentComplete ($i / $DLLs.Count * 100)
+        $i++
+        Start-Process -NoNewWindow -FilePath "regsvr32.exe" -ArgumentList "/s", $dll
+    }
+    Set-Location $oldLocation
+    Write-Progress -Id 5 -ParentId 0 -Activity "Reregistering DLLs" -Status "Completed" -PercentComplete 100
+
+
+    # Remove the WSUS client settings
+    if (Test-Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate") {
+        Write-Progress -Id 0 -Activity "Repairing Windows Update" -Status "Removing WSUS client settings..." -PercentComplete 60
+        Write-Progress -Id 6 -ParentId 0 -Activity "Removing WSUS client settings" -PercentComplete 0
+        Start-Process -NoNewWindow -FilePath "REG" -ArgumentList "DELETE", "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate", "/v", "AccountDomainSid", "/f" -RedirectStandardError "NUL"
+        Start-Process -NoNewWindow -FilePath "REG" -ArgumentList "DELETE", "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate", "/v", "PingID", "/f" -RedirectStandardError "NUL"
+        Start-Process -NoNewWindow -FilePath "REG" -ArgumentList "DELETE", "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate", "/v", "SusClientId", "/f" -RedirectStandardError "NUL"
+        Write-Progress -Id 6 -ParentId 0 -Activity "Removing WSUS client settings" -Status "Completed" -PercentComplete 100
+    }
+
+    # Remove Group Policy Windows Update settings
+    Write-Progress -Id 0 -Activity "Repairing Windows Update" -Status "Removing Group Policy Windows Update settings..." -PercentComplete 60
+    Write-Progress -Id 7 -ParentId 0 -Activity "Removing Group Policy Windows Update settings" -PercentComplete 0
+    Remove-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate" -Name "ExcludeWUDriversInQualityUpdate" -ErrorAction SilentlyContinue
+    Write-Host "正在默认通过 Windows 更新提供驱动..."
+    Remove-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Device Metadata" -Name "PreventDeviceMetadataFromNetwork" -ErrorAction SilentlyContinue
+    Remove-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\DriverSearching" -Name "DontPromptForWindowsUpdate" -ErrorAction SilentlyContinue
+    Remove-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\DriverSearching" -Name "DontSearchWindowsUpdate" -ErrorAction SilentlyContinue
+    Remove-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\DriverSearching" -Name "DriverUpdateWizardWuSearchEnabled" -ErrorAction SilentlyContinue
+    Remove-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate" -Name "ExcludeWUDriversInQualityUpdate" -ErrorAction SilentlyContinue
+    Write-Host "正在默认 Windows 更新自动重启..."
+    Remove-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU" -Name "NoAutoRebootWithLoggedOnUsers" -ErrorAction SilentlyContinue
+    Remove-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU" -Name "AUPowerManagement" -ErrorAction SilentlyContinue
+    Write-Host "正在清除所有 Windows 更新策略设置..."
+    Remove-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\WindowsUpdate\UX\Settings" -Name "BranchReadinessLevel" -ErrorAction SilentlyContinue
+    Remove-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\WindowsUpdate\UX\Settings" -Name "DeferFeatureUpdatesPeriodInDays" -ErrorAction SilentlyContinue
+    Remove-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\WindowsUpdate\UX\Settings" -Name "DeferQualityUpdatesPeriodInDays" -ErrorAction SilentlyContinue
+    Remove-Item -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Policies" -Recurse -Force -ErrorAction SilentlyContinue
+    Remove-Item -Path "HKCU:\Software\Microsoft\WindowsSelfHost" -Recurse -Force -ErrorAction SilentlyContinue
+    Remove-Item -Path "HKCU:\Software\Policies" -Recurse -Force -ErrorAction SilentlyContinue
+    Remove-Item -Path "HKLM:\Software\Microsoft\Policies" -Recurse -Force -ErrorAction SilentlyContinue
+    Remove-Item -Path "HKLM:\Software\Microsoft\Windows\CurrentVersion\Policies" -Recurse -Force -ErrorAction SilentlyContinue
+    Remove-Item -Path "HKLM:\Software\Microsoft\Windows\CurrentVersion\WindowsStore\WindowsUpdate" -Recurse -Force -ErrorAction SilentlyContinue
+    Remove-Item -Path "HKLM:\Software\Microsoft\WindowsSelfHost" -Recurse -Force -ErrorAction SilentlyContinue
+    Remove-Item -Path "HKLM:\Software\Policies" -Recurse -Force -ErrorAction SilentlyContinue
+    Remove-Item -Path "HKLM:\Software\WOW6432Node\Microsoft\Policies" -Recurse -Force -ErrorAction SilentlyContinue
+    Remove-Item -Path "HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Policies" -Recurse -Force -ErrorAction SilentlyContinue
+    Remove-Item -Path "HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\WindowsStore\WindowsUpdate" -Recurse -Force -ErrorAction SilentlyContinue
+    Start-Process -NoNewWindow -FilePath "secedit" -ArgumentList "/configure", "/cfg", "$env:windir\inf\defltbase.inf", "/db", "defltbase.sdb", "/verbose" -Wait
+    Start-Process -NoNewWindow -FilePath "cmd.exe" -ArgumentList "/c RD /S /Q $env:WinDir\System32\GroupPolicyUsers" -Wait
+    Start-Process -NoNewWindow -FilePath "cmd.exe" -ArgumentList "/c RD /S /Q $env:WinDir\System32\GroupPolicy" -Wait
+    Start-Process -NoNewWindow -FilePath "gpupdate" -ArgumentList "/force" -Wait
+    Write-Progress -Id 7 -ParentId 0 -Activity "Removing Group Policy Windows Update settings" -Status "Completed" -PercentComplete 100
+
+
+    # Reset WinSock
+    Write-Progress -Id 0 -Activity "Repairing Windows Update" -Status "Resetting WinSock..." -PercentComplete 65
+    Write-Progress -Id 7 -ParentId 0 -Activity "Resetting WinSock" -Status "Resetting WinSock..." -PercentComplete 0
+    Start-Process -NoNewWindow -FilePath "netsh" -ArgumentList "winsock", "reset"
+    Start-Process -NoNewWindow -FilePath "netsh" -ArgumentList "winhttp", "reset", "proxy"
+    Start-Process -NoNewWindow -FilePath "netsh" -ArgumentList "int", "ip", "reset"
+    Write-Progress -Id 7 -ParentId 0 -Activity "Resetting WinSock" -Status "Completed" -PercentComplete 100
+
+
+    # Get and delete all BITS jobs
+    Write-Progress -Id 0 -Activity "Repairing Windows Update" -Status "Deleting BITS jobs..." -PercentComplete 75
+    Write-Progress -Id 8 -ParentId 0 -Activity "Deleting BITS jobs" -Status "Deleting BITS jobs..." -PercentComplete 0
+    Get-BitsTransfer | Remove-BitsTransfer
+    Write-Progress -Id 8 -ParentId 0 -Activity "Deleting BITS jobs" -Status "Completed" -PercentComplete 100
+
+
+    # Change the startup type of the Windows Update Services and start them
+    Write-Progress -Id 0 -Activity "Repairing Windows Update" -Status "Starting Windows Update Services..." -PercentComplete 90
+    Write-Progress -Id 9 -ParentId 0 -Activity "Starting Windows Update Services" -Status "Starting BITS..." -PercentComplete 0
+    Get-Service BITS | Set-Service -StartupType Manual -PassThru | Start-Service
+    Write-Progress -Id 9 -ParentId 0 -Activity "Starting Windows Update Services" -Status "Starting wuauserv..." -PercentComplete 25
+    Get-Service wuauserv | Set-Service -StartupType Manual -PassThru | Start-Service
+    Write-Progress -Id 9 -ParentId 0 -Activity "Starting Windows Update Services" -Status "Starting AppIDSvc..." -PercentComplete 50
+    # The AppIDSvc service is protected, so the startup type has to be changed in the registry
+    Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\AppIDSvc" -Name "Start" -Value "3" # Manual
+    Start-Service AppIDSvc
+    Write-Progress -Id 9 -ParentId 0 -Activity "Starting Windows Update Services" -Status "Starting CryptSvc..." -PercentComplete 75
+    Get-Service CryptSvc | Set-Service -StartupType Manual -PassThru | Start-Service
+    Write-Progress -Id 9 -ParentId 0 -Activity "Starting Windows Update Services" -Status "Completed" -PercentComplete 100
+
+
+    # Force Windows Update to check for updates
+    Write-Progress -Id 0 -Activity "Repairing Windows Update" -Status "Forcing discovery..." -PercentComplete 95
+    Write-Progress -Id 10 -ParentId 0 -Activity "Forcing discovery" -Status "Forcing discovery..." -PercentComplete 0
+    try {
+        (New-Object -ComObject Microsoft.Update.AutoUpdate).DetectNow()
+    } catch {
+        Set-WinUtilTaskbaritem -state "Error" -overlay "warning"
+        Write-Warning "Failed to create Windows Update COM object: $_"
+    }
+    Start-Process -NoNewWindow -FilePath "wuauclt" -ArgumentList "/resetauthorization", "/detectnow"
+    Write-Progress -Id 10 -ParentId 0 -Activity "Forcing discovery" -Status "Completed" -PercentComplete 100
+    Write-Progress -Id 0 -Activity "Repairing Windows Update" -Status "Completed" -PercentComplete 100
+
+    Set-WinUtilTaskbaritem -state "None" -overlay "checkmark"
+
+    $ButtonType = [System.Windows.MessageBoxButton]::OK
+    $MessageboxTitle = "Reset Windows Update "
+    $Messageboxbody = ("Stock settings loaded.`n Please reboot your computer")
+    $MessageIcon = [System.Windows.MessageBoxImage]::Information
+
+    [System.Windows.MessageBox]::Show($Messageboxbody, $MessageboxTitle, $ButtonType, $MessageIcon)
+    Write-Host "==============================================="
+    Write-Host "-- 将所有 Windows 更新设置重置为默认 -"
+    Write-Host "==============================================="
+
+    # Remove the progress bars
+    Write-Progress -Id 0 -Activity "Repairing Windows Update" -Completed
+    Write-Progress -Id 1 -Activity "Scanning for corruption" -Completed
+    Write-Progress -Id 2 -Activity "Stopping Services" -Completed
+    Write-Progress -Id 3 -Activity "Renaming/Removing Files" -Completed
+    Write-Progress -Id 4 -Activity "Resetting the WU Service Security Descriptors" -Completed
+    Write-Progress -Id 5 -Activity "Reregistering DLLs" -Completed
+    Write-Progress -Id 6 -Activity "Removing Group Policy Windows Update settings" -Completed
+    Write-Progress -Id 7 -Activity "Resetting WinSock" -Completed
+    Write-Progress -Id 8 -Activity "Deleting BITS jobs" -Completed
+    Write-Progress -Id 9 -Activity "Starting Windows Update Services" -Completed
+    Write-Progress -Id 10 -Activity "Forcing discovery" -Completed
+}
+
+function Invoke-WPFFixesWinget {
+
+    <#
+
+    .SYNOPSIS
+        Fixes WinGet by running `choco install winget`
+    .DESCRIPTION
+        BravoNorris for the fantastic idea of a button to reinstall WinGet
+    #>
+    # Install Choco if not already present
+    try {
+        Set-WinUtilTaskbaritem -state "Indeterminate" -overlay "logo"
+        Write-Host "==> Starting WinGet Repair"
+        Install-WinUtilWinget
+    } catch {
+        Write-Error "Failed to install WinGet: $_"
+        Set-WinUtilTaskbaritem -state "Error" -overlay "warning"
+    } finally {
+        Write-Host "==> Finished WinGet Repair"
+        Set-WinUtilTaskbaritem -state "None" -overlay "checkmark"
+    }
+
+}
+
+function Invoke-WPFGetInstalled {
+    <#
+    .SYNOPSIS
+        Invokes the function that gets the checkboxes to check in a new runspace
+
+    .PARAMETER checkbox
+        Indicates whether to check for installed 'winget' programs or applied 'tweaks'
+
+    #>
+    param($checkbox)
+    if ($sync.ProcessRunning) {
+        $msg = "[Invoke-WPFGetInstalled] Install process is currently running."
+        [System.Windows.MessageBox]::Show($msg, "Winutil", [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Warning)
+        return
+    }
+
+    if (($sync.ChocoRadioButton.IsChecked -eq $false) -and ((Test-WinUtilPackageManager -winget) -eq "not-installed") -and $checkbox -eq "winget") {
+        return
+    }
+    $managerPreference = $sync.preferences.packagemanager
+    $operation = [Hashtable]::Synchronized(@{
+        Checkboxes = @()
+        Error = $null
+    })
+    $completeAction = [Action[hashtable, string]]{
+        param(
+            [hashtable]$completedOperation,
+            [string]$completedCheckbox
+        )
+        try {
+            if ($completedOperation.Error) {
+                Write-WinUtilLog -Level "ERROR" -Component "Install" -Message "Get installed state failed: $($completedOperation.Error)"
+                Write-Warning "Unable to get installed state: $($completedOperation.Error)"
+                return
+            }
+
+            if ($completedCheckbox -eq "winget") {
+                foreach ($checkboxName in $completedOperation.Checkboxes) {
+                    if (-not $sync.selectedApps.Contains($checkboxName)) {
+                        $sync.selectedApps.Add($checkboxName)
+                    }
+                }
+                Reset-WPFCheckBoxes -checkboxfilterpattern "WPFInstall*"
+            } else {
+                foreach ($checkboxName in $completedOperation.Checkboxes) {
+                    $sync.$checkboxName.ischecked = $True
+                }
+            }
+        } finally {
+            $sync.ProcessRunning = $false
+            Set-WinUtilTaskbaritem -state "None"
+        }
+    }
+
+    $sync.ProcessRunning = $true
+    Set-WinUtilTaskbaritem -state "Indeterminate"
+    try {
+        Invoke-WPFRunspace -ParameterList @(
+            ("managerPreference", $managerPreference),
+            ("checkbox", $checkbox),
+            ("operation", $operation),
+            ("completeAction", $completeAction)
+        ) -ScriptBlock {
+            param (
+                [string]$checkbox,
+                [string]$managerPreference,
+                [hashtable]$operation,
+                [Action[hashtable, string]]$completeAction
+            )
+            try {
+                if ($checkbox -eq "winget") {
+                    switch ($managerPreference) {
+                        "Choco" { $operation.Checkboxes = @(Invoke-WinUtilCurrentSystem -CheckBox "choco"); break }
+                        "Winget" { $operation.Checkboxes = @(Invoke-WinUtilCurrentSystem -CheckBox $checkbox); break }
+                    }
+                } elseif ($checkbox -eq "tweaks") {
+                    $operation.Checkboxes = @(Invoke-WinUtilCurrentSystem -CheckBox $checkbox)
+                }
+            } catch {
+                $operation.Error = $_.Exception.Message
+            } finally {
+                $sync.Form.Dispatcher.BeginInvoke($completeAction, [object[]]@($operation, $checkbox)) | Out-Null
+            }
+        }
+    } catch {
+        $operation.Error = $_.Exception.Message
+        $completeAction.Invoke($operation, $checkbox)
+    }
+}
+
+function Invoke-WPFImpex {
+    <#
+
+    .SYNOPSIS
+        Handles importing and exporting of the checkboxes checked for the tweaks section
+
+    .PARAMETER type
+        Indicates whether to 'import' or 'export'
+
+    .PARAMETER checkbox
+        The checkbox to export to a file or apply the imported file to
+
+    .EXAMPLE
+        Invoke-WPFImpex -type "export"
+
+    #>
+    param(
+        $type,
+        $Config = $null
+    )
+
+    function ConfigDialog {
+        if (!$Config) {
+            switch ($type) {
+                "export" { $FileBrowser = New-Object System.Windows.Forms.SaveFileDialog }
+                "import" { $FileBrowser = New-Object System.Windows.Forms.OpenFileDialog }
+            }
+            $FileBrowser.InitialDirectory = [Environment]::GetFolderPath('Desktop')
+            $FileBrowser.Filter = "JSON Files (*.json)|*.json"
+            $FileBrowser.ShowDialog() | Out-Null
+
+            if ($FileBrowser.FileName -eq "") {
+                return $null
+            } else {
+                return $FileBrowser.FileName
+            }
+        } else {
+            return $Config
+        }
+    }
+
+    switch ($type) {
+        "export" {
+            try {
+                $Config = ConfigDialog
+                if ($Config) {
+                    $allConfs = ($sync.selectedApps + $sync.selectedTweaks + $sync.selectedToggles + $sync.selectedFeatures + $sync.selectedAppx) | ForEach-Object { [string]$_ }
+                    if (-not $allConfs) {
+                        [System.Windows.MessageBox]::Show(
+                            "No settings are selected to export. Please select at least one app, tweak, toggle, feature, or AppX package before exporting.",
+                            "Nothing to Export", "OK", "Warning")
+                        return
+                    }
+                    $jsonFile = $allConfs | ConvertTo-Json
+                    $jsonFile | Out-File $Config -Force
+                    "iex ""& { `$(irm https://christitus.com/win) } -Config '$Config'""" | Set-Clipboard
+                }
+            } catch {
+                Write-Error "An error occurred while exporting: $_"
+            }
+        }
+        "import" {
+            try {
+                $Config = ConfigDialog
+                if ($Config) {
+                    try {
+                        if ($Config -match '^https?://') {
+                            $jsonFile = (Invoke-WebRequest "$Config").Content | ConvertFrom-Json
+                        } else {
+                            $jsonFile = Get-Content $Config | ConvertFrom-Json
+                        }
+                    } catch {
+                        Write-Error "Failed to load the JSON file from the specified path or URL: $_"
+                        return
+                    }
+                    # TODO how to handle old style? detected json type then flatten it in a func?
+                    # $flattenedJson = $jsonFile.PSObject.Properties.Where({ $_.Name -ne "Install" }).ForEach({ $_.Value })
+                    $flattenedJson = $jsonFile
+
+                    if (-not $flattenedJson) {
+                        [System.Windows.MessageBox]::Show(
+                            "The selected file contains no settings to import. No changes have been made.",
+                            "Empty Configuration", "OK", "Warning")
+                        return
+                    }
+
+                    # Clear all existing selections before importing so the import replaces
+                    # the current state rather than merging with it
+                    $sync.selectedAppx = [System.Collections.Generic.List[string]]::new()
+                    $sync.selectedApps = [System.Collections.Generic.List[string]]::new()
+                    $sync.selectedTweaks = [System.Collections.Generic.List[string]]::new()
+                    $sync.selectedToggles = [System.Collections.Generic.List[string]]::new()
+                    $sync.selectedFeatures = [System.Collections.Generic.List[string]]::new()
+
+                    Update-WinUtilSelections -flatJson $flattenedJson
+
+                    if ($sync.Form) {
+                        Reset-WPFCheckBoxes -doToggles $true
+                    }
+                }
+            } catch {
+                Write-Error "An error occurred while importing: $_"
+            }
+        }
+    }
+}
+
+function Invoke-WPFInstall {
+    <#
+    .SYNOPSIS
+        Installs the selected programs using winget, if one or more of the selected programs are already installed on the system, winget will try and perform an upgrade if there's a newer version to install.
+    #>
+
+    $PackagesToInstall = $sync.selectedApps | Foreach-Object { $sync.configs.applicationsHashtable.$_ }
+
+
+    if($sync.ProcessRunning) {
+        $msg = "[Invoke-WPFInstall] An Install process is currently running."
+        Show-WinUtilMessage -Message $msg -Title "Winutil" -Button "OK" -Icon "Warning"
+        return
+    }
+
+    if ($PackagesToInstall.Count -eq 0) {
+        $WarningMsg = "Please select the program(s) to install or upgrade."
+        Show-WinUtilMessage -Message $WarningMsg -Title $AppTitle -Button "OK" -Icon "Warning"
+        return
+    }
+
+    $ManagerPreference = $sync.preferences.packagemanager
+    Write-WinUtilLog -Component "Install" -Message "Install requested for $(@($PackagesToInstall).Count) selected package(s) using preference: $ManagerPreference"
+    $packageSummary = Get-WinUtilPackageLogSummary -Packages $PackagesToInstall -Preference $ManagerPreference
+    Write-WinUtilLog -Component "Install" -Message "Install selected package(s): $($packageSummary -join '; ')"
+
+    Invoke-WPFRunspace -ParameterList @(("PackagesToInstall", $PackagesToInstall),("ManagerPreference", $ManagerPreference)) -ScriptBlock {
+        param($PackagesToInstall, $ManagerPreference)
+
+        $packagesSorted = Get-WinUtilSelectedPackages -PackageList $PackagesToInstall -Preference $ManagerPreference
+
+        $packagesWinget = $packagesSorted['Winget']
+        $packagesChoco = $packagesSorted['Choco']
+        $totalPackages = @($packagesWinget).Count + @($packagesChoco).Count
+        $completedPackages = 0
+        $hasUI = $null -ne $sync.Form -and $null -ne $sync.Form.Dispatcher
+        Write-WinUtilLog -Component "Install" -Message "Install package manager split: winget=$(@($packagesWinget).Count), choco=$(@($packagesChoco).Count)"
+
+        try {
+            $sync.ProcessRunning = $true
+            if ($hasUI) {
+                Set-WinUtilTweaksProgressIndicator -Visible $true -Label "Preparing app install (0/$totalPackages)" -Percent 0
+                Invoke-WPFUIThread -ScriptBlock {
+                    if ($null -ne $sync.ItemsControl) {
+                        $sync.ItemsControl.IsEnabled = $false
+                    }
+                }
+            }
+
+            if($packagesWinget.Count -gt 0 -and $packagesWinget -ne "0") {
+                Install-WinUtilWinget
+                foreach ($program in $packagesWinget) {
+                    $position = $completedPackages + 1
+                    $startPercent = [int](($completedPackages / $totalPackages) * 100)
+                    if ($hasUI) {
+                        Set-WinUtilTweaksProgressIndicator -Visible $true -Label "Installing $program ($position/$totalPackages)" -Percent $startPercent
+                    }
+
+                    Install-WinUtilProgramWinget -Action Install -Programs @($program)
+                    $completedPackages++
+                    $completedPercent = [int](($completedPackages / $totalPackages) * 100)
+                    if ($hasUI) {
+                        Set-WinUtilTweaksProgressIndicator -Visible $true -Label "Installed $program ($completedPackages/$totalPackages)" -Percent $completedPercent
+                        Invoke-WPFUIThread -ScriptBlock { Set-WinUtilTaskbaritem -value ($completedPercent / 100) }
+                    }
+                }
+            }
+            if($packagesChoco.Count -gt 0) {
+                $position = $completedPackages + 1
+                $startPercent = [int](($completedPackages / $totalPackages) * 100)
+                if ($hasUI) {
+                    Set-WinUtilTweaksProgressIndicator -Visible $true -Label "Installing Chocolatey packages ($position/$totalPackages)" -Percent $startPercent
+                }
+
+                Install-WinUtilChoco
+                Install-WinUtilProgramChoco -Action Install -Programs $packagesChoco
+                $completedPackages += @($packagesChoco).Count
+                $completedPercent = [int](($completedPackages / $totalPackages) * 100)
+                if ($hasUI) {
+                    Set-WinUtilTweaksProgressIndicator -Visible $true -Label "Installed Chocolatey packages ($completedPackages/$totalPackages)" -Percent $completedPercent
+                    Invoke-WPFUIThread -ScriptBlock { Set-WinUtilTaskbaritem -value ($completedPercent / 100) }
+                }
+            }
+            Write-Host "==========================================="
+            Write-Host "--      安装已完成          ---"
+            Write-Host "==========================================="
+            Write-WinUtilLog -Component "Install" -Message "Install workflow completed."
+            if ($hasUI) {
+                Set-WinUtilTweaksProgressIndicator -Visible $true -Label "App install finished" -Percent 100
+                Invoke-WPFUIThread -ScriptBlock { Set-WinUtilTaskbaritem -state "None" -overlay "checkmark" }
+            }
+        } catch {
+            Write-Host "==========================================="
+            Write-Host "错误: $_"
+            Write-Host "==========================================="
+            Write-WinUtilLog -Level "ERROR" -Component "Install" -Message "Install workflow failed: $($_.Exception.Message)"
+            if ($hasUI) {
+                Set-WinUtilTweaksProgressIndicator -Visible $true -Label "App install failed" -Percent 100
+                Invoke-WPFUIThread -ScriptBlock { Set-WinUtilTaskbaritem -state "Error" -overlay "warning" }
+            }
+        } finally {
+            if ($hasUI) {
+                Invoke-WPFUIThread -ScriptBlock {
+                    if ($null -ne $sync.ItemsControl) {
+                        $sync.ItemsControl.IsEnabled = $true
+                    }
+                }
+            }
+            $sync.ProcessRunning = $False
+        }
+    }
+}
+
+function Invoke-WPFInstallUpgrade {
+    if ($sync.ChocoRadioButton.IsChecked) {
+        Install-WinUtilChoco # Ensure Chocolatey is installed before upgrading
+
+        Write-Host "==========================================="
+        Write-Host "--           Updates started            ---"
+        Write-Host "-- You can close this window if desired ---"
+        Write-Host "==========================================="
+
+        Start-Process -FilePath powershell.exe -ArgumentList 'choco upgrade all -y'
+    } else {
+        Install-WinUtilWinget # Ensure WinGet is installed before upgrading
+
+        Write-Host "==========================================="
+        Write-Host "--           Updates started            ---"
+        Write-Host "-- You can close this window if desired ---"
+        Write-Host "==========================================="
+
+        Start-Process -FilePath powershell.exe -ArgumentList '-NoExit winget upgrade --all --include-unknown --silent --accept-source-agreements --accept-package-agreements'
+    }
+}
+
+function Invoke-WPFOOSU {
+    if ($sync.ProcessRunning) {
+        Show-WinUtilMessage -Message "Another process is currently running." -Title "WinUtil" -Button "OK" -Icon "Warning"
+        return
+    }
+
+    $downloadPath = Join-Path $sync.winutildir "ooshutup10.exe"
+    $sync.ProcessRunning = $true
+
+    Invoke-WPFRunspace -ParameterList @(,("downloadPath", $downloadPath)) -ScriptBlock {
+        param($downloadPath)
+
+        $hasUI = $null -ne $sync.Form -and $null -ne $sync.Form.Dispatcher
+
+        try {
+            Write-WinUtilLog -Component "OOSU" -Message "Downloading O&O ShutUp10++."
+            if ($hasUI) {
+                Set-WinUtilTweaksProgressIndicator -Visible $true -Label "Downloading O&O ShutUp10++ (0%)" -Percent 0
+            }
+
+            Save-WinUtilFile -Uri "https://dl5.oo-software.com/files/ooshutup10/OOSU10.exe" -DestinationPath $downloadPath -ProgressCallback {
+                param($percent)
+
+                if ($hasUI) {
+                    Set-WinUtilTweaksProgressIndicator -Visible $true -Label "Downloading O&O ShutUp10++ ($percent%)" -Percent $percent
+                }
+            }
+
+            if ($hasUI) {
+                Set-WinUtilTweaksProgressIndicator -Visible $true -Label "Launching O&O ShutUp10++" -Percent 100
+            }
+            Start-Process -FilePath $downloadPath
+
+            Write-WinUtilLog -Component "OOSU" -Message "O&O ShutUp10++ launched."
+            if ($hasUI) {
+                Set-WinUtilTweaksProgressIndicator -Visible $true -Label "O&O ShutUp10++ launched" -Percent 100
+            }
+        }
+        catch {
+            Write-WinUtilLog -Level "ERROR" -Component "OOSU" -Message "O&O ShutUp10++ download failed: $($_.Exception.Message)"
+            if ($hasUI) {
+                Set-WinUtilTweaksProgressIndicator -Visible $true -Label "O&O ShutUp10++ download failed" -Percent 100
+            }
+            Write-Error "Couldn't download O&O ShutUp10. Please make sure you have an active Internet connection."
+        }
+        finally {
+            $sync.ProcessRunning = $false
+        }
+    }
+}
+
+function Invoke-WPFPanelAutologin {
+    Invoke-WebRequest -Uri https://live.sysinternals.com/Autologon.exe -OutFile "$winutildir\autologin.exe"
+    Start-Process -FilePath "$winutildir\autologin.exe" -ArgumentList /accepteula
+}
+
+function Invoke-WPFPopup {
+    param (
+        [ValidateSet("Show", "Hide", "Toggle")]
+        [string]$Action = "",
+
+        [string[]]$Popups = @(),
+
+        [ValidateScript({
+            $invalid = $_.GetEnumerator() | Where-Object { $_.Value -notin @("Show", "Hide", "Toggle") }
+            if ($invalid) {
+                throw "Found invalid Popup-Action pair(s): " + ($invalid | ForEach-Object { "$($_.Key) = $($_.Value)" } -join "; ")
+            }
+            $true
+        })]
+        [hashtable]$PopupActionTable = @{}
+    )
+
+    if (-not $PopupActionTable.Count -and (-not $Action -or -not $Popups.Count)) {
+        throw "Provide either 'PopupActionTable' or both 'Action' and 'Popups'."
+    }
+
+    if ($PopupActionTable.Count -and ($Action -or $Popups.Count)) {
+        throw "Use 'PopupActionTable' on its own, or 'Action' with 'Popups'."
+    }
+
+    # Collect popups and actions
+    $PopupsToProcess = if ($PopupActionTable.Count) {
+        $PopupActionTable.GetEnumerator() | ForEach-Object { [PSCustomObject]@{ Name = "$($_.Key)Popup"; Action = $_.Value } }
+    } else {
+        $Popups | ForEach-Object { [PSCustomObject]@{ Name = "$_`Popup"; Action = $Action } }
+    }
+
+    $PopupsNotFound = @()
+
+    # Apply actions
+    foreach ($popupEntry in $PopupsToProcess) {
+        $popupName = $popupEntry.Name
+
+        if (-not $sync.$popupName) {
+            $PopupsNotFound += $popupName
+            continue
+        }
+
+        $sync.$popupName.IsOpen = switch ($popupEntry.Action) {
+            "Show" { $true }
+            "Hide" { $false }
+            "Toggle" { -not $sync.$popupName.IsOpen }
+        }
+    }
+
+    if ($PopupsNotFound.Count -gt 0) {
+        throw "Could not find the following popups: $($PopupsNotFound -join ', ')"
+    }
+}
+
+function Invoke-WPFPresets {
+    <#
+
+    .SYNOPSIS
+        Sets the checkboxes in winutil to the given preset
+
+    .PARAMETER preset
+        The preset to set the checkboxes to
+
+    .PARAMETER imported
+        If the preset is imported from a file, defaults to false
+
+    .PARAMETER checkboxfilterpattern
+        The Pattern to use when filtering through CheckBoxes, defaults to "**"
+
+    #>
+
+    param (
+        [Parameter(position=0)]
+        [Array]$preset = $null,
+
+        [Parameter(position=1)]
+        [bool]$imported = $false,
+
+        [Parameter(position=2)]
+        [string]$checkboxfilterpattern = "**"
+    )
+
+    if ($imported -eq $true) {
+        $CheckBoxesToCheck = $preset
+    } else {
+        $CheckBoxesToCheck = $sync.configs.preset.$preset
+    }
+
+    # clear out the filtered pattern so applying a preset replaces the current
+    # state rather than merging with it
+    switch ($checkboxfilterpattern) {
+        "WPFTweak*" { $sync.selectedTweaks = [System.Collections.Generic.List[string]]::new() }
+        "WPFInstall*" { $sync.selectedApps = [System.Collections.Generic.List[string]]::new() }
+        "WPFAppx*" { $sync.selectedAppx = [System.Collections.Generic.List[string]]::new() }
+        "WPFeatures" { $sync.selectedFeatures = [System.Collections.Generic.List[string]]::new() }
+        "WPFToggle" { $sync.selectedToggles = [System.Collections.Generic.List[string]]::new() }
+        default {}
+    }
+
+    if ($preset) {
+        Update-WinUtilSelections -flatJson $CheckBoxesToCheck
+    }
+
+    Reset-WPFCheckBoxes -doToggles $false -checkboxfilterpattern $checkboxfilterpattern
+}
+
+function Invoke-WPFRunspace {
+
+    <#
+
+    .SYNOPSIS
+        Creates and invokes a runspace using the given scriptblock and argumentlist
+
+    .PARAMETER ScriptBlock
+        The scriptblock to invoke in the runspace
+
+    .PARAMETER ArgumentList
+        A list of arguments to pass to the runspace
+
+    .PARAMETER ParameterList
+        A list of named parameters that should be provided.
+    .EXAMPLE
+        Invoke-WPFRunspace `
+            -ScriptBlock $sync.ScriptsInstallPrograms `
+            -ArgumentList "Installadvancedip,Installbitwarden" `
+
+        Invoke-WPFRunspace`
+            -ScriptBlock $sync.ScriptsInstallPrograms `
+            -ParameterList @(("PackagesToInstall", @("Installadvancedip,Installbitwarden")),("ChocoPreference", $true))
+    #>
+
+    [CmdletBinding()]
+    [OutputType([System.IAsyncResult])]
+    Param (
+        $ScriptBlock,
+        $ArgumentList,
+        $ParameterList
+    )
+
+    if (-not ("WinUtilRunspaceCleanup" -as [type])) {
+        Add-Type @"
+using System;
+using System.Management.Automation;
+
+public sealed class WinUtilRunspaceCleanupState
+{
+    public PowerShell PowerShell { get; set; }
+    public IAsyncResult Handle { get; set; }
+}
+
+public static class WinUtilRunspaceCleanup
+{
+    public static readonly System.Threading.WaitOrTimerCallback Callback = Cleanup;
+
+    public static void Cleanup(object state, bool timedOut)
+    {
+        var cleanupState = state as WinUtilRunspaceCleanupState;
+        if (cleanupState == null || cleanupState.PowerShell == null || cleanupState.Handle == null)
+        {
+            return;
+        }
+
+        try
+        {
+            cleanupState.PowerShell.EndInvoke(cleanupState.Handle);
+        }
+        catch
+        {
+        }
+        finally
+        {
+            cleanupState.PowerShell.Dispose();
+        }
+    }
+}
+"@
+    }
+
+    Initialize-WinUtilRunspacePool | Out-Null
+
+    # Create a PowerShell instance
+    $powershell = [powershell]::Create()
+
+    # Add Scriptblock and Arguments to runspace
+    [void]$powershell.AddScript($ScriptBlock)
+    [void]$powershell.AddArgument($ArgumentList)
+
+    foreach ($parameter in $ParameterList) {
+        [void]$powershell.AddParameter($parameter[0], $parameter[1])
+    }
+
+    $powershell.RunspacePool = $sync.runspace
+
+    # Execute the RunspacePool
+    $handle = $powershell.BeginInvoke()
+
+    $cleanupState = [WinUtilRunspaceCleanupState]::new()
+    $cleanupState.PowerShell = $powershell
+    $cleanupState.Handle = $handle
+    [System.Threading.ThreadPool]::RegisterWaitForSingleObject($handle.AsyncWaitHandle, [WinUtilRunspaceCleanup]::Callback, $cleanupState, -1, $true) | Out-Null
+
+    # Return the handle
+    return $handle
+}
+
+function Invoke-WPFSSHServer {
+    <#
+
+    .SYNOPSIS
+        Invokes the OpenSSH Server install in a runspace
+
+  #>
+
+    Invoke-WPFRunspace -ScriptBlock {
+
+        Invoke-WinUtilSSHServer
+
+        Write-Host "======================================="
+        Write-Host "--     OpenSSH Server installed!    ---"
+        Write-Host "======================================="
+    }
+}
+
+function Invoke-WPFSelectedCheckboxesUpdate ($type, $checkboxName) {
+    $listName = switch -Regex ($checkboxName) {
+        '^WPFInstall' { 'selectedApps' }
+        '^WPFTweaks'  { 'selectedTweaks' }
+        '^WPFToggle'  { 'selectedToggles' }
+        '^WPFFeature' { 'selectedFeatures' }
+        '^WPFAppx'    { 'selectedAppx' }
+    }
+
+    $selectionChanged = $false
+    if ($type -eq "Add") {
+        if (-not $sync.$listName.Contains($checkboxName)) {
+            $sync.$listName.Add($checkboxName)
+            $selectionChanged = $true
+        }
+    } else {
+        $selectionChanged = $sync.$listName.Remove($checkboxName)
+    }
+
+    if ($listName -eq "selectedApps" -and $selectionChanged) {
+        $sync.WPFselectedAppsButton.Content = "Selected Apps: $($sync.selectedApps.Count)"
+        $sync.selectedAppsstackPanel.Children.Clear()
+        $sync.selectedApps | Sort-Object | ForEach-Object {
+            Add-SelectedAppsMenuItem -name $sync.configs.applicationsHashtable.$_.Content -key $_
+        }
+    }
+}
+
+function Invoke-WPFSystemRepair {
+    <#
+    .SYNOPSIS
+        Checks for system corruption using SFC, and DISM
+        Checks for disk failure using Chkdsk
+
+    .DESCRIPTION
+        1. Chkdsk - Checks for disk errors, which can cause system file corruption and notifies of early disk failure
+        2. SFC - scans protected system files for corruption and fixes them
+        3. DISM - Repair a corrupted Windows operating system image
+    #>
+
+    Start-Process cmd.exe -ArgumentList "/c chkdsk /scan /perf" -NoNewWindow -Wait
+    Start-Process cmd.exe -ArgumentList "/c sfc /scannow" -NoNewWindow -Wait
+    Start-Process cmd.exe -ArgumentList "/c dism /online /cleanup-image /restorehealth" -NoNewWindow -Wait
+
+    Write-Host "==> Finished System Repair"
+    Set-WinUtilTaskbaritem -state "None" -overlay "checkmark"
+}
+
+function Invoke-WPFTab {
+
+    <#
+
+    .SYNOPSIS
+        Sets the selected tab to the tab that was clicked
+
+    .PARAMETER ClickedTab
+        The name of the tab that was clicked
+
+    #>
+
+    Param (
+        [Parameter(Mandatory,position=0)]
+        [string]$ClickedTab
+    )
+
+    $tabNav = Get-WinUtilVariables | Where-Object {$psitem -like "WPFTabNav"}
+    $tabNumber = [int]($ClickedTab -replace "WPFTab","" -replace "BT","") - 1
+
+    $filter = Get-WinUtilVariables -Type ToggleButton | Where-Object {$psitem -like "WPFTab?BT"}
+    $sync.$tabNav.Items[$tabNumber].IsSelected = $true
+    ($sync.GetEnumerator()).where{$psitem.Key -in $filter} | ForEach-Object {
+        if ($ClickedTab -ne $PSItem.name) {
+            $sync[$PSItem.Name].IsChecked = $false
+        } else {
+            $sync["$ClickedTab"].IsChecked = $true
+        }
+    }
+    $sync.currentTab = $sync.$tabNav.Items[$tabNumber].Header
+    Initialize-WinUtilTabContent -TabName $sync.currentTab
+
+    # Always reset the filter for the current tab
+    if ($sync.currentTab -eq "Install") {
+        # Reset Install tab filter
+        Find-AppsByNameOrDescription -SearchString ""
+    } elseif ($sync.currentTab -eq "Tweaks") {
+        # Reset Tweaks tab filter
+        Find-TweaksByNameOrDescription -SearchString ""
+    } elseif ($sync.currentTab -eq "AppX") {
+        # Reset AppX tab filter
+        Find-TweaksByNameOrDescription -SearchString ""
+    }
+
+    # Show search bar in Install, Tweaks, and AppX tabs
+    if ($tabNumber -eq 0 -or $tabNumber -eq 1 -or $tabNumber -eq 5) {
+        $sync.SearchBar.Visibility = "Visible"
+        $searchIcon = ($sync.Form.FindName("SearchBar").Parent.Children | Where-Object { $_ -is [System.Windows.Controls.TextBlock] -and $_.Text -eq [char]0xE721 })[0]
+        if ($searchIcon) {
+            $searchIcon.Visibility = "Visible"
+        }
+    } else {
+        $sync.SearchBar.Visibility = "Collapsed"
+        $searchIcon = ($sync.Form.FindName("SearchBar").Parent.Children | Where-Object { $_ -is [System.Windows.Controls.TextBlock] -and $_.Text -eq [char]0xE721 })[0]
+        if ($searchIcon) {
+            $searchIcon.Visibility = "Collapsed"
+        }
+        # Hide the clear button if it's visible
+        $sync.SearchBarClearButton.Visibility = "Collapsed"
+    }
+}
+
+function Invoke-WPFToggleAllCategories {
+    <#
+        .SYNOPSIS
+            Expands or collapses all categories in the Install tab
+
+        .PARAMETER Action
+            The action to perform: "Expand" or "Collapse"
+
+        .DESCRIPTION
+            This function iterates through all category containers in the Install tab
+            and expands or collapses their WrapPanels while updating the toggle button labels
+    #>
+
+    param(
+        [Parameter(Mandatory=$true)]
+        [ValidateSet("Expand", "Collapse")]
+        [string]$Action
+    )
+
+    try {
+        if ($null -eq $sync.ItemsControl) {
+            Write-Warning "ItemsControl 未初始化"
+            return
+        }
+
+        $targetVisibility = if ($Action -eq "Expand") { [Windows.Visibility]::Visible } else { [Windows.Visibility]::Collapsed }
+        $targetPrefix = if ($Action -eq "Expand") { "-" } else { "+" }
+        $sourcePrefix = if ($Action -eq "Expand") { "+" } else { "-" }
+
+        # Iterate through all items in the ItemsControl
+        $sync.ItemsControl.Items | ForEach-Object {
+            $categoryContainer = $_
+
+            # Check if this is a category container (StackPanel with children)
+            if ($categoryContainer -is [System.Windows.Controls.StackPanel] -and $categoryContainer.Children.Count -ge 2) {
+                # Get the WrapPanel (second child)
+                $wrapPanel = $categoryContainer.Children[1]
+                $wrapPanel.Visibility = $targetVisibility
+
+                # Update the label to show the correct state
+                $categoryLabel = $categoryContainer.Children[0]
+                if ($categoryLabel.Content -like "$sourcePrefix*") {
+                    $escapedSourcePrefix = [regex]::Escape($sourcePrefix)
+                    $categoryLabel.Content = $categoryLabel.Content -replace "^$escapedSourcePrefix ", "$targetPrefix "
+                }
+            }
+        }
+    }
+    catch {
+        Write-Error "Error toggling categories: $_"
+    }
+}
+
+function Invoke-WPFUIElements {
+    <#
+    .SYNOPSIS
+        Adds UI elements to a specified Grid in the WinUtil GUI based on a JSON configuration.
+    .PARAMETER configVariable
+        The variable/link containing the JSON configuration.
+    .PARAMETER targetGridName
+        The name of the grid to which the UI elements should be added.
+    .PARAMETER columncount
+        The number of columns to be used in the Grid. If not provided, a default value is used based on the panel.
+    .EXAMPLE
+        Invoke-WPFUIElements -configVariable $sync.configs.applications -targetGridName "install" -columncount 5
+    .NOTES
+        Future me/contributor: If possible, please wrap this into a runspace to make it load all panels at the same time.
+    #>
+
+    param(
+        [Parameter(Mandatory, Position = 0)]
+        [PSCustomObject]$configVariable,
+
+        [Parameter(Mandatory, Position = 1)]
+        [string]$targetGridName,
+
+        [Parameter(Mandatory, Position = 2)]
+        [int]$columncount
+    )
+
+    $window = $sync.form
+
+    $borderstyle = $window.FindResource("BorderStyle")
+    $HoverTextBlockStyle = $window.FindResource("HoverTextBlockStyle")
+    $ColorfulToggleSwitchStyle = $window.FindResource("ColorfulToggleSwitchStyle")
+    $ToggleButtonStyle = $window.FindResource("ToggleButtonStyle")
+
+    if (!$borderstyle -or !$HoverTextBlockStyle -or !$ColorfulToggleSwitchStyle) {
+        throw "Failed to retrieve Styles using 'FindResource' from main window element."
+    }
+
+    $targetGrid = $window.FindName($targetGridName)
+
+    if (!$targetGrid) {
+        throw "Failed to retrieve Target Grid by name, provided name: $targetGrid"
+    }
+
+    # Clear existing ColumnDefinitions and Children
+    $targetGrid.ColumnDefinitions.Clear() | Out-Null
+    $targetGrid.Children.Clear() | Out-Null
+
+    # Add ColumnDefinitions to the target Grid
+    for ($i = 0; $i -lt $columncount; $i++) {
+        $colDef = New-Object Windows.Controls.ColumnDefinition
+        $colDef.Width = New-Object Windows.GridLength(1, [Windows.GridUnitType]::Star)
+        $targetGrid.ColumnDefinitions.Add($colDef) | Out-Null
+    }
+
+    # Convert PSCustomObject to Hashtable
+    $configHashtable = @{}
+    $configVariable.PSObject.Properties.Name | ForEach-Object {
+        $configHashtable[$_] = $configVariable.$_
+    }
+
+    $radioButtonGroups = @{}
+
+    $organizedData = @{}
+    # Iterate through JSON data and organize by panel and category
+    foreach ($entry in $configHashtable.Keys) {
+        $entryInfo = $configHashtable[$entry]
+
+        # Create an object for the application
+        $entryObject = [PSCustomObject]@{
+            Name        = $entry
+            Category    = $entryInfo.Category
+            Content     = $entryInfo.Content
+            Panel       = if ($entryInfo.Panel) { $entryInfo.Panel } else { "0" }
+            Link        = $entryInfo.link
+            Description = $entryInfo.description
+            Type        = $entryInfo.type
+            ComboItems  = $entryInfo.ComboItems
+            Checked     = $entryInfo.Checked
+            ButtonWidth = $entryInfo.ButtonWidth
+            GroupName   = $entryInfo.GroupName  # Added for RadioButton groupings
+        }
+
+        if (-not $organizedData.ContainsKey($entryObject.Panel)) {
+            $organizedData[$entryObject.Panel] = @{}
+        }
+
+        if (-not $organizedData[$entryObject.Panel].ContainsKey($entryObject.Category)) {
+            $organizedData[$entryObject.Panel][$entryObject.Category] = @()
+        }
+
+        # Store application data in an array under the category
+        $organizedData[$entryObject.Panel][$entryObject.Category] += $entryObject
+
+    }
+
+    # Initialize panel count
+    $panelcount = 0
+
+    # Iterate through 'organizedData' by panel, category, and application
+    $count = 0
+    foreach ($panelKey in ($organizedData.Keys | Sort-Object)) {
+        # Create a Border for each column
+        $border = New-Object Windows.Controls.Border
+        $border.VerticalAlignment = "Stretch"
+        [System.Windows.Controls.Grid]::SetColumn($border, $panelcount)
+        $border.style = $borderstyle
+        $targetGrid.Children.Add($border) | Out-Null
+
+        # Use a DockPanel to contain the content
+        $dockPanelContainer = New-Object Windows.Controls.DockPanel
+        $border.Child = $dockPanelContainer
+
+        # Create an ItemsControl for application content
+        $itemsControl = New-Object Windows.Controls.ItemsControl
+        $itemsControl.HorizontalAlignment = 'Stretch'
+        $itemsControl.VerticalAlignment = 'Stretch'
+
+        # Set the ItemsPanel to a VirtualizingStackPanel
+        $itemsPanelTemplate = New-Object Windows.Controls.ItemsPanelTemplate
+        $factory = New-Object Windows.FrameworkElementFactory ([Windows.Controls.VirtualizingStackPanel])
+        $itemsPanelTemplate.VisualTree = $factory
+        $itemsControl.ItemsPanel = $itemsPanelTemplate
+
+        # Set virtualization properties
+        $itemsControl.SetValue([Windows.Controls.VirtualizingStackPanel]::IsVirtualizingProperty, $true)
+        $itemsControl.SetValue([Windows.Controls.VirtualizingStackPanel]::VirtualizationModeProperty, [Windows.Controls.VirtualizationMode]::Recycling)
+
+        # Add the ItemsControl directly to the DockPanel
+        [Windows.Controls.DockPanel]::SetDock($itemsControl, [Windows.Controls.Dock]::Bottom)
+        $dockPanelContainer.Children.Add($itemsControl) | Out-Null
+        $panelcount++
+
+        # Now proceed with adding category labels and entries to $itemsControl
+        foreach ($category in ($organizedData[$panelKey].Keys | Sort-Object)) {
+            $count++
+
+            $label = New-Object Windows.Controls.Label
+            $label.Content = $category -replace ".*__", ""
+            $label.SetResourceReference([Windows.Controls.Control]::FontSizeProperty, "HeaderFontSize")
+            $label.SetResourceReference([Windows.Controls.Control]::FontFamilyProperty, "HeaderFontFamily")
+            $label.UseLayoutRounding = $true
+            $itemsControl.Items.Add($label) | Out-Null
+            $sync[$category] = $label
+
+            # Sort entries by type (checkboxes first, then buttons, then comboboxes) and then alphabetically by Content
+            $entries = $organizedData[$panelKey][$category] | Sort-Object @{Expression = {
+                switch ($_.Type) {
+                    'Button' { 1 }
+                    'Combobox' { 2 }
+                    default { 0 }
+                }
+            }}, Content
+            foreach ($entryInfo in $entries) {
+                $count++
+                # Create the UI elements based on the entry type
+                switch ($entryInfo.Type) {
+                    "Toggle" {
+                        $dockPanel = New-Object Windows.Controls.DockPanel
+                        [System.Windows.Automation.AutomationProperties]::SetName($dockPanel, $entryInfo.Content)
+                        $checkBox = New-Object Windows.Controls.CheckBox
+                        $checkBox.Name = $entryInfo.Name
+                        $checkBox.HorizontalAlignment = "Right"
+                        $checkBox.UseLayoutRounding = $true
+                        [System.Windows.Automation.AutomationProperties]::SetName($checkBox, $entryInfo.Content)
+                        $dockPanel.Children.Add($checkBox) | Out-Null
+                        $checkBox.Style = $ColorfulToggleSwitchStyle
+
+                        $label = New-Object Windows.Controls.Label
+                        $label.Content = $entryInfo.Content
+                        $label.ToolTip = $entryInfo.Description
+                        $label.HorizontalAlignment = "Left"
+                        $label.SetResourceReference([Windows.Controls.Control]::FontSizeProperty, "FontSize")
+                        $label.SetResourceReference([Windows.Controls.Control]::ForegroundProperty, "MainForegroundColor")
+                        $label.UseLayoutRounding = $true
+                        $dockPanel.Children.Add($label) | Out-Null
+                        $itemsControl.Items.Add($dockPanel) | Out-Null
+
+                        $sync[$entryInfo.Name] = $checkBox
+                        $sync[$entryInfo.Name].IsChecked = (Get-WinUtilToggleStatus $entryInfo.Name)
+
+                        $sync[$entryInfo.Name].Add_Checked({
+                            [System.Object]$Sender = $args[0]
+                            Invoke-WPFSelectedCheckboxesUpdate -type "Add" -checkboxName $Sender.name
+                            # Skip applying tweaks while an import is restoring toggle states
+                            if (-not $sync.ImportInProgress) {
+                                Invoke-WinUtilTweaks $Sender.name
+                            }
+                        })
+
+                        $sync[$entryInfo.Name].Add_Unchecked({
+                            [System.Object]$Sender = $args[0]
+                            Invoke-WPFSelectedCheckboxesUpdate -type "Remove" -checkboxName $Sender.name
+                            # Skip undoing tweaks while an import is restoring toggle states
+                            if (-not $sync.ImportInProgress) {
+                                Invoke-WinUtiltweaks $Sender.name -undo $true
+                            }
+                        })
+                    }
+
+                    "ToggleButton" {
+                        $toggleButton = New-Object Windows.Controls.Primitives.ToggleButton
+                        $toggleButton.Name = $entryInfo.Name
+                        $toggleButton.Content = $entryInfo.Content[1]
+                        $toggleButton.ToolTip = $entryInfo.Description
+                        $toggleButton.HorizontalAlignment = "Left"
+                        $toggleButton.Style = $ToggleButtonStyle
+                        [System.Windows.Automation.AutomationProperties]::SetName($toggleButton, $entryInfo.Content[0])
+
+                        $toggleButton.Tag = @{
+                            contentOn = if ($entryInfo.Content.Count -ge 1) { $entryInfo.Content[0] } else { "" }
+                            contentOff = if ($entryInfo.Content.Count -ge 2) { $entryInfo.Content[1] } else { $contentOn }
+                        }
+
+                        $itemsControl.Items.Add($toggleButton) | Out-Null
+
+                        $sync[$entryInfo.Name] = $toggleButton
+
+                        $sync[$entryInfo.Name].Add_Checked({
+                            $this.Content = $this.Tag.contentOn
+                        })
+
+                        $sync[$entryInfo.Name].Add_Unchecked({
+                            $this.Content = $this.Tag.contentOff
+                        })
+
+                        if ($null -eq $sync.Buttons) {
+                            $sync.Buttons = [System.Collections.Generic.List[PSObject]]::new()
+                        }
+
+                        if ($sync.Buttons -notcontains $toggleButton.Name) {
+                            $toggleButton.Add_Click({
+                                [System.Object]$Sender = $args[0]
+                                Invoke-WPFButton $Sender.name
+                            })
+                            $sync.Buttons.Add($toggleButton.Name) | Out-Null
+                        }
+                    }
+
+                    "Combobox" {
+                        $horizontalStackPanel = New-Object Windows.Controls.StackPanel
+                        $horizontalStackPanel.Orientation = "Horizontal"
+                        $horizontalStackPanel.Margin = "0,5,0,0"
+                        [System.Windows.Automation.AutomationProperties]::SetName($horizontalStackPanel, $entryInfo.Content)
+
+                        $label = New-Object Windows.Controls.Label
+                        $label.Content = $entryInfo.Content
+                        $label.HorizontalAlignment = "Left"
+                        $label.VerticalAlignment = "Center"
+                        $label.SetResourceReference([Windows.Controls.Control]::FontSizeProperty, "ButtonFontSize")
+                        $label.UseLayoutRounding = $true
+                        $horizontalStackPanel.Children.Add($label) | Out-Null
+
+                        $comboBox = New-Object Windows.Controls.ComboBox
+                        $comboBox.Name = $entryInfo.Name
+                        $comboBox.SetResourceReference([Windows.Controls.Control]::HeightProperty, "ButtonHeight")
+                        $comboBox.SetResourceReference([Windows.Controls.Control]::WidthProperty, "ButtonWidth")
+                        $comboBox.HorizontalAlignment = "Left"
+                        $comboBox.VerticalAlignment = "Center"
+                        $comboBox.SetResourceReference([Windows.Controls.Control]::MarginProperty, "ButtonMargin")
+                        $comboBox.SetResourceReference([Windows.Controls.Control]::FontSizeProperty, "ButtonFontSize")
+                        $comboBox.UseLayoutRounding = $true
+                        [System.Windows.Automation.AutomationProperties]::SetName($comboBox, $entryInfo.Content)
+
+                        foreach ($comboitem in ($entryInfo.ComboItems -split " ")) {
+                            $comboBoxItem = New-Object Windows.Controls.ComboBoxItem
+                            $comboBoxItem.Content = $comboitem
+                            $comboBoxItem.SetResourceReference([Windows.Controls.Control]::FontSizeProperty, "ButtonFontSize")
+                            $comboBoxItem.UseLayoutRounding = $true
+                            $comboBox.Items.Add($comboBoxItem) | Out-Null
+                        }
+
+                        $horizontalStackPanel.Children.Add($comboBox) | Out-Null
+                        $itemsControl.Items.Add($horizontalStackPanel) | Out-Null
+
+                        $comboBox.SelectedIndex = 0
+
+                        # Set initial text
+                        if ($comboBox.Items.Count -gt 0) {
+                            $comboBox.Text = $comboBox.Items[0].Content
+                        }
+
+                        # Add SelectionChanged event handler to update the text property
+                        $comboBox.Add_SelectionChanged({
+                            $selectedItem = $this.SelectedItem
+                            if ($selectedItem) {
+                                $this.Text = $selectedItem.Content
+                            }
+                        })
+
+                        $sync[$entryInfo.Name] = $comboBox
+                    }
+
+                    "Button" {
+                        $button = New-Object Windows.Controls.Button
+                        $button.Name = $entryInfo.Name
+                        $button.Content = $entryInfo.Content
+                        $button.HorizontalAlignment = "Left"
+                        $button.SetResourceReference([Windows.Controls.Control]::MarginProperty, "ButtonMargin")
+                        $button.SetResourceReference([Windows.Controls.Control]::FontSizeProperty, "ButtonFontSize")
+                        if ($entryInfo.ButtonWidth) {
+                            $baseWidth = [int]$entryInfo.ButtonWidth
+                            $button.Width = [math]::Max($baseWidth, 350)
+                        }
+                        [System.Windows.Automation.AutomationProperties]::SetName($button, $entryInfo.Content)
+                        $itemsControl.Items.Add($button) | Out-Null
+
+                        $sync[$entryInfo.Name] = $button
+
+                        if ($null -eq $sync.Buttons) {
+                            $sync.Buttons = [System.Collections.Generic.List[PSObject]]::new()
+                        }
+
+                        if ($sync.Buttons -notcontains $button.Name) {
+                            $button.Add_Click({
+                                [System.Object]$Sender = $args[0]
+                                Invoke-WPFButton $Sender.name
+                            })
+                            $sync.Buttons.Add($button.Name) | Out-Null
+                        }
+                    }
+
+                    "RadioButton" {
+                        # Check if a container for this GroupName already exists
+                        if (-not $radioButtonGroups.ContainsKey($entryInfo.GroupName)) {
+                            # Create a StackPanel for this group
+                            $groupStackPanel = New-Object Windows.Controls.StackPanel
+                            $groupStackPanel.Orientation = "Vertical"
+                            [System.Windows.Automation.AutomationProperties]::SetName($groupStackPanel, $entryInfo.GroupName)
+
+                            # Add the group container to the ItemsControl
+                            $itemsControl.Items.Add($groupStackPanel) | Out-Null
+                        }
+                        else {
+                            # Retrieve the existing group container
+                            $groupStackPanel = $radioButtonGroups[$entryInfo.GroupName]
+                        }
+
+                        # Create the RadioButton
+                        $radioButton = New-Object Windows.Controls.RadioButton
+                        $radioButton.Name = $entryInfo.Name
+                        $radioButton.GroupName = $entryInfo.GroupName
+                        $radioButton.Content = $entryInfo.Content
+                        $radioButton.HorizontalAlignment = "Left"
+                        $radioButton.SetResourceReference([Windows.Controls.Control]::MarginProperty, "CheckBoxMargin")
+                        $radioButton.SetResourceReference([Windows.Controls.Control]::FontSizeProperty, "ButtonFontSize")
+                        $radioButton.ToolTip = $entryInfo.Description
+                        $radioButton.UseLayoutRounding = $true
+                        [System.Windows.Automation.AutomationProperties]::SetName($radioButton, $entryInfo.Content)
+
+                        if ($entryInfo.Checked -eq $true) {
+                            $radioButton.IsChecked = $true
+                        }
+
+                        # Add the RadioButton to the group container
+                        $groupStackPanel.Children.Add($radioButton) | Out-Null
+                        $sync[$entryInfo.Name] = $radioButton
+                    }
+
+                    "Note" {
+                        $textBlock = New-Object Windows.Controls.TextBlock
+                        $textBlock.TextWrapping = "Wrap"
+                        $textBlock.Margin = "5,5,5,5"
+                        $textBlock.UseLayoutRounding = $true
+
+                        $bulletRun = New-Object Windows.Documents.Run
+                        $bulletRun.Text = [char]0x25CF
+                        $bulletRun.Foreground = [Windows.Media.SolidColorBrush]::new([Windows.Media.Color]::FromRgb(110, 255, 114))
+                        $bulletRun.FontSize = 11.5
+
+                        $textRun = New-Object Windows.Documents.Run
+                        $textRun.Text = " $($entryInfo.Content)"
+                        $textRun.SetResourceReference([Windows.Controls.Control]::FontSizeProperty, "FontSize")
+                        $textRun.Foreground = [Windows.Media.SolidColorBrush]::new([Windows.Media.Color]::FromRgb(19, 143, 83))
+
+                        $textBlock.Inlines.Add($bulletRun)
+                        $textBlock.Inlines.Add($textRun)
+
+                        $itemsControl.Items.Add($textBlock) | Out-Null
+                    }
+
+                    default {
+                        $horizontalStackPanel = New-Object Windows.Controls.StackPanel
+                        $horizontalStackPanel.Orientation = "Horizontal"
+                        [System.Windows.Automation.AutomationProperties]::SetName($horizontalStackPanel, $entryInfo.Content)
+
+                        $checkBox = New-Object Windows.Controls.CheckBox
+                        $checkBox.Name = $entryInfo.Name
+                        $checkBox.Content = $entryInfo.Content
+                        $checkBox.SetResourceReference([Windows.Controls.Control]::FontSizeProperty, "FontSize")
+                        $checkBox.ToolTip = $entryInfo.Description
+                        $checkBox.SetResourceReference([Windows.Controls.Control]::MarginProperty, "CheckBoxMargin")
+                        $checkBox.UseLayoutRounding = $true
+                        [System.Windows.Automation.AutomationProperties]::SetName($checkBox, $entryInfo.Content)
+                        if ($entryInfo.Checked -eq $true) {
+                            $checkBox.IsChecked = $entryInfo.Checked
+                        }
+                        $horizontalStackPanel.Children.Add($checkBox) | Out-Null
+
+                        if ($entryInfo.Link) {
+                            $textBlock = New-Object Windows.Controls.TextBlock
+                            $textBlock.Name = $checkBox.Name + "Link"
+                            $textBlock.Text = "(?)"
+                            $textBlock.ToolTip = $entryInfo.Link
+                            $textBlock.Style = $HoverTextBlockStyle
+                            $textBlock.UseLayoutRounding = $true
+
+                            $textBlock.VerticalAlignment = "Center"
+                            $textBlock.SetResourceReference([Windows.Controls.Control]::FontSizeProperty, "FontSize")
+                            $textBlock.Tag = $checkBox
+
+                            $textBlock.Add_MouseUp({
+                                [System.Object]$Sender = $args[0]
+                                Start-Process $Sender.ToolTip -ErrorAction Stop
+                            })
+
+                            $updateLinkMargin = {
+                                [System.Object]$Sender = $args[0]
+                                $linkedCheckBox = $Sender.Tag
+                                $MarginTopBase = if ($linkedCheckBox) { $linkedCheckBox.Margin.Top } else { 0 }
+                                $Sender.Margin = New-Object Windows.Thickness(
+                                    [math]::Round($Sender.FontSize * 0.5),
+                                    ($MarginTopBase - [math]::Round($Sender.FontSize / 2)),
+                                    0, 0
+                                )
+                            }
+                            $textBlock.Add_Loaded($updateLinkMargin)
+                            $fontSizeDescriptor = [System.ComponentModel.DependencyPropertyDescriptor]::FromProperty(
+                                [Windows.Controls.Control]::FontSizeProperty,
+                                [Windows.Controls.TextBlock]
+                            )
+                            $fontSizeDescriptor.AddValueChanged($textBlock, $updateLinkMargin)
+
+                            $horizontalStackPanel.Children.Add($textBlock) | Out-Null
+
+                            $sync[$textBlock.Name] = $textBlock
+                        }
+
+                        $itemsControl.Items.Add($horizontalStackPanel) | Out-Null
+                        $sync[$entryInfo.Name] = $checkBox
+
+                        $sync[$entryInfo.Name].Add_Checked({
+                            [System.Object]$Sender = $args[0]
+                            Invoke-WPFSelectedCheckboxesUpdate -type "Add" -checkboxName $Sender.name
+                        })
+
+                        $sync[$entryInfo.Name].Add_Unchecked({
+                            [System.Object]$Sender = $args[0]
+                            Invoke-WPFSelectedCheckboxesUpdate -type "Remove" -checkboxName $Sender.name
+                        })
+                    }
+                }
+            }
+        }
+    }
+}
+
+function Invoke-WPFUIThread ($ScriptBlock) {
+    $sync.form.Dispatcher.Invoke([action]$ScriptBlock)
+}
+
+function Invoke-WPFUltimatePerformance ([switch]$Enable) {
+    if ($Enable) {
+        powercfg /setactive (powercfg /duplicatescheme e9a42b02-d5df-448d-aa00-03f14749eb61 | Select-String -Pattern '[A-Fa-f0-9-]{36}').Matches.Value
+        [System.Windows.MessageBox]::Show("Ultimate Power Plan plan installed and activated.","Success","OK","Information")
+    } else {
+        powercfg /restoredefaultschemes
+        [System.Windows.MessageBox]::Show("Power Plan was reset to defaults.","Success","OK","Information")
+    }
+}
+
+function Invoke-WPFUnInstall {
+    param(
+        [Parameter(Mandatory=$false)]
+        [PSObject[]]$PackagesToUninstall = $($sync.selectedApps | Foreach-Object { $sync.configs.applicationsHashtable.$_ })
+    )
+    <#
+
+    .SYNOPSIS
+        Uninstalls the selected programs
+    #>
+
+    if($sync.ProcessRunning) {
+        $msg = "[Invoke-WPFUnInstall] Install process is currently running"
+        Show-WinUtilMessage -Message $msg -Title "Winutil" -Button "OK" -Icon "Warning"
+        return
+    }
+
+    if ($PackagesToUninstall.Count -eq 0) {
+        $WarningMsg = "Please select the program(s) to uninstall"
+        Show-WinUtilMessage -Message $WarningMsg -Title $AppTitle -Button "OK" -Icon "Warning"
+        return
+    }
+
+    $ButtonType = "YesNo"
+    $MessageboxTitle = "Are you sure?"
+    $Messageboxbody = ("This will uninstall the following applications: `n $($PackagesToUninstall | Select-Object Name, Description| Out-String)")
+    $MessageIcon = "Information"
+
+    $confirm = Show-WinUtilMessage -Message $Messageboxbody -Title $MessageboxTitle -Button $ButtonType -Icon $MessageIcon
+
+    if($confirm -eq "No") {return}
+
+    $ManagerPreference = $sync.preferences.packagemanager
+    Write-WinUtilLog -Component "Uninstall" -Message "Uninstall requested for $(@($PackagesToUninstall).Count) selected package(s) using preference: $ManagerPreference"
+    $packageSummary = Get-WinUtilPackageLogSummary -Packages $PackagesToUninstall -Preference $ManagerPreference
+    Write-WinUtilLog -Component "Uninstall" -Message "Uninstall selected package(s): $($packageSummary -join '; ')"
+
+    Invoke-WPFRunspace -ParameterList @(("PackagesToUninstall", $PackagesToUninstall),("ManagerPreference", $ManagerPreference)) -ScriptBlock {
+        param($PackagesToUninstall, $ManagerPreference)
+
+        $packagesSorted = Get-WinUtilSelectedPackages -PackageList $PackagesToUninstall -Preference $ManagerPreference
+
+        $packagesWinget = $packagesSorted['Winget']
+        $packagesChoco = $packagesSorted['Choco']
+        $totalPackages = @($packagesWinget).Count + @($packagesChoco).Count
+        $completedPackages = 0
+        $hasUI = $null -ne $sync.Form -and $null -ne $sync.Form.Dispatcher
+        Write-WinUtilLog -Component "Uninstall" -Message "Uninstall package manager split: winget=$(@($packagesWinget).Count), choco=$(@($packagesChoco).Count)"
+
+        try {
+            $sync.ProcessRunning = $true
+            if ($hasUI) {
+                Set-WinUtilTweaksProgressIndicator -Visible $true -Label "Preparing app uninstall (0/$totalPackages)" -Percent 0
+                Invoke-WPFUIThread -ScriptBlock {
+                    if ($null -ne $sync.ItemsControl) {
+                        $sync.ItemsControl.IsEnabled = $false
+                    }
+                }
+            }
+
+            if ($packagesWinget -contains "Microsoft.Edge") {
+                New-Item -Path "$Env:SystemRoot\SystemApps\Microsoft.MicrosoftEdge_8wekyb3d8bbwe\MicrosoftEdge.exe" -Force
+            }
+
+            # Uninstall all selected programs in new window
+            if($packagesWinget.Count -gt 0) {
+                foreach ($program in $packagesWinget) {
+                    $position = $completedPackages + 1
+                    $startPercent = [int](($completedPackages / $totalPackages) * 100)
+                    if ($hasUI) {
+                        Set-WinUtilTweaksProgressIndicator -Visible $true -Label "Uninstalling $program ($position/$totalPackages)" -Percent $startPercent
+                    }
+
+                    Install-WinUtilProgramWinget -Action Uninstall -Programs @($program)
+                    $completedPackages++
+                    $completedPercent = [int](($completedPackages / $totalPackages) * 100)
+                    if ($hasUI) {
+                        Set-WinUtilTweaksProgressIndicator -Visible $true -Label "Uninstalled $program ($completedPackages/$totalPackages)" -Percent $completedPercent
+                        Invoke-WPFUIThread -ScriptBlock { Set-WinUtilTaskbaritem -value ($completedPercent / 100) }
+                    }
+                }
+            }
+            if($packagesChoco.Count -gt 0) {
+                $position = $completedPackages + 1
+                $startPercent = [int](($completedPackages / $totalPackages) * 100)
+                if ($hasUI) {
+                    Set-WinUtilTweaksProgressIndicator -Visible $true -Label "Uninstalling Chocolatey packages ($position/$totalPackages)" -Percent $startPercent
+                }
+
+                Install-WinUtilProgramChoco -Action Uninstall -Programs $packagesChoco
+                $completedPackages += @($packagesChoco).Count
+                $completedPercent = [int](($completedPackages / $totalPackages) * 100)
+                if ($hasUI) {
+                    Set-WinUtilTweaksProgressIndicator -Visible $true -Label "Uninstalled Chocolatey packages ($completedPackages/$totalPackages)" -Percent $completedPercent
+                    Invoke-WPFUIThread -ScriptBlock { Set-WinUtilTaskbaritem -value ($completedPercent / 100) }
+                }
+            }
+            Write-Host "==========================================="
+            Write-Host "--       Uninstalls have finished       ---"
+            Write-Host "==========================================="
+            Write-WinUtilLog -Component "Uninstall" -Message "Uninstall workflow completed."
+            if ($hasUI) {
+                Set-WinUtilTweaksProgressIndicator -Visible $true -Label "App uninstall finished" -Percent 100
+                Invoke-WPFUIThread -ScriptBlock { Set-WinUtilTaskbaritem -state "None" -overlay "checkmark" }
+            }
+        } catch {
+            Write-Host "==========================================="
+            Write-Host "错误: $_"
+            Write-Host "==========================================="
+            Write-WinUtilLog -Level "ERROR" -Component "Uninstall" -Message "Uninstall workflow failed: $($_.Exception.Message)"
+            if ($hasUI) {
+                Set-WinUtilTweaksProgressIndicator -Visible $true -Label "App uninstall failed" -Percent 100
+                Invoke-WPFUIThread -ScriptBlock { Set-WinUtilTaskbaritem -state "Error" -overlay "warning" }
+            }
+        } finally {
+            if ($hasUI) {
+                Invoke-WPFUIThread -ScriptBlock {
+                    if ($null -ne $sync.ItemsControl) {
+                        $sync.ItemsControl.IsEnabled = $true
+                    }
+                }
+            }
+            $sync.ProcessRunning = $False
+        }
+
+    }
+}
+
+function Invoke-WPFUpdatesdefault {
+    <#
+
+    .SYNOPSIS
+        Resets Windows Update settings to default
+
+    #>
+    Write-WinUtilLog -Component "Updates" -Message "Resetting Windows Update settings to default."
+
+    Write-Host "正在移除 WinUtil 管理的 Windows 更新设置..." -ForegroundColor Green
+    Write-WinUtilLog -Component "Updates" -Message "Removing Windows Update registry values managed by WinUtil."
+
+    $registryValues = @(
+        @{
+            Path = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU"
+            Names = @("NoAutoUpdate", "AUOptions", "NoAutoRebootWithLoggedOnUsers", "AUPowerManagement")
+        },
+        @{
+            Path = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate"
+            Names = @("ExcludeWUDriversInQualityUpdate", "DeferFeatureUpdates", "DeferFeatureUpdatesPeriodInDays", "DeferQualityUpdates", "DeferQualityUpdatesPeriodInDays")
+        },
+        @{
+            Path = "HKLM:\SOFTWARE\Microsoft\WindowsUpdate\UX\Settings"
+            Names = @("BranchReadinessLevel", "DeferFeatureUpdatesPeriodInDays", "DeferQualityUpdatesPeriodInDays")
+        },
+        @{
+            Path = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Device Metadata"
+            Names = @("PreventDeviceMetadataFromNetwork")
+        },
+        @{
+            Path = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\DriverSearching"
+            Names = @("DontPromptForWindowsUpdate", "DontSearchWindowsUpdate", "DriverUpdateWizardWuSearchEnabled")
+        },
+        @{
+            Path = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\DeliveryOptimization\Config"
+            Names = @("DODownloadMode")
+        }
+    )
+
+    foreach ($registryEntry in $registryValues) {
+        foreach ($valueName in $registryEntry.Names) {
+            Remove-ItemProperty -Path $registryEntry.Path -Name $valueName -ErrorAction SilentlyContinue
+        }
+    }
+
+    $explorerPolicyPath = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer"
+    $settingsPageVisibility = (Get-ItemProperty -Path $explorerPolicyPath -Name "SettingsPageVisibility" -ErrorAction SilentlyContinue).SettingsPageVisibility
+    if ($settingsPageVisibility -eq "hide:windowsupdate") {
+        Write-Host "正在移除 WinUtil 旧版 Windows 更新页面限制..."
+        Write-WinUtilLog -Component "Updates" -Message "Removing the legacy Windows Update settings page restriction."
+        Remove-ItemProperty -Path $explorerPolicyPath -Name "SettingsPageVisibility" -ErrorAction SilentlyContinue
+    }
+
+    Write-Host "正在重新启用 Windows 更新服务..." -ForegroundColor Green
+    Write-WinUtilLog -Component "Updates" -Message "Restoring Windows Update service startup types."
+
+    Write-Host "已将 BITS 恢复为手动。"
+    Write-WinUtilLog -Component "Updates" -Message "Restoring BITS service to Manual."
+    Set-Service -Name BITS -StartupType Manual
+
+    Write-Host "已将 wuauserv 恢复为手动。"
+    Write-WinUtilLog -Component "Updates" -Message "Restoring wuauserv service to Manual."
+    Set-Service -Name wuauserv -StartupType Manual
+
+    Write-Host "已将 UsoSvc 恢复为自动。"
+    Write-WinUtilLog -Component "Updates" -Message "Starting UsoSvc service and restoring startup type to Automatic."
+    Set-Service -Name UsoSvc -StartupType Automatic
+    Start-Service -Name UsoSvc
+
+    Write-Host "正在启用更新相关的计划任务..." -ForegroundColor Green
+    Write-WinUtilLog -Component "Updates" -Message "Enabling update related scheduled tasks."
+
+    $Tasks =
+        '\Microsoft\Windows\InstallService\*',
+        '\Microsoft\Windows\UpdateOrchestrator\*',
+        '\Microsoft\Windows\UpdateAssistant\*',
+        '\Microsoft\Windows\WaaSMedic\*',
+        '\Microsoft\Windows\WindowsUpdate\*',
+        '\Microsoft\WindowsUpdate\*'
+
+    foreach ($Task in $Tasks) {
+        Get-ScheduledTask -TaskPath $Task -ErrorAction SilentlyContinue | Enable-ScheduledTask -ErrorAction SilentlyContinue
+    }
+
+    Write-Host "===================================================" -ForegroundColor Green
+    Write-Host "---  Windows Update Settings Reset to Default   ---" -ForegroundColor Green
+    Write-Host "===================================================" -ForegroundColor Green
+
+    Write-Host "注意：您必须重新启动系统才能使所有更改生效。" -ForegroundColor Yellow
+    Write-WinUtilLog -Component "Updates" -Message "Windows Update default workflow completed. Restart required."
+}
+
+function Invoke-WPFUpdatesdisable {
+    <#
+
+    .SYNOPSIS
+        Disables Windows Update
+
+    .NOTES
+        Disabling Windows Update is not recommended. This is only for advanced users who know what they are doing.
+
+    #>
+    $confirmation = Show-WinUtilMessage `
+        -Message "Disabling Windows Update stops update services, disables scheduled tasks, and clears downloaded update files. Security updates will not be installed until defaults are restored. Continue?" `
+        -Title "Disable Windows Update?" `
+        -Button "YesNo" `
+        -Icon "Warning"
+
+    if ($confirmation -ne "Yes") {
+        Write-WinUtilLog -Component "Updates" -Message "Windows Update disable workflow cancelled."
+        return
+    }
+
+    Write-WinUtilLog -Component "Updates" -Message "Disabling Windows Update settings."
+
+    Write-Host "正在配置注册表设置..." -ForegroundColor Yellow
+    Write-WinUtilLog -Component "Updates" -Message "Configuring Windows Update registry policy values for disable mode."
+    New-Item -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU" -Force
+
+    Set-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU" -Name "NoAutoUpdate" -Type DWord -Value 1
+    Set-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU" -Name "AUOptions" -Type DWord -Value 1
+
+    New-Item -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\DeliveryOptimization\Config" -Force
+    Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\DeliveryOptimization\Config" -Name "DODownloadMode" -Type DWord -Value 0
+
+    foreach ($serviceName in @("BITS", "wuauserv", "UsoSvc")) {
+        Write-Host "正在停止并禁用 $serviceName 服务。"
+        Write-WinUtilLog -Component "Updates" -Message "Stopping and disabling $serviceName service."
+        Stop-Service -Name $serviceName -Force -ErrorAction SilentlyContinue
+        Set-Service -Name $serviceName -StartupType Disabled
+    }
+
+    Remove-Item -Path "C:\Windows\SoftwareDistribution\*" -Recurse -Force -ErrorAction SilentlyContinue
+    Write-Host "已清除 SoftwareDistribution 文件夹。"
+    Write-WinUtilLog -Component "Updates" -Message "Cleared SoftwareDistribution folder."
+
+    Write-Host "正在禁用更新相关的计划任务..." -ForegroundColor Yellow
+    Write-WinUtilLog -Component "Updates" -Message "Disabling update related scheduled tasks."
+
+    $Tasks =
+        '\Microsoft\Windows\InstallService\*',
+        '\Microsoft\Windows\UpdateOrchestrator\*',
+        '\Microsoft\Windows\UpdateAssistant\*',
+        '\Microsoft\Windows\WaaSMedic\*',
+        '\Microsoft\Windows\WindowsUpdate\*',
+        '\Microsoft\WindowsUpdate\*'
+
+    foreach ($Task in $Tasks) {
+        Get-ScheduledTask -TaskPath $Task -ErrorAction SilentlyContinue | Disable-ScheduledTask -ErrorAction SilentlyContinue
+    }
+
+    Write-Host "=================================" -ForegroundColor Green
+    Write-Host "--- Windows Update Is Disabled ---" -ForegroundColor Green
+    Write-Host "=================================" -ForegroundColor Green
+
+    Write-Host "注意：您必须重新启动系统才能使所有更改生效。" -ForegroundColor Yellow
+    Write-WinUtilLog -Component "Updates" -Message "Windows Update disable workflow completed. Restart required."
+}
+
+function Invoke-WPFUpdatessecurity {
+    <#
+
+    .SYNOPSIS
+        Sets Windows Update to recommended settings
+
+    .DESCRIPTION
+        1. Disables driver offering through Windows Update
+        2. Defers feature updates for 365 days
+        3. Defers quality updates for 4 days
+        4. Prevents automatic restarts while a user is signed in
+
+    #>
+
+    Write-Host "正在禁用通过 Windows 更新提供的驱动..."
+    Write-WinUtilLog -Component "Updates" -Message "Applying recommended Windows Update settings."
+    Write-WinUtilLog -Component "Updates" -Message "Disabling driver offering through Windows Update."
+
+    $windowsUpdatePolicyPath = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate"
+    $automaticUpdatePolicyPath = Join-Path $windowsUpdatePolicyPath "AU"
+
+    Write-Host "正在恢复 Windows 更新可用性..."
+    Write-WinUtilLog -Component "Updates" -Message "Restoring Windows Update services and scheduled tasks before applying recommended settings."
+
+    Remove-ItemProperty -Path $automaticUpdatePolicyPath -Name "NoAutoUpdate" -ErrorAction SilentlyContinue
+    Remove-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\DeliveryOptimization\Config" -Name "DODownloadMode" -ErrorAction SilentlyContinue
+
+    Set-Service -Name BITS -StartupType Manual
+    Set-Service -Name wuauserv -StartupType Manual
+    Set-Service -Name UsoSvc -StartupType Automatic
+    Start-Service -Name UsoSvc
+
+    $Tasks =
+        '\Microsoft\Windows\InstallService\*',
+        '\Microsoft\Windows\UpdateOrchestrator\*',
+        '\Microsoft\Windows\UpdateAssistant\*',
+        '\Microsoft\Windows\WaaSMedic\*',
+        '\Microsoft\Windows\WindowsUpdate\*',
+        '\Microsoft\WindowsUpdate\*'
+
+    foreach ($Task in $Tasks) {
+        Get-ScheduledTask -TaskPath $Task -ErrorAction SilentlyContinue | Enable-ScheduledTask -ErrorAction SilentlyContinue
+    }
+
+    New-Item -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Device Metadata" -Force
+    Set-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Device Metadata" -Name "PreventDeviceMetadataFromNetwork" -Type DWord -Value 1
+
+    New-Item -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\DriverSearching" -Force
+
+    Set-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\DriverSearching" -Name "DontPromptForWindowsUpdate" -Type DWord -Value 1
+    Set-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\DriverSearching" -Name "DontSearchWindowsUpdate" -Type DWord -Value 1
+    Set-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\DriverSearching" -Name "DriverUpdateWizardWuSearchEnabled" -Type DWord -Value 0
+
+    New-Item -Path $windowsUpdatePolicyPath -Force
+    Set-ItemProperty -Path $windowsUpdatePolicyPath -Name "ExcludeWUDriversInQualityUpdate" -Type DWord -Value 1
+
+    Write-Host "将功能更新推迟 365 天，质量更新推迟 4 天..."
+    Write-WinUtilLog -Component "Updates" -Message "Deferring feature updates by 365 days and quality updates by 4 days."
+
+    Set-ItemProperty -Path $windowsUpdatePolicyPath -Name "DeferFeatureUpdates" -Type DWord -Value 1
+    Set-ItemProperty -Path $windowsUpdatePolicyPath -Name "DeferFeatureUpdatesPeriodInDays" -Type DWord -Value 365
+    Set-ItemProperty -Path $windowsUpdatePolicyPath -Name "DeferQualityUpdates" -Type DWord -Value 1
+    Set-ItemProperty -Path $windowsUpdatePolicyPath -Name "DeferQualityUpdatesPeriodInDays" -Type DWord -Value 4
+
+    $legacySettingsPath = "HKLM:\SOFTWARE\Microsoft\WindowsUpdate\UX\Settings"
+    foreach ($legacyValue in @("BranchReadinessLevel", "DeferFeatureUpdatesPeriodInDays", "DeferQualityUpdatesPeriodInDays")) {
+        Remove-ItemProperty -Path $legacySettingsPath -Name $legacyValue -ErrorAction SilentlyContinue
+    }
+
+    Write-Host "防止用户在登录时自动重启..."
+    Write-WinUtilLog -Component "Updates" -Message "Configuring scheduled automatic updates without restarting while users are signed in."
+
+    New-Item -Path $automaticUpdatePolicyPath -Force
+    # NoAutoRebootWithLoggedOnUsers only applies when automatic updates use option 4.
+    Set-ItemProperty -Path $automaticUpdatePolicyPath -Name "AUOptions" -Type DWord -Value 4
+    Set-ItemProperty -Path $automaticUpdatePolicyPath -Name "NoAutoRebootWithLoggedOnUsers" -Type DWord -Value 1
+    Set-ItemProperty -Path $automaticUpdatePolicyPath -Name "AUPowerManagement" -Type DWord -Value 0
+
+    Write-Host "================================="
+    Write-Host "-- Updates Set to Recommended ---"
+    Write-Host "================================="
+    Write-WinUtilLog -Component "Updates" -Message "Recommended Windows Update settings workflow completed."
+}
+
+function Invoke-WPFtweaksbutton {
+  <#
+
+    .SYNOPSIS
+        Invokes the functions associated with each group of checkboxes
+
+  #>
+
+  if($sync.ProcessRunning) {
+    $msg = "[Invoke-WPFtweaksbutton] Install process is currently running."
+    [System.Windows.MessageBox]::Show($msg, "Winutil", [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Warning)
+    return
+  }
+
+  $Tweaks = $sync.selectedTweaks
+  $dnsProvider = $sync["WPFchangedns"].text
+  if (-not ($dnsProvider)) {
+    $dnsProvider = "Default"
+  }
+  $restorePointTweak = "WPFTweaksRestorePoint"
+  $restorePointSelected = $Tweaks -contains $restorePointTweak
+  $tweaksToRun = @($Tweaks | Where-Object { $_ -ne $restorePointTweak })
+  $totalSteps = [Math]::Max($Tweaks.Count, 1)
+  $completedSteps = 0
+  Write-WinUtilLog -Component "Tweaks" -Message "Tweaks requested: $(@($Tweaks).Count) selected tweak(s), DNS provider: $dnsProvider"
+
+  if ($tweaks.count -eq 0 -and $dnsProvider -eq "Default") {
+    $msg = "Please check the tweaks you wish to perform."
+    [System.Windows.MessageBox]::Show($msg, "Winutil", [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Warning)
+    return
+  }
+
+  if ($restorePointSelected) {
+    $sync.ProcessRunning = $true
+
+    if ($Tweaks.Count -eq 1) {
+        Invoke-WPFUIThread -ScriptBlock { Set-WinUtilTaskbaritem -state "Indeterminate" -value 0.01 -overlay "logo" }
+    } else {
+        Invoke-WPFUIThread -ScriptBlock { Set-WinUtilTaskbaritem -state "Normal" -value 0.01 -overlay "logo" }
+    }
+
+    Set-WinUtilTweaksProgressIndicator -Visible $true -Label "Creating restore point" -Percent 0
+    Write-WinUtilLog -Component "Tweaks" -Message "Creating restore point before applying selected tweaks."
+    Invoke-WinUtilTweaks $restorePointTweak
+    $completedSteps = 1
+
+    if ($tweaksToRun.Count -eq 0 -and $dnsProvider -eq "Default") {
+      Set-WinUtilTweaksProgressIndicator -Visible $true -Label "Tweaks finished" -Percent 100
+      $sync.ProcessRunning = $false
+      Invoke-WPFUIThread -ScriptBlock { Set-WinUtilTaskbaritem -state "None" -overlay "checkmark" }
+      Write-Host "================================="
+      Write-Host "--     优化已完成    ---"
+      Write-Host "================================="
+      Write-WinUtilLog -Component "Tweaks" -Message "Tweaks workflow completed after restore point."
+      return
+    }
+  }
+
+  # The leading "," in the ParameterList is necessary because we only provide one argument and powershell cannot be convinced that we want a nested loop with only one argument otherwise
+  Invoke-WPFRunspace -ParameterList @(("tweaks", $tweaksToRun), ("dnsProvider", $dnsProvider), ("completedSteps", $completedSteps), ("totalSteps", $totalSteps)) -ScriptBlock {
+    param($tweaks, $dnsProvider, $completedSteps, $totalSteps)
+
+    $sync.ProcessRunning = $true
+
+    if ($completedSteps -eq 0) {
+      if ($Tweaks.count -eq 1) {
+        Invoke-WPFUIThread -ScriptBlock { Set-WinUtilTaskbaritem -state "Indeterminate" -value 0.01 -overlay "logo" }
+      } else {
+        Invoke-WPFUIThread -ScriptBlock{ Set-WinUtilTaskbaritem -state "Normal" -value 0.01 -overlay "logo" }
+      }
+    }
+
+    if ($dnsProvider -ne "Default") {
+      Set-WinUtilDNS -DNSProvider $dnsProvider
+    }
+
+    for ($i = 0; $i -lt $tweaks.Count; $i++) {
+      Set-WinUtilTweaksProgressIndicator -Visible $true -Label "Applying $($tweaks[$i]) ($($completedSteps + 1)/$totalSteps)" -Percent ($completedSteps / $totalSteps * 100)
+      Invoke-WinUtilTweaks $tweaks[$i]
+      $completedSteps++
+      $progress = $completedSteps / $totalSteps
+      Invoke-WPFUIThread -ScriptBlock { Set-WinUtilTaskbaritem -value $progress }
+    }
+    Set-WinUtilTweaksProgressIndicator -Visible $true -Label "Tweaks finished" -Percent 100
+    $sync.ProcessRunning = $false
+    Invoke-WPFUIThread -ScriptBlock { Set-WinUtilTaskbaritem -state "None" -overlay "checkmark" }
+    Write-Host "================================="
+    Write-Host "--     优化已完成    ---"
+    Write-Host "================================="
+    Write-WinUtilLog -Component "Tweaks" -Message "Tweaks workflow completed."
+  }
+}
+
+function Invoke-WPFundoall {
+    <#
+
+    .SYNOPSIS
+        Undoes every selected tweak
+
+    #>
+
+    if($sync.ProcessRunning) {
+        $msg = "[Invoke-WPFundoall] Install process is currently running."
+        [System.Windows.MessageBox]::Show($msg, "Winutil", [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Warning)
+        return
+    }
+
+    $tweaks = $sync.selectedTweaks
+
+    if ($tweaks.count -eq 0) {
+        $msg = "Please check the tweaks you wish to undo."
+        [System.Windows.MessageBox]::Show($msg, "Winutil", [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Warning)
+        return
+    }
+
+    Invoke-WPFRunspace -ArgumentList $tweaks -ScriptBlock {
+        param($tweaks)
+
+        $sync.ProcessRunning = $true
+        Write-WinUtilLog -Component "Tweaks" -Message "Undo tweaks requested: $(@($tweaks).Count) selected tweak(s)."
+        if ($tweaks.count -eq 1) {
+            Invoke-WPFUIThread -ScriptBlock { Set-WinUtilTaskbaritem -state "Indeterminate" -value 0.01 -overlay "logo" }
+        } else {
+            Invoke-WPFUIThread -ScriptBlock { Set-WinUtilTaskbaritem -state "Normal" -value 0.01 -overlay "logo" }
+        }
+
+
+        for ($i = 0; $i -lt $tweaks.Count; $i++) {
+            Set-WinUtilTweaksProgressIndicator -Visible $true -Label "Undoing $($tweaks[$i]) ($($i + 1)/$($tweaks.Count))" -Percent ($i / $tweaks.Count * 100)
+            Invoke-WinUtiltweaks $tweaks[$i] -undo $true
+            Invoke-WPFUIThread -ScriptBlock { Set-WinUtilTaskbaritem -value ($i/$tweaks.Count) }
+        }
+
+        Set-WinUtilTweaksProgressIndicator -Visible $true -Label "Undo Tweaks Finished" -Percent 100
+        $sync.ProcessRunning = $false
+        Invoke-WPFUIThread -ScriptBlock { Set-WinUtilTaskbaritem -state "None" -overlay "checkmark" }
+        Write-Host "=================================="
+        Write-Host "---  撤销优化已完成  ---"
+        Write-Host "=================================="
+        Write-WinUtilLog -Component "Tweaks" -Message "Undo tweaks workflow completed."
+
+    }
+}
+
+function Invoke-WinUtilAutoRun {
+    <#
+
+    .SYNOPSIS
+        Runs Install, Tweaks, and Features with optional UI invocation.
+    #>
+
+    function BusyWait {
+        Start-Sleep -Milliseconds 100
+        while ($sync.ProcessRunning) {
+            Start-Sleep -Milliseconds 100
+        }
+    }
+
+    if ($sync.selectedTweaks.Count -gt 0) {
+        Write-Host "正在应用优化..."
+        Invoke-WPFtweaksbutton
+        BusyWait
+    }
+
+    if ($sync.selectedFeatures.Count -gt 0) {
+        Write-Host "正在应用功能..."
+        Invoke-WPFFeatureInstall
+        BusyWait
+    }
+
+    if ($sync.selectedApps.Count -gt 0) {
+        Write-Host "正在安装应用..."
+        Invoke-WPFInstall
+        BusyWait
+    }
+
+    if ($sync.selectedAppx.Count -gt 0) {
+        Write-Host "正在移除 AppX 包..."
+        Invoke-WPFAppxRemoval
+        BusyWait
+    }
+
+    Write-Host "完成。"
+}
 
 function Add-SelectedAppsMenuItem {
     <#
@@ -135,8 +2644,6 @@ function Add-SelectedAppsMenuItem {
     $sync.selectedAppsstackPanel.Children.Add($selectedAppGrid)
 }
 
-
-
 function Close-WinUtilRunspacePool {
     if ($null -eq $sync -or -not $sync.ContainsKey("runspace") -or $null -eq $sync.runspace) {
         return
@@ -155,8 +2662,6 @@ function Close-WinUtilRunspacePool {
         $sync.Remove("runspace")
     }
 }
-
-
 
 function Find-AppsByNameOrDescription {
     <#
@@ -301,8 +2806,6 @@ function Find-AppsByNameOrDescription {
         return
     }
 }
-
-
 
 function Find-TweaksByNameOrDescription {
     <#
@@ -614,8 +3117,6 @@ function Find-TweaksByNameOrDescription {
     }
 }
 
-
-
 function Get-WinUtilInstalledAPPX {
     <#
 
@@ -640,8 +3141,6 @@ function Get-WinUtilInstalledAPPX {
 
     return @($packageOutput)
 }
-
-
 
 function Get-WinUtilPackageLogSummary {
     param(
@@ -671,8 +3170,6 @@ function Get-WinUtilPackageLogSummary {
         }
     })
 }
-
-
 
 function Get-WinUtilSelectedPackages {
 
@@ -730,8 +3227,6 @@ function Get-WinUtilSelectedPackages {
     return $packages
 }
 
-
-
 Function Get-WinUtilToggleStatus ($ToggleSwitch) {
 
     $ToggleSwitchReg = $sync.configs.tweaks.$ToggleSwitch.registry
@@ -773,8 +3268,6 @@ Function Get-WinUtilToggleStatus ($ToggleSwitch) {
     return $true
 }
 
-
-
 function Get-WinUtilVariables {
 
     <#
@@ -805,8 +3298,6 @@ function Get-WinUtilVariables {
     }
     return $keys
 }
-
-
 
     function Initialize-InstallAppArea {
         <#
@@ -854,8 +3345,6 @@ function Get-WinUtilVariables {
 
         return $itemsControl
     }
-
-
 
 function Initialize-InstallAppEntry {
     <#
@@ -972,8 +3461,6 @@ function Initialize-InstallAppEntry {
         return $checkbox
     }
 
-
-
 function Initialize-InstallCategoryAppList {
     <#
         .SYNOPSIS
@@ -1077,8 +3564,6 @@ function Initialize-InstallCategoryAppList {
         Start-WinUtilInstallAppRendering
     }
 
-
-
 function Initialize-WinUtilRunspacePool {
     if ($sync.runspace -and $sync.runspace.RunspacePoolStateInfo.State -eq [System.Management.Automation.Runspaces.RunspacePoolState]::Opened) {
         return $sync.runspace
@@ -1117,8 +3602,6 @@ function Initialize-WinUtilRunspacePool {
     $sync.runspace.Open()
     return $sync.runspace
 }
-
-
 
 function Initialize-WinUtilTabContent {
     param(
@@ -1160,8 +3643,6 @@ function Initialize-WinUtilTabContent {
     $sync.InitializedTabs[$TabName] = $true
 }
 
-
-
 function Initialize-WinUtilTaskbarOverlayAssets {
     param(
         [bool]$IncludeLogo = $true,
@@ -1180,8 +3661,6 @@ function Initialize-WinUtilTaskbarOverlayAssets {
         $sync["warningrender"] = (Invoke-WinUtilAssets -Type "warning" -Size 512 -Render)
     }
 }
-
-
 
 function Install-WinUtilAPPX {
     <#
@@ -1263,8 +3742,6 @@ function Install-WinUtilAPPX {
     Install-WinUtilProgramWinget -Action Install -Programs @("msstore:$StoreId")
 }
 
-
-
 function Install-WinUtilChoco {
     if (-not (Get-Command -Name choco)) {
       Write-Host "Chocolatey 未安装。正在安装..."
@@ -1272,8 +3749,6 @@ function Install-WinUtilChoco {
       Invoke-Command -ScriptBlock ([scriptblock]::Create($installScript.Content))
     }
 }
-
-
 
 function Install-WinUtilProgramChoco {
     param (
@@ -1295,8 +3770,6 @@ function Install-WinUtilProgramChoco {
     $process = Start-Process -FilePath choco -ArgumentList $arguments -NoNewWindow -Wait -PassThru
     Write-WinUtilLog -Component "Package" -Message "$Action choco package(s) completed: $($Programs -join ', ') (exit code: $($process.ExitCode))"
 }
-
-
 
 Function Install-WinUtilProgramWinget {
     param (
@@ -1331,8 +3804,6 @@ Function Install-WinUtilProgramWinget {
     }
 }
 
-
-
 function Install-WinUtilWinget {
     <#
 
@@ -1352,8 +3823,6 @@ function Install-WinUtilWinget {
     Install-Module -Name Microsoft.WinGet.Client -Force
     Repair-WinGetPackageManager -AllUsers
 }
-
-
 
 function Invoke-WinUtilAssets {
   param (
@@ -1573,8 +4042,6 @@ C 21.36,47.14 28.67,50.71 30.01,52.63
   }
 }
 
-
-
 Function Invoke-WinUtilCurrentSystem {
 
     <#
@@ -1705,8 +4172,6 @@ Function Invoke-WinUtilCurrentSystem {
     }
 }
 
-
-
 function Invoke-WinUtilExplorerUpdate {
      <#
     .SYNOPSIS
@@ -1746,8 +4211,6 @@ public class Win32 {
     }
 }
 
-
-
 function Invoke-WinUtilFeatureInstall ($CheckBox) {
     Write-WinUtilLog -Component "Feature" -Message "Applying feature action: $CheckBox"
 
@@ -1770,8 +4233,6 @@ function Invoke-WinUtilFeatureInstall ($CheckBox) {
     }
     Write-WinUtilLog -Component "Feature" -Message "Feature action completed: $CheckBox"
 }
-
-
 
 function Invoke-WinUtilFontScaling {
     <#
@@ -1858,8 +4319,6 @@ function Invoke-WinUtilFontScaling {
         $sync.FontScalingValue.Text = "$percentage%"
     }
 }
-
-
 
 function Write-Win11ISOLog {
     param([string]$Message)
@@ -2677,8 +5136,6 @@ function Invoke-WinUtilISOExport {
     $script.BeginInvoke()
 }
 
-
-
 function Invoke-WinUtilISOScript {
     <#
     .SYNOPSIS
@@ -3188,8 +5645,6 @@ Retail
     }
 }
 
-
-
 function Invoke-WinUtilISORefreshUSBDrives {
     $combo    = $sync["WPFWin11ISOUSBDriveComboBox"]
     $removable = @(Get-Disk | Where-Object { $_.BusType -eq "USB" } | Sort-Object Number)
@@ -3463,8 +5918,6 @@ function Invoke-WinUtilISOWriteUSB {
     $script.BeginInvoke()
 }
 
-
-
 function Invoke-WinUtilInstallPSProfile {
     if (-not (Get-Command wt)) {
         Write-Host "未找到 Windows Terminal。正在安装..."
@@ -3480,8 +5933,6 @@ function Invoke-WinUtilInstallPSProfile {
 
     wt new-tab pwsh -NoExit -Command "irm https://github.com/ChrisTitusTech/powershell-profile/raw/main/setup.ps1 | iex"
 }
-
-
 
 function Invoke-WinUtilSSHServer {
     <#
@@ -3544,8 +5995,6 @@ function Invoke-WinUtilSSHServer {
     Write-Host "将您的公钥添加到此文件 -> $authorizedKeysPath"
 }
 
-
-
 function Invoke-WinUtilScript {
     <#
 
@@ -3598,14 +6047,10 @@ function Invoke-WinUtilScript {
 
 }
 
-
-
 Function Invoke-WinUtilSponsors {
     $sponsors = ([regex]::Matches(([regex]::Match((Invoke-RestMethod https://github.com/sponsors/ChrisTitusTech),'(?s)(?<=Current sponsors).*?(?=Past sponsors)')).Value,'(?<=alt="@)[^"]+')).Value | Where-Object {$_ -ne "ChrisTitusTech"}
     return $sponsors
 }
-
-
 
 function Invoke-WinUtilTweaks {
     <#
@@ -3693,8 +6138,6 @@ function Invoke-WinUtilTweaks {
     Write-WinUtilLog -Component "Tweaks" -Message "$action tweak completed: $CheckBox"
 }
 
-
-
 function Invoke-WinUtilUninstallPSProfile {
 
     if (Test-Path ($Profile + ".bak")) {
@@ -3705,8 +6148,6 @@ function Invoke-WinUtilUninstallPSProfile {
 
     Write-Host "已成功卸载 CTT PowerShell 配置文件。" -ForegroundColor Green
 }
-
-
 
 function Invoke-WinutilThemeChange {
     <#
@@ -3869,8 +6310,6 @@ function Invoke-WinutilThemeChange {
     $ThemeButton.Content = [string]$themeButtonIcon
 }
 
-
-
 function Remove-WinUtilAPPX {
     <#
 
@@ -3907,8 +6346,6 @@ function Remove-WinUtilAPPX {
 
     Write-WinUtilLog -Component "AppX" -Message "AppX removal completed for package pattern: $Name"
 }
-
-
 
 function Remove-WinUtilProvisionedAPPX {
     <#
@@ -3972,8 +6409,6 @@ function Remove-WinUtilProvisionedAPPX {
 
     Write-WinUtilLog -Component "AppX" -Message "AppX provisioned package removal completed."
 }
-
-
 
 function Reset-WPFCheckBoxes {
     <#
@@ -4046,8 +6481,6 @@ function Reset-WPFCheckBoxes {
     }
 }
 
-
-
 function Save-WinUtilFile {
     <#
     .SYNOPSIS
@@ -4108,8 +6541,6 @@ function Save-WinUtilFile {
     }
 }
 
-
-
 function Set-WinUtilAppCategoryFilter {
     <#
         .SYNOPSIS
@@ -4127,8 +6558,6 @@ function Set-WinUtilAppCategoryFilter {
     $sync.SearchBar.Text = $Category
     Find-AppsByNameOrDescription -SearchString $Category -Category $Category
 }
-
-
 
 function Set-WinUtilDNS {
     <#
@@ -4185,8 +6614,6 @@ function Set-WinUtilDNS {
         Write-WinUtilLog -Level "ERROR" -Component "DNS" -Message "Unable to set DNS provider $DNSProvider`: $($psitem.Exception.Message)"
     }
 }
-
-
 
 function Set-WinUtilRegistry {
     <#
@@ -4252,8 +6679,6 @@ function Set-WinUtilRegistry {
     }
 }
 
-
-
 Function Set-WinUtilService {
     <#
 
@@ -4306,8 +6731,6 @@ Function Set-WinUtilService {
     }
 
 }
-
-
 
 function Set-WinUtilTaskbaritem {
     <#
@@ -4405,8 +6828,6 @@ function Set-WinUtilTaskbaritem {
     }
 }
 
-
-
 function Set-WinUtilTweaksProgressIndicator {
     <#
     .SYNOPSIS
@@ -4442,8 +6863,6 @@ function Set-WinUtilTweaksProgressIndicator {
         }
     }
 }
-
-
 
 function Show-CustomDialog {
     <#
@@ -4739,8 +7158,6 @@ function Show-CustomDialog {
     $dialog.ShowDialog()
 }
 
-
-
 function Show-WinUtilMessage {
     <#
     .SYNOPSIS
@@ -4755,8 +7172,6 @@ function Show-WinUtilMessage {
 
     [System.Windows.MessageBox]::Show($Message, $Title, $Button, $Icon)
 }
-
-
 
 function Invoke-WinUtilInstallAppRenderBatch {
     param(
@@ -4817,8 +7232,6 @@ function Start-WinUtilInstallAppRendering {
     Complete-WinUtilInstallAppRendering
 }
 
-
-
 function Test-WinUtilPackageManager {
     <#
 
@@ -4869,8 +7282,6 @@ function Test-WinUtilPackageManager {
     return $status
 }
 
-
-
 function Update-WinUtilSelections ($flatJson) {
     foreach ($cbkey in $flatJson) {
 
@@ -4885,8 +7296,6 @@ function Update-WinUtilSelections ($flatJson) {
         $sync.$listName.Add($cbkey)
     }
 }
-
-
 
 function Write-WinUtilLog {
     <#
@@ -4970,7064 +7379,25 @@ function Write-WinUtilLog {
     }
 }
 
-
-
-function Initialize-WPFUI {
-    [OutputType([void])]
-    param(
-        [Parameter(Mandatory)]
-        [string]$TargetGridName
-    )
-
-    switch ($TargetGridName) {
-        "appscategory"{
-            # TODO
-            # Switch UI generation of the sidebar to this function
-            # $sync.ItemsControl = Initialize-InstallAppArea -TargetElement $TargetGridName
-            # ...
-
-            # Create and configure a popup for displaying selected apps
-            $selectedAppsPopup = New-Object Windows.Controls.Primitives.Popup
-            $selectedAppsPopup.IsOpen = $false
-            $selectedAppsPopup.PlacementTarget = $sync.WPFselectedAppsButton
-            $selectedAppsPopup.Placement = [System.Windows.Controls.Primitives.PlacementMode]::Bottom
-            $selectedAppsPopup.AllowsTransparency = $true
-
-            # Style the popup with a border and background
-            $selectedAppsBorder = New-Object Windows.Controls.Border
-            $selectedAppsBorder.SetResourceReference([Windows.Controls.Control]::BackgroundProperty, "MainBackgroundColor")
-            $selectedAppsBorder.SetResourceReference([Windows.Controls.Control]::BorderBrushProperty, "MainForegroundColor")
-            $selectedAppsBorder.SetResourceReference([Windows.Controls.Control]::BorderThicknessProperty, "ButtonBorderThickness")
-            $selectedAppsBorder.Width = 200
-            $selectedAppsBorder.Padding = 5
-            $selectedAppsPopup.Child = $selectedAppsBorder
-            $sync.selectedAppsPopup = $selectedAppsPopup
-
-            # Add a stack panel inside the popup's border to organize its child elements
-            $sync.selectedAppsstackPanel = New-Object Windows.Controls.StackPanel
-            $selectedAppsBorder.Child = $sync.selectedAppsstackPanel
-
-            # Close selectedAppsPopup when mouse leaves both button and selectedAppsPopup
-            $sync.WPFselectedAppsButton.Add_MouseLeave({
-                if (-not $sync.selectedAppsPopup.IsMouseOver) {
-                    $sync.selectedAppsPopup.IsOpen = $false
-                }
-            })
-            $selectedAppsPopup.Add_MouseLeave({
-                if (-not $sync.WPFselectedAppsButton.IsMouseOver) {
-                    $sync.selectedAppsPopup.IsOpen = $false
-                }
-            })
-
-            # Creates the popup that is displayed when the user right-clicks on an app entry
-            # This popup contains buttons for installing, uninstalling, and viewing app information
-
-            $appPopup = New-Object Windows.Controls.Primitives.Popup
-            $appPopup.StaysOpen = $false
-            $appPopup.Placement = [System.Windows.Controls.Primitives.PlacementMode]::Bottom
-            $appPopup.AllowsTransparency = $true
-            # Store the popup globally so the position can be set later
-            $sync.appPopup = $appPopup
-
-            $appPopupStackPanel = New-Object Windows.Controls.StackPanel
-            $appPopupStackPanel.Orientation = "Horizontal"
-            $appPopupStackPanel.Add_MouseLeave({
-                $sync.appPopup.IsOpen = $false
-            })
-            $appPopup.Child = $appPopupStackPanel
-
-            $appButtons = @(
-            [PSCustomObject]@{ Name = "Install";    Icon = [char]0xE118 },
-            [PSCustomObject]@{ Name = "Uninstall";  Icon = [char]0xE74D },
-            [PSCustomObject]@{ Name = "Info";       Icon = [char]0xE946 }
-            )
-            foreach ($button in $appButtons) {
-                $newButton = New-Object Windows.Controls.Button
-                $newButton.Style = $sync.Form.Resources.AppEntryButtonStyle
-                $newButton.Content = $button.Icon
-                $appPopupStackPanel.Children.Add($newButton) | Out-Null
-
-                # Dynamically load the selected app object so the buttons can be reused and do not need to be created for each app
-                switch ($button.Name) {
-                    "Install" {
-                        $newButton.Add_MouseEnter({
-                            $appObject = $sync.configs.applicationsHashtable.$($sync.appPopupSelectedApp)
-                            $this.ToolTip = "Install or Upgrade $($appObject.content)"
-                        })
-                        $newButton.Add_Click({
-                            $appObject = $sync.configs.applicationsHashtable.$($sync.appPopupSelectedApp)
-                            Invoke-WPFInstall -PackagesToInstall $appObject
-                        })
-                    }
-                    "Uninstall" {
-                        $newButton.Add_MouseEnter({
-                            $appObject = $sync.configs.applicationsHashtable.$($sync.appPopupSelectedApp)
-                            $this.ToolTip = "Uninstall $($appObject.content)"
-                        })
-                        $newButton.Add_Click({
-                            $appObject = $sync.configs.applicationsHashtable.$($sync.appPopupSelectedApp)
-                            Invoke-WPFUnInstall -PackagesToUninstall $appObject
-                        })
-                    }
-                    "Info" {
-                        $newButton.Add_MouseEnter({
-                            $appObject = $sync.configs.applicationsHashtable.$($sync.appPopupSelectedApp)
-                            $this.ToolTip = "Open the application's website in your default browser`n$($appObject.link)"
-                        })
-                        $newButton.Add_Click({
-                            $appObject = $sync.configs.applicationsHashtable.$($sync.appPopupSelectedApp)
-                            Start-Process $appObject.link
-                        })
-                    }
-                }
-            }
-        }
-        "appspanel" {
-            $sync.ItemsControl = Initialize-InstallAppArea -TargetElement $TargetGridName
-            Initialize-InstallCategoryAppList -TargetElement $sync.ItemsControl -Apps $sync.configs.applicationsHashtable
-        }
-        default {
-            Write-Output "$TargetGridName not yet implemented"
-        }
-    }
-}
-
-
-
-
-function Invoke-WPFAppxInstall {
-    if ($sync.ProcessRunning) {
-        Show-WinUtilMessage -Message "An AppX process is currently running." -Title "WinUtil" -Button "OK" -Icon "Warning"
-        return
-    }
-
-    if ($null -eq $sync.selectedAppx -or $sync.selectedAppx.Count -eq 0) {
-        Show-WinUtilMessage -Message "No AppX Package selected" -Title "Error" -Button "OK" -Icon "Error"
-        return
-    }
-
-    $selected = @($sync.selectedAppx)
-    $apps = $sync.configs.appxHashtable
-
-    $sync.ProcessRunning = $true
-    Invoke-WPFRunspace -ParameterList @(("selected", $selected), ("apps", $apps)) -ScriptBlock {
-        param($selected, $apps)
-
-        $totalPackages = @($selected).Count
-        $hasUI = $null -ne $sync.Form -and $null -ne $sync.Form.Dispatcher
-
-        try {
-            Write-WinUtilLog -Component "AppX" -Message "Starting AppX install for $totalPackages selected package(s)."
-            if ($hasUI) {
-                Set-WinUtilTweaksProgressIndicator -Visible $true -Label "Preparing AppX install (0/$totalPackages)" -Percent 0
-                Invoke-WPFUIThread -ScriptBlock { Set-WinUtilTaskbaritem -state "Normal" -value 0.01 -overlay "logo" }
-            }
-
-            for ($index = 0; $index -lt $totalPackages; $index++) {
-                $key = $selected[$index]
-                $app = $apps[$key]
-                $position = $index + 1
-                $startPercent = [int](($index / $totalPackages) * 100)
-
-                if ($hasUI) {
-                    Set-WinUtilTweaksProgressIndicator -Visible $true -Label "Installing $($app.Content) ($position/$totalPackages)" -Percent $startPercent
-                }
-                Write-Host "正在安装 $($app.Content)"
-                Install-WinUtilAPPX -Name $app.PackageId -StoreId $app.StoreId
-
-                $completedPercent = [int](($position / $totalPackages) * 100)
-                if ($hasUI) {
-                    Set-WinUtilTweaksProgressIndicator -Visible $true -Label "Installed $($app.Content) ($position/$totalPackages)" -Percent $completedPercent
-                    Invoke-WPFUIThread -ScriptBlock { Set-WinUtilTaskbaritem -value ($completedPercent / 100) }
-                }
-            }
-
-            Write-Host "================================="
-            Write-Host "--   AppX 安装完成   ---"
-            Write-Host "================================="
-            Write-WinUtilLog -Component "AppX" -Message "AppX install finished."
-            if ($hasUI) {
-                Set-WinUtilTweaksProgressIndicator -Visible $true -Label "AppX install finished" -Percent 100
-                Invoke-WPFUIThread -ScriptBlock { Set-WinUtilTaskbaritem -state "None" -overlay "checkmark" }
-            }
-        }
-        catch {
-            Write-WinUtilLog -Level "ERROR" -Component "AppX" -Message "AppX install failed: $($_.Exception.Message)"
-            if ($hasUI) {
-                Set-WinUtilTweaksProgressIndicator -Visible $true -Label "AppX install failed" -Percent 100
-                Invoke-WPFUIThread -ScriptBlock { Set-WinUtilTaskbaritem -state "Error" -overlay "warning" }
-            }
-        }
-        finally {
-            $sync.ProcessRunning = $false
-        }
-    }
-}
-
-
-
-function Invoke-WPFAppxRemoval {
-    if ($sync.ProcessRunning) {
-        Show-WinUtilMessage -Message "An AppX process is currently running." -Title "WinUtil" -Button "OK" -Icon "Warning"
-        return
-    }
-
-    if ($null -eq $sync.selectedAppx -or $sync.selectedAppx.Count -eq 0) {
-        Show-WinUtilMessage -Message "No AppX Package selected" -Title "Error" -Button "OK" -Icon "Error"
-        return
-    }
-
-    $selected = @($sync.selectedAppx)
-    $apps = $sync.configs.appxHashtable
-
-    $sync.ProcessRunning = $true
-    Invoke-WPFRunspace -ParameterList @(("selected", $selected), ("apps", $apps)) -ScriptBlock {
-        param($selected, $apps)
-
-        $totalPackages = @($selected).Count
-        $hasUI = $null -ne $sync.Form -and $null -ne $sync.Form.Dispatcher
-        $packageList = [System.Collections.Generic.List[string]]::new()
-
-        try {
-            Write-WinUtilLog -Component "AppX" -Message "Starting AppX removal for $totalPackages selected package(s)."
-            if ($hasUI) {
-                Set-WinUtilTweaksProgressIndicator -Visible $true -Label "Preparing AppX removal (0/$totalPackages)" -Percent 0
-                Invoke-WPFUIThread -ScriptBlock { Set-WinUtilTaskbaritem -state "Normal" -value 0.01 -overlay "logo" }
-            }
-
-            for ($index = 0; $index -lt $totalPackages; $index++) {
-                $key = $selected[$index]
-                $app = $apps[$key]
-                $position = $index + 1
-                $startPercent = [int](($index / $totalPackages) * 90)
-                if ($hasUI) {
-                    Set-WinUtilTweaksProgressIndicator -Visible $true -Label "Removing $($app.Content) ($position/$totalPackages)" -Percent $startPercent
-                }
-
-                if ($key -eq "WPFAppxMicrosoft_XboxGamingOverlay") {
-                    # Making sure Game Bar isn't running
-                    Write-WinUtilLog -Component "AppX" -Message "Stopping GameBarFTServer before removing Xbox Gaming Overlay."
-                    Stop-Process -Name GameBarFTServer -Force -Confirm:$false -ErrorAction SilentlyContinue
-
-                    # This stops annoying ms-gamebar popup when launching games.
-                    Write-WinUtilLog -Component "AppX" -Message "Disabling Game DVR capture before removing Xbox Gaming Overlay."
-                    Set-ItemProperty -Path HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\GameDVR -Name AppCaptureEnabled -Value 0
-                }
-
-                if ($key -eq "WPFAppxMicrosoft_WindowsNotepad") {
-                    Write-WinUtilLog -Component "AppX" -Message "Stopping dllhost before removing Notepad."
-                    Stop-Process -Name dllhost -Force -Confirm:$false -ErrorAction SilentlyContinue
-                }
-
-                Write-Host "正在移除 $($app.Content)"
-                Write-WinUtilLog -Component "AppX" -Message "Removing $($app.Content) ($($app.PackageId))."
-                Remove-WinUtilAPPX -Name $app.PackageId
-                $packageList.Add($app.PackageId)
-
-                if ($key -eq "WPFAppxMSTeams") {
-                    # Uninstalls Microsoft Teams Meeting Add-in for Microsoft Office
-                    Write-WinUtilLog -Component "AppX" -Message "Uninstalling Microsoft Teams meeting add-in package."
-                    Get-Package -Name "Microsoft Teams*" -ErrorAction SilentlyContinue | Uninstall-Package -Force
-                }
-
-                $completedPercent = [int](($position / $totalPackages) * 90)
-                if ($hasUI) {
-                    Set-WinUtilTweaksProgressIndicator -Visible $true -Label "Removed $($app.Content) ($position/$totalPackages)" -Percent $completedPercent
-                    Invoke-WPFUIThread -ScriptBlock { Set-WinUtilTaskbaritem -value ($completedPercent / 100) }
-                }
-            }
-
-            if ($packageList.Count -gt 0) {
-                if ($hasUI) {
-                    Set-WinUtilTweaksProgressIndicator -Visible $true -Label "Removing provisioned AppX packages" -Percent 90
-                }
-                Remove-WinUtilProvisionedAPPX -PackageList $packageList.ToArray()
-            }
-
-            Write-Host "================================="
-            Write-Host "--   AppX 移除完成   ---"
-            Write-Host "================================="
-            Write-WinUtilLog -Component "AppX" -Message "AppX removal finished."
-            if ($hasUI) {
-                Set-WinUtilTweaksProgressIndicator -Visible $true -Label "AppX removal finished" -Percent 100
-                Invoke-WPFUIThread -ScriptBlock { Set-WinUtilTaskbaritem -state "None" -overlay "checkmark" }
-            }
-        }
-        catch {
-            Write-WinUtilLog -Level "ERROR" -Component "AppX" -Message "AppX removal failed: $($_.Exception.Message)"
-            if ($hasUI) {
-                Set-WinUtilTweaksProgressIndicator -Visible $true -Label "AppX removal failed" -Percent 100
-                Invoke-WPFUIThread -ScriptBlock { Set-WinUtilTaskbaritem -state "Error" -overlay "warning" }
-            }
-        }
-        finally {
-            $sync.ProcessRunning = $false
-        }
-
-    }
-}
-
-
-
-function Invoke-WPFButton {
-
-    <#
-
-    .SYNOPSIS
-        Invokes the function associated with the clicked button
-
-    .PARAMETER Button
-        The name of the button that was clicked
-
-    #>
-
-    Param ([string]$Button)
-
-    # Use this to get the name of the button
-    #[System.Windows.MessageBox]::Show("$Button","Chris Titus Tech's Windows Utility","OK","Info")
-    if (-not $sync.ProcessRunning -and -not $sync.Win11ISOProcessRunning) {
-        Set-WinUtilTweaksProgressIndicator -Visible $false
-    }
-
-    # Check if button is defined in feature config with function or InvokeScript
-    if ($sync.configs.feature.$Button) {
-        $buttonConfig = $sync.configs.feature.$Button
-
-        # If button has a function defined, call it
-        if ($buttonConfig.function) {
-            $functionName = $buttonConfig.function
-            if (Get-Command $functionName -ErrorAction SilentlyContinue) {
-                & $functionName
-                return
-            }
-        }
-
-        # If button has InvokeScript defined, execute the scripts
-        if ($buttonConfig.InvokeScript -and $buttonConfig.InvokeScript.Count -gt 0) {
-            foreach ($script in $buttonConfig.InvokeScript) {
-                if (-not [string]::IsNullOrWhiteSpace($script)) {
-                    Invoke-Command -ScriptBlock ([scriptblock]::Create($script)) -ErrorAction Stop
-                }
-            }
-            return
-        }
-    }
-
-    # Fallback to hard-coded switch for buttons not in feature.json
-    Switch -Wildcard ($Button) {
-        "WPFTab?BT" {Invoke-WPFTab $Button}
-        "WPFInstall" {Invoke-WPFInstall}
-        "WPFUninstall" {Invoke-WPFUnInstall}
-        "WPFInstallUpgrade" {Invoke-WPFInstallUpgrade}
-        "WPFCollapseAllCategories" {Invoke-WPFToggleAllCategories -Action "Collapse"}
-        "WPFExpandAllCategories" {Invoke-WPFToggleAllCategories -Action "Expand"}
-        "WPFStandard" {Invoke-WPFPresets "Standard" -checkboxfilterpattern "WPFTweak*"}
-        "WPFMinimal" {Invoke-WPFPresets "Minimal" -checkboxfilterpattern "WPFTweak*"}
-        "WPFAdvanced" {Invoke-WPFPresets "Advanced" -checkboxfilterpattern "WPFTweak*"}
-        "WPFClearTweaksSelection" {Invoke-WPFPresets -imported $true -checkboxfilterpattern "WPFTweak*"}
-        "WPFClearInstallSelection" {Invoke-WPFPresets -imported $true -checkboxfilterpattern "WPFInstall*"}
-        "WPFtweaksbutton" {Invoke-WPFtweaksbutton}
-        "WPFOOSUbutton" {Invoke-WPFOOSU}
-        "WPFAddUltPerf" {Invoke-WPFUltimatePerformance -Enable}
-        "WPFRemoveUltPerf" {Invoke-WPFUltimatePerformance}
-        "WPFundoall" {Invoke-WPFundoall}
-        "WPFUpdatesdefault" {Invoke-WPFUpdatesdefault}
-        "WPFUpdatesdisable" {Invoke-WPFUpdatesdisable}
-        "WPFUpdatessecurity" {Invoke-WPFUpdatessecurity}
-        "WPFGetInstalled" {Invoke-WPFGetInstalled -CheckBox "winget"}
-        "WPFGetInstalledTweaks" {Invoke-WPFGetInstalled -CheckBox "tweaks"}
-        "WPFAppxRemoval" {Invoke-WPFTab "WPFTab6BT"}
-        "WPFBackToTweaks" {Invoke-WPFTab "WPFTab2BT"}
-        "WPFInstallSelectedAppx" {Invoke-WPFAppxInstall}
-        "WPFRemoveSelectedAppx" {Invoke-WPFAppxRemoval}
-        "WPFDefaultAppxSelection" {Invoke-WPFPresets "AppxDefault" -checkboxfilterpattern "WPFAppx*"}
-        "WPFSelectAllAppx" {
-            $sync.configs.appxHashtable.Keys | ForEach-Object {$sync.$_.IsChecked = $true}
-        }
-        "WPFClearAppxSelection" {
-            $sync.configs.appxHashtable.Keys | ForEach-Object {$sync.$_.IsChecked = $false}
-        }
-        "WPFGetInstalledAppx" {
-            $installedAppxPackages = Get-WinUtilInstalledAPPX
-            foreach ($appx in $sync.configs.appxHashtable.GetEnumerator()) {
-                if ($appx.Value.PackageId -in $installedAppxPackages) {
-                    $sync.$($appx.Key).IsChecked = $true
-                }
-            }
-        }
-        "WPFCloseButton" {$sync.Form.Close(); Write-Host "再见！"}
-        "WPFMinimizeButton" {$sync.Form.WindowState = [Windows.WindowState]::Minimized}
-        "WPFMaximizeButton" {
-            if ($sync.Form.WindowState -eq [Windows.WindowState]::Normal) {
-                $sync.Form.WindowState = [Windows.WindowState]::Maximized
-            } else {
-                $sync.Form.WindowState = [Windows.WindowState]::Normal
-            }
-        }
-        "WPFselectedAppsButton" {$sync.selectedAppsPopup.IsOpen = -not $sync.selectedAppsPopup.IsOpen}
-    }
-}
-
-
-
-function Invoke-WPFFeatureInstall {
-    <#
-
-    .SYNOPSIS
-        Installs selected Windows Features
-
-    #>
-
-    if($sync.ProcessRunning) {
-        $msg = "[Invoke-WPFFeatureInstall] Install process is currently running."
-        [System.Windows.MessageBox]::Show($msg, "Winutil", [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Warning)
-        return
-    }
-
-    Invoke-WPFRunspace -ScriptBlock {
-        $Features = $sync.selectedFeatures
-        $sync.ProcessRunning = $true
-        if ($Features.count -eq 1) {
-            Invoke-WPFUIThread -ScriptBlock { Set-WinUtilTaskbaritem -state "Indeterminate" -value 0.01 -overlay "logo" }
-        } else {
-            Invoke-WPFUIThread -ScriptBlock { Set-WinUtilTaskbaritem -state "Normal" -value 0.01 -overlay "logo" }
-        }
-
-        $x = 0
-
-        $Features | ForEach-Object {
-            Invoke-WinUtilFeatureInstall $_
-            $X++
-            Invoke-WPFUIThread -ScriptBlock { Set-WinUtilTaskbaritem -value ($x/$Features.Count) }
-        }
-
-        $sync.ProcessRunning = $false
-        Invoke-WPFUIThread -ScriptBlock { Set-WinUtilTaskbaritem -state "None" -overlay "checkmark" }
-
-        Write-Host "==================================="
-        Write-Host "---   功能已安装    ---"
-        Write-Host "---  可能需要重启  ---"
-        Write-Host "==================================="
-    }
-}
-
-
-
-function Invoke-WPFFixesNTPPool {
-    <#
-    .SYNOPSIS
-        Configures Windows to use pool.ntp.org for NTP synchronization
-
-    .DESCRIPTION
-        Replaces the default Windows NTP server (time.windows.com) with
-        pool.ntp.org for improved time synchronization accuracy and reliability.
-    #>
-
-    Start-Service w32time
-    w32tm /config /update /manualpeerlist:"pool.ntp.org,0x8" /syncfromflags:MANUAL
-
-    Restart-Service w32time
-    w32tm /resync
-
-    Write-Host "================================="
-    Write-Host "-- NTP 配置完成 ---"
-    Write-Host "================================="
-}
-
-
-
-function Invoke-WPFFixesNetwork {
-    netsh winsock reset
-    netsh int ip reset
-    Write-Host "网络配置已重置。请重新启动计算机。"
-}
-
-
-
-function Invoke-WPFFixesUpdate {
-
-    <#
-
-    .SYNOPSIS
-        Performs various tasks in an attempt to repair Windows Update
-
-    .DESCRIPTION
-        1. (Aggressive Only) Scans the system for corruption using the Invoke-WPFSystemRepair function
-        2. Stops Windows Update Services
-        3. Remove the QMGR Data file, which stores BITS jobs
-        4. (Aggressive Only) Renames the DataStore and CatRoot2 folders
-            DataStore - Contains the Windows Update History and Log Files
-            CatRoot2 - Contains the Signatures for Windows Update Packages
-        5. Renames the Windows Update Download Folder
-        6. Deletes the Windows Update Log
-        7. (Aggressive Only) Resets the Security Descriptors on the Windows Update Services
-        8. Reregisters the BITS and Windows Update DLLs
-        9. Removes the WSUS client settings
-        10. Resets WinSock
-        11. Gets and deletes all BITS jobs
-        12. Sets the startup type of the Windows Update Services then starts them
-        13. Forces Windows Update to check for updates
-
-    .PARAMETER Aggressive
-        If specified, the script will take additional steps to repair Windows Update that are more dangerous, take a significant amount of time, or are generally unnecessary
-
-    #>
-
-    param($Aggressive = $false)
-
-    Write-Progress -Id 0 -Activity "Repairing Windows Update" -PercentComplete 0
-    Set-WinUtilTaskbaritem -state "Indeterminate" -overlay "logo"
-    Write-Host "正在修复 Windows 更新..."
-    # Wait for the first progress bar to show, otherwise the second one won't show
-    Start-Sleep -Milliseconds 200
-
-    if ($Aggressive) {
-        Invoke-WPFSystemRepair
-    }
-
-
-    Write-Progress -Id 0 -Activity "Repairing Windows Update" -Status "Stopping Windows Update Services..." -PercentComplete 10
-    # Stop the Windows Update Services
-    Write-Progress -Id 2 -ParentId 0 -Activity "Stopping Services" -Status "Stopping BITS..." -PercentComplete 0
-    Stop-Service -Name BITS -Force
-    Write-Progress -Id 2 -ParentId 0 -Activity "Stopping Services" -Status "Stopping wuauserv..." -PercentComplete 20
-    Stop-Service -Name wuauserv -Force
-    Write-Progress -Id 2 -ParentId 0 -Activity "Stopping Services" -Status "Stopping appidsvc..." -PercentComplete 40
-    Stop-Service -Name appidsvc -Force
-    Write-Progress -Id 2 -ParentId 0 -Activity "Stopping Services" -Status "Stopping cryptsvc..." -PercentComplete 60
-    Stop-Service -Name cryptsvc -Force
-    Write-Progress -Id 2 -ParentId 0 -Activity "Stopping Services" -Status "Completed" -PercentComplete 100
-
-
-    # Remove the QMGR Data file
-    Write-Progress -Id 0 -Activity "Repairing Windows Update" -Status "Renaming/Removing Files..." -PercentComplete 20
-    Write-Progress -Id 3 -ParentId 0 -Activity "Renaming/Removing Files" -Status "Removing QMGR Data files..." -PercentComplete 0
-    Remove-Item "$env:allusersprofile\Application Data\Microsoft\Network\Downloader\qmgr*.dat" -ErrorAction SilentlyContinue
-
-
-    if ($Aggressive) {
-        # Rename the Windows Update Log and Signature Folders
-        Write-Progress -Id 3 -ParentId 0 -Activity "Renaming/Removing Files" -Status "Renaming the Windows Update Log, Download, and Signature Folder..." -PercentComplete 20
-        Rename-Item $env:systemroot\SoftwareDistribution\DataStore DataStore.bak -ErrorAction SilentlyContinue
-        Rename-Item $env:systemroot\System32\Catroot2 catroot2.bak -ErrorAction SilentlyContinue
-    }
-
-    # Rename the Windows Update Download Folder
-    Write-Progress -Id 3 -ParentId 0 -Activity "Renaming/Removing Files" -Status "Renaming the Windows Update Download Folder..." -PercentComplete 20
-    Rename-Item $env:systemroot\SoftwareDistribution\Download Download.bak -ErrorAction SilentlyContinue
-
-    # Delete the legacy Windows Update Log
-    Write-Progress -Id 3 -ParentId 0 -Activity "Renaming/Removing Files" -Status "Removing the old Windows Update log..." -PercentComplete 80
-    Remove-Item $env:systemroot\WindowsUpdate.log -ErrorAction SilentlyContinue
-    Write-Progress -Id 3 -ParentId 0 -Activity "Renaming/Removing Files" -Status "Completed" -PercentComplete 100
-
-
-    if ($Aggressive) {
-        # Reset the Security Descriptors on the Windows Update Services
-        Write-Progress -Id 0 -Activity "Repairing Windows Update" -Status "Resetting the WU Service Security Descriptors..." -PercentComplete 25
-        Write-Progress -Id 4 -ParentId 0 -Activity "Resetting the WU Service Security Descriptors" -Status "Resetting the BITS Security Descriptor..." -PercentComplete 0
-        Start-Process -NoNewWindow -FilePath "sc.exe" -ArgumentList "sdset", "bits", "D:(A;;CCLCSWRPWPDTLOCRRC;;;SY)(A;;CCDCLCSWRPWPDTLOCRSDRCWDWO;;;BA)(A;;CCLCSWLOCRRC;;;AU)(A;;CCLCSWRPWPDTLOCRRC;;;PU)" -Wait
-        Write-Progress -Id 4 -ParentId 0 -Activity "Resetting the WU Service Security Descriptors" -Status "Resetting the wuauserv Security Descriptor..." -PercentComplete 50
-        Start-Process -NoNewWindow -FilePath "sc.exe" -ArgumentList "sdset", "wuauserv", "D:(A;;CCLCSWRPWPDTLOCRRC;;;SY)(A;;CCDCLCSWRPWPDTLOCRSDRCWDWO;;;BA)(A;;CCLCSWLOCRRC;;;AU)(A;;CCLCSWRPWPDTLOCRRC;;;PU)" -Wait
-        Write-Progress -Id 4 -ParentId 0 -Activity "Resetting the WU Service Security Descriptors" -Status "Completed" -PercentComplete 100
-    }
-
-
-    # Reregister the BITS and Windows Update DLLs
-    Write-Progress -Id 0 -Activity "Repairing Windows Update" -Status "Reregistering DLLs..." -PercentComplete 40
-    $oldLocation = Get-Location
-    Set-Location $env:systemroot\system32
-    $i = 0
-    $DLLs = @(
-        "atl.dll", "urlmon.dll", "mshtml.dll", "shdocvw.dll", "browseui.dll",
-        "jscript.dll", "vbscript.dll", "scrrun.dll", "msxml.dll", "msxml3.dll",
-        "msxml6.dll", "actxprxy.dll", "softpub.dll", "wintrust.dll", "dssenh.dll",
-        "rsaenh.dll", "gpkcsp.dll", "sccbase.dll", "slbcsp.dll", "cryptdlg.dll",
-        "oleaut32.dll", "ole32.dll", "shell32.dll", "initpki.dll", "wuapi.dll",
-        "wuaueng.dll", "wuaueng1.dll", "wucltui.dll", "wups.dll", "wups2.dll",
-        "wuweb.dll", "qmgr.dll", "qmgrprxy.dll", "wucltux.dll", "muweb.dll", "wuwebv.dll"
-    )
-    foreach ($dll in $DLLs) {
-        Write-Progress -Id 5 -ParentId 0 -Activity "Reregistering DLLs" -Status "Registering $dll..." -PercentComplete ($i / $DLLs.Count * 100)
-        $i++
-        Start-Process -NoNewWindow -FilePath "regsvr32.exe" -ArgumentList "/s", $dll
-    }
-    Set-Location $oldLocation
-    Write-Progress -Id 5 -ParentId 0 -Activity "Reregistering DLLs" -Status "Completed" -PercentComplete 100
-
-
-    # Remove the WSUS client settings
-    if (Test-Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate") {
-        Write-Progress -Id 0 -Activity "Repairing Windows Update" -Status "Removing WSUS client settings..." -PercentComplete 60
-        Write-Progress -Id 6 -ParentId 0 -Activity "Removing WSUS client settings" -PercentComplete 0
-        Start-Process -NoNewWindow -FilePath "REG" -ArgumentList "DELETE", "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate", "/v", "AccountDomainSid", "/f" -RedirectStandardError "NUL"
-        Start-Process -NoNewWindow -FilePath "REG" -ArgumentList "DELETE", "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate", "/v", "PingID", "/f" -RedirectStandardError "NUL"
-        Start-Process -NoNewWindow -FilePath "REG" -ArgumentList "DELETE", "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate", "/v", "SusClientId", "/f" -RedirectStandardError "NUL"
-        Write-Progress -Id 6 -ParentId 0 -Activity "Removing WSUS client settings" -Status "Completed" -PercentComplete 100
-    }
-
-    # Remove Group Policy Windows Update settings
-    Write-Progress -Id 0 -Activity "Repairing Windows Update" -Status "Removing Group Policy Windows Update settings..." -PercentComplete 60
-    Write-Progress -Id 7 -ParentId 0 -Activity "Removing Group Policy Windows Update settings" -PercentComplete 0
-    Remove-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate" -Name "ExcludeWUDriversInQualityUpdate" -ErrorAction SilentlyContinue
-    Write-Host "正在默认通过 Windows 更新提供驱动..."
-    Remove-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Device Metadata" -Name "PreventDeviceMetadataFromNetwork" -ErrorAction SilentlyContinue
-    Remove-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\DriverSearching" -Name "DontPromptForWindowsUpdate" -ErrorAction SilentlyContinue
-    Remove-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\DriverSearching" -Name "DontSearchWindowsUpdate" -ErrorAction SilentlyContinue
-    Remove-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\DriverSearching" -Name "DriverUpdateWizardWuSearchEnabled" -ErrorAction SilentlyContinue
-    Remove-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate" -Name "ExcludeWUDriversInQualityUpdate" -ErrorAction SilentlyContinue
-    Write-Host "正在默认 Windows 更新自动重启..."
-    Remove-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU" -Name "NoAutoRebootWithLoggedOnUsers" -ErrorAction SilentlyContinue
-    Remove-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU" -Name "AUPowerManagement" -ErrorAction SilentlyContinue
-    Write-Host "正在清除所有 Windows 更新策略设置..."
-    Remove-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\WindowsUpdate\UX\Settings" -Name "BranchReadinessLevel" -ErrorAction SilentlyContinue
-    Remove-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\WindowsUpdate\UX\Settings" -Name "DeferFeatureUpdatesPeriodInDays" -ErrorAction SilentlyContinue
-    Remove-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\WindowsUpdate\UX\Settings" -Name "DeferQualityUpdatesPeriodInDays" -ErrorAction SilentlyContinue
-    Remove-Item -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Policies" -Recurse -Force -ErrorAction SilentlyContinue
-    Remove-Item -Path "HKCU:\Software\Microsoft\WindowsSelfHost" -Recurse -Force -ErrorAction SilentlyContinue
-    Remove-Item -Path "HKCU:\Software\Policies" -Recurse -Force -ErrorAction SilentlyContinue
-    Remove-Item -Path "HKLM:\Software\Microsoft\Policies" -Recurse -Force -ErrorAction SilentlyContinue
-    Remove-Item -Path "HKLM:\Software\Microsoft\Windows\CurrentVersion\Policies" -Recurse -Force -ErrorAction SilentlyContinue
-    Remove-Item -Path "HKLM:\Software\Microsoft\Windows\CurrentVersion\WindowsStore\WindowsUpdate" -Recurse -Force -ErrorAction SilentlyContinue
-    Remove-Item -Path "HKLM:\Software\Microsoft\WindowsSelfHost" -Recurse -Force -ErrorAction SilentlyContinue
-    Remove-Item -Path "HKLM:\Software\Policies" -Recurse -Force -ErrorAction SilentlyContinue
-    Remove-Item -Path "HKLM:\Software\WOW6432Node\Microsoft\Policies" -Recurse -Force -ErrorAction SilentlyContinue
-    Remove-Item -Path "HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Policies" -Recurse -Force -ErrorAction SilentlyContinue
-    Remove-Item -Path "HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\WindowsStore\WindowsUpdate" -Recurse -Force -ErrorAction SilentlyContinue
-    Start-Process -NoNewWindow -FilePath "secedit" -ArgumentList "/configure", "/cfg", "$env:windir\inf\defltbase.inf", "/db", "defltbase.sdb", "/verbose" -Wait
-    Start-Process -NoNewWindow -FilePath "cmd.exe" -ArgumentList "/c RD /S /Q $env:WinDir\System32\GroupPolicyUsers" -Wait
-    Start-Process -NoNewWindow -FilePath "cmd.exe" -ArgumentList "/c RD /S /Q $env:WinDir\System32\GroupPolicy" -Wait
-    Start-Process -NoNewWindow -FilePath "gpupdate" -ArgumentList "/force" -Wait
-    Write-Progress -Id 7 -ParentId 0 -Activity "Removing Group Policy Windows Update settings" -Status "Completed" -PercentComplete 100
-
-
-    # Reset WinSock
-    Write-Progress -Id 0 -Activity "Repairing Windows Update" -Status "Resetting WinSock..." -PercentComplete 65
-    Write-Progress -Id 7 -ParentId 0 -Activity "Resetting WinSock" -Status "Resetting WinSock..." -PercentComplete 0
-    Start-Process -NoNewWindow -FilePath "netsh" -ArgumentList "winsock", "reset"
-    Start-Process -NoNewWindow -FilePath "netsh" -ArgumentList "winhttp", "reset", "proxy"
-    Start-Process -NoNewWindow -FilePath "netsh" -ArgumentList "int", "ip", "reset"
-    Write-Progress -Id 7 -ParentId 0 -Activity "Resetting WinSock" -Status "Completed" -PercentComplete 100
-
-
-    # Get and delete all BITS jobs
-    Write-Progress -Id 0 -Activity "Repairing Windows Update" -Status "Deleting BITS jobs..." -PercentComplete 75
-    Write-Progress -Id 8 -ParentId 0 -Activity "Deleting BITS jobs" -Status "Deleting BITS jobs..." -PercentComplete 0
-    Get-BitsTransfer | Remove-BitsTransfer
-    Write-Progress -Id 8 -ParentId 0 -Activity "Deleting BITS jobs" -Status "Completed" -PercentComplete 100
-
-
-    # Change the startup type of the Windows Update Services and start them
-    Write-Progress -Id 0 -Activity "Repairing Windows Update" -Status "Starting Windows Update Services..." -PercentComplete 90
-    Write-Progress -Id 9 -ParentId 0 -Activity "Starting Windows Update Services" -Status "Starting BITS..." -PercentComplete 0
-    Get-Service BITS | Set-Service -StartupType Manual -PassThru | Start-Service
-    Write-Progress -Id 9 -ParentId 0 -Activity "Starting Windows Update Services" -Status "Starting wuauserv..." -PercentComplete 25
-    Get-Service wuauserv | Set-Service -StartupType Manual -PassThru | Start-Service
-    Write-Progress -Id 9 -ParentId 0 -Activity "Starting Windows Update Services" -Status "Starting AppIDSvc..." -PercentComplete 50
-    # The AppIDSvc service is protected, so the startup type has to be changed in the registry
-    Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\AppIDSvc" -Name "Start" -Value "3" # Manual
-    Start-Service AppIDSvc
-    Write-Progress -Id 9 -ParentId 0 -Activity "Starting Windows Update Services" -Status "Starting CryptSvc..." -PercentComplete 75
-    Get-Service CryptSvc | Set-Service -StartupType Manual -PassThru | Start-Service
-    Write-Progress -Id 9 -ParentId 0 -Activity "Starting Windows Update Services" -Status "Completed" -PercentComplete 100
-
-
-    # Force Windows Update to check for updates
-    Write-Progress -Id 0 -Activity "Repairing Windows Update" -Status "Forcing discovery..." -PercentComplete 95
-    Write-Progress -Id 10 -ParentId 0 -Activity "Forcing discovery" -Status "Forcing discovery..." -PercentComplete 0
-    try {
-        (New-Object -ComObject Microsoft.Update.AutoUpdate).DetectNow()
-    } catch {
-        Set-WinUtilTaskbaritem -state "Error" -overlay "warning"
-        Write-Warning "Failed to create Windows Update COM object: $_"
-    }
-    Start-Process -NoNewWindow -FilePath "wuauclt" -ArgumentList "/resetauthorization", "/detectnow"
-    Write-Progress -Id 10 -ParentId 0 -Activity "Forcing discovery" -Status "Completed" -PercentComplete 100
-    Write-Progress -Id 0 -Activity "Repairing Windows Update" -Status "Completed" -PercentComplete 100
-
-    Set-WinUtilTaskbaritem -state "None" -overlay "checkmark"
-
-    $ButtonType = [System.Windows.MessageBoxButton]::OK
-    $MessageboxTitle = "Reset Windows Update "
-    $Messageboxbody = ("Stock settings loaded.`n Please reboot your computer")
-    $MessageIcon = [System.Windows.MessageBoxImage]::Information
-
-    [System.Windows.MessageBox]::Show($Messageboxbody, $MessageboxTitle, $ButtonType, $MessageIcon)
-    Write-Host "==============================================="
-    Write-Host "-- 将所有 Windows 更新设置重置为默认 -"
-    Write-Host "==============================================="
-
-    # Remove the progress bars
-    Write-Progress -Id 0 -Activity "Repairing Windows Update" -Completed
-    Write-Progress -Id 1 -Activity "Scanning for corruption" -Completed
-    Write-Progress -Id 2 -Activity "Stopping Services" -Completed
-    Write-Progress -Id 3 -Activity "Renaming/Removing Files" -Completed
-    Write-Progress -Id 4 -Activity "Resetting the WU Service Security Descriptors" -Completed
-    Write-Progress -Id 5 -Activity "Reregistering DLLs" -Completed
-    Write-Progress -Id 6 -Activity "Removing Group Policy Windows Update settings" -Completed
-    Write-Progress -Id 7 -Activity "Resetting WinSock" -Completed
-    Write-Progress -Id 8 -Activity "Deleting BITS jobs" -Completed
-    Write-Progress -Id 9 -Activity "Starting Windows Update Services" -Completed
-    Write-Progress -Id 10 -Activity "Forcing discovery" -Completed
-}
-
-
-
-function Invoke-WPFFixesWinget {
-
-    <#
-
-    .SYNOPSIS
-        Fixes WinGet by running `choco install winget`
-    .DESCRIPTION
-        BravoNorris for the fantastic idea of a button to reinstall WinGet
-    #>
-    # Install Choco if not already present
-    try {
-        Set-WinUtilTaskbaritem -state "Indeterminate" -overlay "logo"
-        Write-Host "==> Starting WinGet Repair"
-        Install-WinUtilWinget
-    } catch {
-        Write-Error "Failed to install WinGet: $_"
-        Set-WinUtilTaskbaritem -state "Error" -overlay "warning"
-    } finally {
-        Write-Host "==> Finished WinGet Repair"
-        Set-WinUtilTaskbaritem -state "None" -overlay "checkmark"
-    }
-
-}
-
-
-
-function Invoke-WPFGetInstalled {
-    <#
-    .SYNOPSIS
-        Invokes the function that gets the checkboxes to check in a new runspace
-
-    .PARAMETER checkbox
-        Indicates whether to check for installed 'winget' programs or applied 'tweaks'
-
-    #>
-    param($checkbox)
-    if ($sync.ProcessRunning) {
-        $msg = "[Invoke-WPFGetInstalled] Install process is currently running."
-        [System.Windows.MessageBox]::Show($msg, "Winutil", [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Warning)
-        return
-    }
-
-    if (($sync.ChocoRadioButton.IsChecked -eq $false) -and ((Test-WinUtilPackageManager -winget) -eq "not-installed") -and $checkbox -eq "winget") {
-        return
-    }
-    $managerPreference = $sync.preferences.packagemanager
-    $operation = [Hashtable]::Synchronized(@{
-        Checkboxes = @()
-        Error = $null
-    })
-    $completeAction = [Action[hashtable, string]]{
-        param(
-            [hashtable]$completedOperation,
-            [string]$completedCheckbox
-        )
-        try {
-            if ($completedOperation.Error) {
-                Write-WinUtilLog -Level "ERROR" -Component "Install" -Message "Get installed state failed: $($completedOperation.Error)"
-                Write-Warning "Unable to get installed state: $($completedOperation.Error)"
-                return
-            }
-
-            if ($completedCheckbox -eq "winget") {
-                foreach ($checkboxName in $completedOperation.Checkboxes) {
-                    if (-not $sync.selectedApps.Contains($checkboxName)) {
-                        $sync.selectedApps.Add($checkboxName)
-                    }
-                }
-                Reset-WPFCheckBoxes -checkboxfilterpattern "WPFInstall*"
-            } else {
-                foreach ($checkboxName in $completedOperation.Checkboxes) {
-                    $sync.$checkboxName.ischecked = $True
-                }
-            }
-        } finally {
-            $sync.ProcessRunning = $false
-            Set-WinUtilTaskbaritem -state "None"
-        }
-    }
-
-    $sync.ProcessRunning = $true
-    Set-WinUtilTaskbaritem -state "Indeterminate"
-    try {
-        Invoke-WPFRunspace -ParameterList @(
-            ("managerPreference", $managerPreference),
-            ("checkbox", $checkbox),
-            ("operation", $operation),
-            ("completeAction", $completeAction)
-        ) -ScriptBlock {
-            param (
-                [string]$checkbox,
-                [string]$managerPreference,
-                [hashtable]$operation,
-                [Action[hashtable, string]]$completeAction
-            )
-            try {
-                if ($checkbox -eq "winget") {
-                    switch ($managerPreference) {
-                        "Choco" { $operation.Checkboxes = @(Invoke-WinUtilCurrentSystem -CheckBox "choco"); break }
-                        "Winget" { $operation.Checkboxes = @(Invoke-WinUtilCurrentSystem -CheckBox $checkbox); break }
-                    }
-                } elseif ($checkbox -eq "tweaks") {
-                    $operation.Checkboxes = @(Invoke-WinUtilCurrentSystem -CheckBox $checkbox)
-                }
-            } catch {
-                $operation.Error = $_.Exception.Message
-            } finally {
-                $sync.Form.Dispatcher.BeginInvoke($completeAction, [object[]]@($operation, $checkbox)) | Out-Null
-            }
-        }
-    } catch {
-        $operation.Error = $_.Exception.Message
-        $completeAction.Invoke($operation, $checkbox)
-    }
-}
-
-
-
-function Invoke-WPFImpex {
-    <#
-
-    .SYNOPSIS
-        Handles importing and exporting of the checkboxes checked for the tweaks section
-
-    .PARAMETER type
-        Indicates whether to 'import' or 'export'
-
-    .PARAMETER checkbox
-        The checkbox to export to a file or apply the imported file to
-
-    .EXAMPLE
-        Invoke-WPFImpex -type "export"
-
-    #>
-    param(
-        $type,
-        $Config = $null
-    )
-
-    function ConfigDialog {
-        if (!$Config) {
-            switch ($type) {
-                "export" { $FileBrowser = New-Object System.Windows.Forms.SaveFileDialog }
-                "import" { $FileBrowser = New-Object System.Windows.Forms.OpenFileDialog }
-            }
-            $FileBrowser.InitialDirectory = [Environment]::GetFolderPath('Desktop')
-            $FileBrowser.Filter = "JSON Files (*.json)|*.json"
-            $FileBrowser.ShowDialog() | Out-Null
-
-            if ($FileBrowser.FileName -eq "") {
-                return $null
-            } else {
-                return $FileBrowser.FileName
-            }
-        } else {
-            return $Config
-        }
-    }
-
-    switch ($type) {
-        "export" {
-            try {
-                $Config = ConfigDialog
-                if ($Config) {
-                    $allConfs = ($sync.selectedApps + $sync.selectedTweaks + $sync.selectedToggles + $sync.selectedFeatures + $sync.selectedAppx) | ForEach-Object { [string]$_ }
-                    if (-not $allConfs) {
-                        [System.Windows.MessageBox]::Show(
-                            "No settings are selected to export. Please select at least one app, tweak, toggle, feature, or AppX package before exporting.",
-                            "Nothing to Export", "OK", "Warning")
-                        return
-                    }
-                    $jsonFile = $allConfs | ConvertTo-Json
-                    $jsonFile | Out-File $Config -Force
-                    "iex ""& { `$(irm https://christitus.com/win) } -Config '$Config'""" | Set-Clipboard
-                }
-            } catch {
-                Write-Error "An error occurred while exporting: $_"
-            }
-        }
-        "import" {
-            try {
-                $Config = ConfigDialog
-                if ($Config) {
-                    try {
-                        if ($Config -match '^https?://') {
-                            $jsonFile = (Invoke-WebRequest "$Config").Content | ConvertFrom-Json
-                        } else {
-                            $jsonFile = Get-Content $Config | ConvertFrom-Json
-                        }
-                    } catch {
-                        Write-Error "Failed to load the JSON file from the specified path or URL: $_"
-                        return
-                    }
-                    # TODO how to handle old style? detected json type then flatten it in a func?
-                    # $flattenedJson = $jsonFile.PSObject.Properties.Where({ $_.Name -ne "Install" }).ForEach({ $_.Value })
-                    $flattenedJson = $jsonFile
-
-                    if (-not $flattenedJson) {
-                        [System.Windows.MessageBox]::Show(
-                            "The selected file contains no settings to import. No changes have been made.",
-                            "Empty Configuration", "OK", "Warning")
-                        return
-                    }
-
-                    # Clear all existing selections before importing so the import replaces
-                    # the current state rather than merging with it
-                    $sync.selectedAppx = [System.Collections.Generic.List[string]]::new()
-                    $sync.selectedApps = [System.Collections.Generic.List[string]]::new()
-                    $sync.selectedTweaks = [System.Collections.Generic.List[string]]::new()
-                    $sync.selectedToggles = [System.Collections.Generic.List[string]]::new()
-                    $sync.selectedFeatures = [System.Collections.Generic.List[string]]::new()
-
-                    Update-WinUtilSelections -flatJson $flattenedJson
-
-                    if ($sync.Form) {
-                        Reset-WPFCheckBoxes -doToggles $true
-                    }
-                }
-            } catch {
-                Write-Error "An error occurred while importing: $_"
-            }
-        }
-    }
-}
-
-
-
-function Invoke-WPFInstall {
-    <#
-    .SYNOPSIS
-        Installs the selected programs using winget, if one or more of the selected programs are already installed on the system, winget will try and perform an upgrade if there's a newer version to install.
-    #>
-
-    $PackagesToInstall = $sync.selectedApps | Foreach-Object { $sync.configs.applicationsHashtable.$_ }
-
-
-    if($sync.ProcessRunning) {
-        $msg = "[Invoke-WPFInstall] An Install process is currently running."
-        Show-WinUtilMessage -Message $msg -Title "Winutil" -Button "OK" -Icon "Warning"
-        return
-    }
-
-    if ($PackagesToInstall.Count -eq 0) {
-        $WarningMsg = "Please select the program(s) to install or upgrade."
-        Show-WinUtilMessage -Message $WarningMsg -Title $AppTitle -Button "OK" -Icon "Warning"
-        return
-    }
-
-    $ManagerPreference = $sync.preferences.packagemanager
-    Write-WinUtilLog -Component "Install" -Message "Install requested for $(@($PackagesToInstall).Count) selected package(s) using preference: $ManagerPreference"
-    $packageSummary = Get-WinUtilPackageLogSummary -Packages $PackagesToInstall -Preference $ManagerPreference
-    Write-WinUtilLog -Component "Install" -Message "Install selected package(s): $($packageSummary -join '; ')"
-
-    Invoke-WPFRunspace -ParameterList @(("PackagesToInstall", $PackagesToInstall),("ManagerPreference", $ManagerPreference)) -ScriptBlock {
-        param($PackagesToInstall, $ManagerPreference)
-
-        $packagesSorted = Get-WinUtilSelectedPackages -PackageList $PackagesToInstall -Preference $ManagerPreference
-
-        $packagesWinget = $packagesSorted['Winget']
-        $packagesChoco = $packagesSorted['Choco']
-        $totalPackages = @($packagesWinget).Count + @($packagesChoco).Count
-        $completedPackages = 0
-        $hasUI = $null -ne $sync.Form -and $null -ne $sync.Form.Dispatcher
-        Write-WinUtilLog -Component "Install" -Message "Install package manager split: winget=$(@($packagesWinget).Count), choco=$(@($packagesChoco).Count)"
-
-        try {
-            $sync.ProcessRunning = $true
-            if ($hasUI) {
-                Set-WinUtilTweaksProgressIndicator -Visible $true -Label "Preparing app install (0/$totalPackages)" -Percent 0
-                Invoke-WPFUIThread -ScriptBlock {
-                    if ($null -ne $sync.ItemsControl) {
-                        $sync.ItemsControl.IsEnabled = $false
-                    }
-                }
-            }
-
-            if($packagesWinget.Count -gt 0 -and $packagesWinget -ne "0") {
-                Install-WinUtilWinget
-                foreach ($program in $packagesWinget) {
-                    $position = $completedPackages + 1
-                    $startPercent = [int](($completedPackages / $totalPackages) * 100)
-                    if ($hasUI) {
-                        Set-WinUtilTweaksProgressIndicator -Visible $true -Label "Installing $program ($position/$totalPackages)" -Percent $startPercent
-                    }
-
-                    Install-WinUtilProgramWinget -Action Install -Programs @($program)
-                    $completedPackages++
-                    $completedPercent = [int](($completedPackages / $totalPackages) * 100)
-                    if ($hasUI) {
-                        Set-WinUtilTweaksProgressIndicator -Visible $true -Label "Installed $program ($completedPackages/$totalPackages)" -Percent $completedPercent
-                        Invoke-WPFUIThread -ScriptBlock { Set-WinUtilTaskbaritem -value ($completedPercent / 100) }
-                    }
-                }
-            }
-            if($packagesChoco.Count -gt 0) {
-                $position = $completedPackages + 1
-                $startPercent = [int](($completedPackages / $totalPackages) * 100)
-                if ($hasUI) {
-                    Set-WinUtilTweaksProgressIndicator -Visible $true -Label "Installing Chocolatey packages ($position/$totalPackages)" -Percent $startPercent
-                }
-
-                Install-WinUtilChoco
-                Install-WinUtilProgramChoco -Action Install -Programs $packagesChoco
-                $completedPackages += @($packagesChoco).Count
-                $completedPercent = [int](($completedPackages / $totalPackages) * 100)
-                if ($hasUI) {
-                    Set-WinUtilTweaksProgressIndicator -Visible $true -Label "Installed Chocolatey packages ($completedPackages/$totalPackages)" -Percent $completedPercent
-                    Invoke-WPFUIThread -ScriptBlock { Set-WinUtilTaskbaritem -value ($completedPercent / 100) }
-                }
-            }
-            Write-Host "==========================================="
-            Write-Host "--      安装已完成          ---"
-            Write-Host "==========================================="
-            Write-WinUtilLog -Component "Install" -Message "Install workflow completed."
-            if ($hasUI) {
-                Set-WinUtilTweaksProgressIndicator -Visible $true -Label "App install finished" -Percent 100
-                Invoke-WPFUIThread -ScriptBlock { Set-WinUtilTaskbaritem -state "None" -overlay "checkmark" }
-            }
-        } catch {
-            Write-Host "==========================================="
-            Write-Host "错误: $_"
-            Write-Host "==========================================="
-            Write-WinUtilLog -Level "ERROR" -Component "Install" -Message "Install workflow failed: $($_.Exception.Message)"
-            if ($hasUI) {
-                Set-WinUtilTweaksProgressIndicator -Visible $true -Label "App install failed" -Percent 100
-                Invoke-WPFUIThread -ScriptBlock { Set-WinUtilTaskbaritem -state "Error" -overlay "warning" }
-            }
-        } finally {
-            if ($hasUI) {
-                Invoke-WPFUIThread -ScriptBlock {
-                    if ($null -ne $sync.ItemsControl) {
-                        $sync.ItemsControl.IsEnabled = $true
-                    }
-                }
-            }
-            $sync.ProcessRunning = $False
-        }
-    }
-}
-
-
-
-function Invoke-WPFInstallUpgrade {
-    if ($sync.ChocoRadioButton.IsChecked) {
-        Install-WinUtilChoco # Ensure Chocolatey is installed before upgrading
-
-        Write-Host "==========================================="
-        Write-Host "--           Updates started            ---"
-        Write-Host "-- You can close this window if desired ---"
-        Write-Host "==========================================="
-
-        Start-Process -FilePath powershell.exe -ArgumentList 'choco upgrade all -y'
-    } else {
-        Install-WinUtilWinget # Ensure WinGet is installed before upgrading
-
-        Write-Host "==========================================="
-        Write-Host "--           Updates started            ---"
-        Write-Host "-- You can close this window if desired ---"
-        Write-Host "==========================================="
-
-        Start-Process -FilePath powershell.exe -ArgumentList '-NoExit winget upgrade --all --include-unknown --silent --accept-source-agreements --accept-package-agreements'
-    }
-}
-
-
-
-function Invoke-WPFOOSU {
-    if ($sync.ProcessRunning) {
-        Show-WinUtilMessage -Message "Another process is currently running." -Title "WinUtil" -Button "OK" -Icon "Warning"
-        return
-    }
-
-    $downloadPath = Join-Path $sync.winutildir "ooshutup10.exe"
-    $sync.ProcessRunning = $true
-
-    Invoke-WPFRunspace -ParameterList @(,("downloadPath", $downloadPath)) -ScriptBlock {
-        param($downloadPath)
-
-        $hasUI = $null -ne $sync.Form -and $null -ne $sync.Form.Dispatcher
-
-        try {
-            Write-WinUtilLog -Component "OOSU" -Message "Downloading O&O ShutUp10++."
-            if ($hasUI) {
-                Set-WinUtilTweaksProgressIndicator -Visible $true -Label "Downloading O&O ShutUp10++ (0%)" -Percent 0
-            }
-
-            Save-WinUtilFile -Uri "https://dl5.oo-software.com/files/ooshutup10/OOSU10.exe" -DestinationPath $downloadPath -ProgressCallback {
-                param($percent)
-
-                if ($hasUI) {
-                    Set-WinUtilTweaksProgressIndicator -Visible $true -Label "Downloading O&O ShutUp10++ ($percent%)" -Percent $percent
-                }
-            }
-
-            if ($hasUI) {
-                Set-WinUtilTweaksProgressIndicator -Visible $true -Label "Launching O&O ShutUp10++" -Percent 100
-            }
-            Start-Process -FilePath $downloadPath
-
-            Write-WinUtilLog -Component "OOSU" -Message "O&O ShutUp10++ launched."
-            if ($hasUI) {
-                Set-WinUtilTweaksProgressIndicator -Visible $true -Label "O&O ShutUp10++ launched" -Percent 100
-            }
-        }
-        catch {
-            Write-WinUtilLog -Level "ERROR" -Component "OOSU" -Message "O&O ShutUp10++ download failed: $($_.Exception.Message)"
-            if ($hasUI) {
-                Set-WinUtilTweaksProgressIndicator -Visible $true -Label "O&O ShutUp10++ download failed" -Percent 100
-            }
-            Write-Error "Couldn't download O&O ShutUp10. Please make sure you have an active Internet connection."
-        }
-        finally {
-            $sync.ProcessRunning = $false
-        }
-    }
-}
-
-
-
-function Invoke-WPFPanelAutologin {
-    Invoke-WebRequest -Uri https://live.sysinternals.com/Autologon.exe -OutFile "$winutildir\autologin.exe"
-    Start-Process -FilePath "$winutildir\autologin.exe" -ArgumentList /accepteula
-}
-
-
-
-function Invoke-WPFPopup {
-    param (
-        [ValidateSet("Show", "Hide", "Toggle")]
-        [string]$Action = "",
-
-        [string[]]$Popups = @(),
-
-        [ValidateScript({
-            $invalid = $_.GetEnumerator() | Where-Object { $_.Value -notin @("Show", "Hide", "Toggle") }
-            if ($invalid) {
-                throw "Found invalid Popup-Action pair(s): " + ($invalid | ForEach-Object { "$($_.Key) = $($_.Value)" } -join "; ")
-            }
-            $true
-        })]
-        [hashtable]$PopupActionTable = @{}
-    )
-
-    if (-not $PopupActionTable.Count -and (-not $Action -or -not $Popups.Count)) {
-        throw "Provide either 'PopupActionTable' or both 'Action' and 'Popups'."
-    }
-
-    if ($PopupActionTable.Count -and ($Action -or $Popups.Count)) {
-        throw "Use 'PopupActionTable' on its own, or 'Action' with 'Popups'."
-    }
-
-    # Collect popups and actions
-    $PopupsToProcess = if ($PopupActionTable.Count) {
-        $PopupActionTable.GetEnumerator() | ForEach-Object { [PSCustomObject]@{ Name = "$($_.Key)Popup"; Action = $_.Value } }
-    } else {
-        $Popups | ForEach-Object { [PSCustomObject]@{ Name = "$_`Popup"; Action = $Action } }
-    }
-
-    $PopupsNotFound = @()
-
-    # Apply actions
-    foreach ($popupEntry in $PopupsToProcess) {
-        $popupName = $popupEntry.Name
-
-        if (-not $sync.$popupName) {
-            $PopupsNotFound += $popupName
-            continue
-        }
-
-        $sync.$popupName.IsOpen = switch ($popupEntry.Action) {
-            "Show" { $true }
-            "Hide" { $false }
-            "Toggle" { -not $sync.$popupName.IsOpen }
-        }
-    }
-
-    if ($PopupsNotFound.Count -gt 0) {
-        throw "Could not find the following popups: $($PopupsNotFound -join ', ')"
-    }
-}
-
-
-
-function Invoke-WPFPresets {
-    <#
-
-    .SYNOPSIS
-        Sets the checkboxes in winutil to the given preset
-
-    .PARAMETER preset
-        The preset to set the checkboxes to
-
-    .PARAMETER imported
-        If the preset is imported from a file, defaults to false
-
-    .PARAMETER checkboxfilterpattern
-        The Pattern to use when filtering through CheckBoxes, defaults to "**"
-
-    #>
-
-    param (
-        [Parameter(position=0)]
-        [Array]$preset = $null,
-
-        [Parameter(position=1)]
-        [bool]$imported = $false,
-
-        [Parameter(position=2)]
-        [string]$checkboxfilterpattern = "**"
-    )
-
-    if ($imported -eq $true) {
-        $CheckBoxesToCheck = $preset
-    } else {
-        $CheckBoxesToCheck = $sync.configs.preset.$preset
-    }
-
-    # clear out the filtered pattern so applying a preset replaces the current
-    # state rather than merging with it
-    switch ($checkboxfilterpattern) {
-        "WPFTweak*" { $sync.selectedTweaks = [System.Collections.Generic.List[string]]::new() }
-        "WPFInstall*" { $sync.selectedApps = [System.Collections.Generic.List[string]]::new() }
-        "WPFAppx*" { $sync.selectedAppx = [System.Collections.Generic.List[string]]::new() }
-        "WPFeatures" { $sync.selectedFeatures = [System.Collections.Generic.List[string]]::new() }
-        "WPFToggle" { $sync.selectedToggles = [System.Collections.Generic.List[string]]::new() }
-        default {}
-    }
-
-    if ($preset) {
-        Update-WinUtilSelections -flatJson $CheckBoxesToCheck
-    }
-
-    Reset-WPFCheckBoxes -doToggles $false -checkboxfilterpattern $checkboxfilterpattern
-}
-
-
-
-function Invoke-WPFRunspace {
-
-    <#
-
-    .SYNOPSIS
-        Creates and invokes a runspace using the given scriptblock and argumentlist
-
-    .PARAMETER ScriptBlock
-        The scriptblock to invoke in the runspace
-
-    .PARAMETER ArgumentList
-        A list of arguments to pass to the runspace
-
-    .PARAMETER ParameterList
-        A list of named parameters that should be provided.
-    .EXAMPLE
-        Invoke-WPFRunspace `
-            -ScriptBlock $sync.ScriptsInstallPrograms `
-            -ArgumentList "Installadvancedip,Installbitwarden" `
-
-        Invoke-WPFRunspace`
-            -ScriptBlock $sync.ScriptsInstallPrograms `
-            -ParameterList @(("PackagesToInstall", @("Installadvancedip,Installbitwarden")),("ChocoPreference", $true))
-    #>
-
-    [CmdletBinding()]
-    [OutputType([System.IAsyncResult])]
-    Param (
-        $ScriptBlock,
-        $ArgumentList,
-        $ParameterList
-    )
-
-    if (-not ("WinUtilRunspaceCleanup" -as [type])) {
-        Add-Type @"
-using System;
-using System.Management.Automation;
-
-public sealed class WinUtilRunspaceCleanupState
-{
-    public PowerShell PowerShell { get; set; }
-    public IAsyncResult Handle { get; set; }
-}
-
-public static class WinUtilRunspaceCleanup
-{
-    public static readonly System.Threading.WaitOrTimerCallback Callback = Cleanup;
-
-    public static void Cleanup(object state, bool timedOut)
-    {
-        var cleanupState = state as WinUtilRunspaceCleanupState;
-        if (cleanupState == null || cleanupState.PowerShell == null || cleanupState.Handle == null)
-        {
-            return;
-        }
-
-        try
-        {
-            cleanupState.PowerShell.EndInvoke(cleanupState.Handle);
-        }
-        catch
-        {
-        }
-        finally
-        {
-            cleanupState.PowerShell.Dispose();
-        }
-    }
-}
-"@
-    }
-
-    Initialize-WinUtilRunspacePool | Out-Null
-
-    # Create a PowerShell instance
-    $powershell = [powershell]::Create()
-
-    # Add Scriptblock and Arguments to runspace
-    [void]$powershell.AddScript($ScriptBlock)
-    [void]$powershell.AddArgument($ArgumentList)
-
-    foreach ($parameter in $ParameterList) {
-        [void]$powershell.AddParameter($parameter[0], $parameter[1])
-    }
-
-    $powershell.RunspacePool = $sync.runspace
-
-    # Execute the RunspacePool
-    $handle = $powershell.BeginInvoke()
-
-    $cleanupState = [WinUtilRunspaceCleanupState]::new()
-    $cleanupState.PowerShell = $powershell
-    $cleanupState.Handle = $handle
-    [System.Threading.ThreadPool]::RegisterWaitForSingleObject($handle.AsyncWaitHandle, [WinUtilRunspaceCleanup]::Callback, $cleanupState, -1, $true) | Out-Null
-
-    # Return the handle
-    return $handle
-}
-
-
-
-function Invoke-WPFSSHServer {
-    <#
-
-    .SYNOPSIS
-        Invokes the OpenSSH Server install in a runspace
-
-  #>
-
-    Invoke-WPFRunspace -ScriptBlock {
-
-        Invoke-WinUtilSSHServer
-
-        Write-Host "======================================="
-        Write-Host "--     OpenSSH Server installed!    ---"
-        Write-Host "======================================="
-    }
-}
-
-
-
-function Invoke-WPFSelectedCheckboxesUpdate ($type, $checkboxName) {
-    $listName = switch -Regex ($checkboxName) {
-        '^WPFInstall' { 'selectedApps' }
-        '^WPFTweaks'  { 'selectedTweaks' }
-        '^WPFToggle'  { 'selectedToggles' }
-        '^WPFFeature' { 'selectedFeatures' }
-        '^WPFAppx'    { 'selectedAppx' }
-    }
-
-    $selectionChanged = $false
-    if ($type -eq "Add") {
-        if (-not $sync.$listName.Contains($checkboxName)) {
-            $sync.$listName.Add($checkboxName)
-            $selectionChanged = $true
-        }
-    } else {
-        $selectionChanged = $sync.$listName.Remove($checkboxName)
-    }
-
-    if ($listName -eq "selectedApps" -and $selectionChanged) {
-        $sync.WPFselectedAppsButton.Content = "Selected Apps: $($sync.selectedApps.Count)"
-        $sync.selectedAppsstackPanel.Children.Clear()
-        $sync.selectedApps | Sort-Object | ForEach-Object {
-            Add-SelectedAppsMenuItem -name $sync.configs.applicationsHashtable.$_.Content -key $_
-        }
-    }
-}
-
-
-
-function Invoke-WPFSystemRepair {
-    <#
-    .SYNOPSIS
-        Checks for system corruption using SFC, and DISM
-        Checks for disk failure using Chkdsk
-
-    .DESCRIPTION
-        1. Chkdsk - Checks for disk errors, which can cause system file corruption and notifies of early disk failure
-        2. SFC - scans protected system files for corruption and fixes them
-        3. DISM - Repair a corrupted Windows operating system image
-    #>
-
-    Start-Process cmd.exe -ArgumentList "/c chkdsk /scan /perf" -NoNewWindow -Wait
-    Start-Process cmd.exe -ArgumentList "/c sfc /scannow" -NoNewWindow -Wait
-    Start-Process cmd.exe -ArgumentList "/c dism /online /cleanup-image /restorehealth" -NoNewWindow -Wait
-
-    Write-Host "==> Finished System Repair"
-    Set-WinUtilTaskbaritem -state "None" -overlay "checkmark"
-}
-
-
-
-function Invoke-WPFTab {
-
-    <#
-
-    .SYNOPSIS
-        Sets the selected tab to the tab that was clicked
-
-    .PARAMETER ClickedTab
-        The name of the tab that was clicked
-
-    #>
-
-    Param (
-        [Parameter(Mandatory,position=0)]
-        [string]$ClickedTab
-    )
-
-    $tabNav = Get-WinUtilVariables | Where-Object {$psitem -like "WPFTabNav"}
-    $tabNumber = [int]($ClickedTab -replace "WPFTab","" -replace "BT","") - 1
-
-    $filter = Get-WinUtilVariables -Type ToggleButton | Where-Object {$psitem -like "WPFTab?BT"}
-    $sync.$tabNav.Items[$tabNumber].IsSelected = $true
-    ($sync.GetEnumerator()).where{$psitem.Key -in $filter} | ForEach-Object {
-        if ($ClickedTab -ne $PSItem.name) {
-            $sync[$PSItem.Name].IsChecked = $false
-        } else {
-            $sync["$ClickedTab"].IsChecked = $true
-        }
-    }
-    $sync.currentTab = $sync.$tabNav.Items[$tabNumber].Header
-    Initialize-WinUtilTabContent -TabName $sync.currentTab
-
-    # Always reset the filter for the current tab
-    if ($sync.currentTab -eq "Install") {
-        # Reset Install tab filter
-        Find-AppsByNameOrDescription -SearchString ""
-    } elseif ($sync.currentTab -eq "Tweaks") {
-        # Reset Tweaks tab filter
-        Find-TweaksByNameOrDescription -SearchString ""
-    } elseif ($sync.currentTab -eq "AppX") {
-        # Reset AppX tab filter
-        Find-TweaksByNameOrDescription -SearchString ""
-    }
-
-    # Show search bar in Install, Tweaks, and AppX tabs
-    if ($tabNumber -eq 0 -or $tabNumber -eq 1 -or $tabNumber -eq 5) {
-        $sync.SearchBar.Visibility = "Visible"
-        $searchIcon = ($sync.Form.FindName("SearchBar").Parent.Children | Where-Object { $_ -is [System.Windows.Controls.TextBlock] -and $_.Text -eq [char]0xE721 })[0]
-        if ($searchIcon) {
-            $searchIcon.Visibility = "Visible"
-        }
-    } else {
-        $sync.SearchBar.Visibility = "Collapsed"
-        $searchIcon = ($sync.Form.FindName("SearchBar").Parent.Children | Where-Object { $_ -is [System.Windows.Controls.TextBlock] -and $_.Text -eq [char]0xE721 })[0]
-        if ($searchIcon) {
-            $searchIcon.Visibility = "Collapsed"
-        }
-        # Hide the clear button if it's visible
-        $sync.SearchBarClearButton.Visibility = "Collapsed"
-    }
-}
-
-
-
-function Invoke-WPFToggleAllCategories {
-    <#
-        .SYNOPSIS
-            Expands or collapses all categories in the Install tab
-
-        .PARAMETER Action
-            The action to perform: "Expand" or "Collapse"
-
-        .DESCRIPTION
-            This function iterates through all category containers in the Install tab
-            and expands or collapses their WrapPanels while updating the toggle button labels
-    #>
-
-    param(
-        [Parameter(Mandatory=$true)]
-        [ValidateSet("Expand", "Collapse")]
-        [string]$Action
-    )
-
-    try {
-        if ($null -eq $sync.ItemsControl) {
-            Write-Warning "ItemsControl 未初始化"
-            return
-        }
-
-        $targetVisibility = if ($Action -eq "Expand") { [Windows.Visibility]::Visible } else { [Windows.Visibility]::Collapsed }
-        $targetPrefix = if ($Action -eq "Expand") { "-" } else { "+" }
-        $sourcePrefix = if ($Action -eq "Expand") { "+" } else { "-" }
-
-        # Iterate through all items in the ItemsControl
-        $sync.ItemsControl.Items | ForEach-Object {
-            $categoryContainer = $_
-
-            # Check if this is a category container (StackPanel with children)
-            if ($categoryContainer -is [System.Windows.Controls.StackPanel] -and $categoryContainer.Children.Count -ge 2) {
-                # Get the WrapPanel (second child)
-                $wrapPanel = $categoryContainer.Children[1]
-                $wrapPanel.Visibility = $targetVisibility
-
-                # Update the label to show the correct state
-                $categoryLabel = $categoryContainer.Children[0]
-                if ($categoryLabel.Content -like "$sourcePrefix*") {
-                    $escapedSourcePrefix = [regex]::Escape($sourcePrefix)
-                    $categoryLabel.Content = $categoryLabel.Content -replace "^$escapedSourcePrefix ", "$targetPrefix "
-                }
-            }
-        }
-    }
-    catch {
-        Write-Error "Error toggling categories: $_"
-    }
-}
-
-
-
-function Invoke-WPFUIElements {
-    <#
-    .SYNOPSIS
-        Adds UI elements to a specified Grid in the WinUtil GUI based on a JSON configuration.
-    .PARAMETER configVariable
-        The variable/link containing the JSON configuration.
-    .PARAMETER targetGridName
-        The name of the grid to which the UI elements should be added.
-    .PARAMETER columncount
-        The number of columns to be used in the Grid. If not provided, a default value is used based on the panel.
-    .EXAMPLE
-        Invoke-WPFUIElements -configVariable $sync.configs.applications -targetGridName "install" -columncount 5
-    .NOTES
-        Future me/contributor: If possible, please wrap this into a runspace to make it load all panels at the same time.
-    #>
-
-    param(
-        [Parameter(Mandatory, Position = 0)]
-        [PSCustomObject]$configVariable,
-
-        [Parameter(Mandatory, Position = 1)]
-        [string]$targetGridName,
-
-        [Parameter(Mandatory, Position = 2)]
-        [int]$columncount
-    )
-
-    $window = $sync.form
-
-    $borderstyle = $window.FindResource("BorderStyle")
-    $HoverTextBlockStyle = $window.FindResource("HoverTextBlockStyle")
-    $ColorfulToggleSwitchStyle = $window.FindResource("ColorfulToggleSwitchStyle")
-    $ToggleButtonStyle = $window.FindResource("ToggleButtonStyle")
-
-    if (!$borderstyle -or !$HoverTextBlockStyle -or !$ColorfulToggleSwitchStyle) {
-        throw "Failed to retrieve Styles using 'FindResource' from main window element."
-    }
-
-    $targetGrid = $window.FindName($targetGridName)
-
-    if (!$targetGrid) {
-        throw "Failed to retrieve Target Grid by name, provided name: $targetGrid"
-    }
-
-    # Clear existing ColumnDefinitions and Children
-    $targetGrid.ColumnDefinitions.Clear() | Out-Null
-    $targetGrid.Children.Clear() | Out-Null
-
-    # Add ColumnDefinitions to the target Grid
-    for ($i = 0; $i -lt $columncount; $i++) {
-        $colDef = New-Object Windows.Controls.ColumnDefinition
-        $colDef.Width = New-Object Windows.GridLength(1, [Windows.GridUnitType]::Star)
-        $targetGrid.ColumnDefinitions.Add($colDef) | Out-Null
-    }
-
-    # Convert PSCustomObject to Hashtable
-    $configHashtable = @{}
-    $configVariable.PSObject.Properties.Name | ForEach-Object {
-        $configHashtable[$_] = $configVariable.$_
-    }
-
-    $radioButtonGroups = @{}
-
-    $organizedData = @{}
-    # Iterate through JSON data and organize by panel and category
-    foreach ($entry in $configHashtable.Keys) {
-        $entryInfo = $configHashtable[$entry]
-
-        # Create an object for the application
-        $entryObject = [PSCustomObject]@{
-            Name        = $entry
-            Category    = $entryInfo.Category
-            Content     = $entryInfo.Content
-            Panel       = if ($entryInfo.Panel) { $entryInfo.Panel } else { "0" }
-            Link        = $entryInfo.link
-            Description = $entryInfo.description
-            Type        = $entryInfo.type
-            ComboItems  = $entryInfo.ComboItems
-            Checked     = $entryInfo.Checked
-            ButtonWidth = $entryInfo.ButtonWidth
-            GroupName   = $entryInfo.GroupName  # Added for RadioButton groupings
-        }
-
-        if (-not $organizedData.ContainsKey($entryObject.Panel)) {
-            $organizedData[$entryObject.Panel] = @{}
-        }
-
-        if (-not $organizedData[$entryObject.Panel].ContainsKey($entryObject.Category)) {
-            $organizedData[$entryObject.Panel][$entryObject.Category] = @()
-        }
-
-        # Store application data in an array under the category
-        $organizedData[$entryObject.Panel][$entryObject.Category] += $entryObject
-
-    }
-
-    # Initialize panel count
-    $panelcount = 0
-
-    # Iterate through 'organizedData' by panel, category, and application
-    $count = 0
-    foreach ($panelKey in ($organizedData.Keys | Sort-Object)) {
-        # Create a Border for each column
-        $border = New-Object Windows.Controls.Border
-        $border.VerticalAlignment = "Stretch"
-        [System.Windows.Controls.Grid]::SetColumn($border, $panelcount)
-        $border.style = $borderstyle
-        $targetGrid.Children.Add($border) | Out-Null
-
-        # Use a DockPanel to contain the content
-        $dockPanelContainer = New-Object Windows.Controls.DockPanel
-        $border.Child = $dockPanelContainer
-
-        # Create an ItemsControl for application content
-        $itemsControl = New-Object Windows.Controls.ItemsControl
-        $itemsControl.HorizontalAlignment = 'Stretch'
-        $itemsControl.VerticalAlignment = 'Stretch'
-
-        # Set the ItemsPanel to a VirtualizingStackPanel
-        $itemsPanelTemplate = New-Object Windows.Controls.ItemsPanelTemplate
-        $factory = New-Object Windows.FrameworkElementFactory ([Windows.Controls.VirtualizingStackPanel])
-        $itemsPanelTemplate.VisualTree = $factory
-        $itemsControl.ItemsPanel = $itemsPanelTemplate
-
-        # Set virtualization properties
-        $itemsControl.SetValue([Windows.Controls.VirtualizingStackPanel]::IsVirtualizingProperty, $true)
-        $itemsControl.SetValue([Windows.Controls.VirtualizingStackPanel]::VirtualizationModeProperty, [Windows.Controls.VirtualizationMode]::Recycling)
-
-        # Add the ItemsControl directly to the DockPanel
-        [Windows.Controls.DockPanel]::SetDock($itemsControl, [Windows.Controls.Dock]::Bottom)
-        $dockPanelContainer.Children.Add($itemsControl) | Out-Null
-        $panelcount++
-
-        # Now proceed with adding category labels and entries to $itemsControl
-        foreach ($category in ($organizedData[$panelKey].Keys | Sort-Object)) {
-            $count++
-
-            $label = New-Object Windows.Controls.Label
-            $label.Content = $category -replace ".*__", ""
-            $label.SetResourceReference([Windows.Controls.Control]::FontSizeProperty, "HeaderFontSize")
-            $label.SetResourceReference([Windows.Controls.Control]::FontFamilyProperty, "HeaderFontFamily")
-            $label.UseLayoutRounding = $true
-            $itemsControl.Items.Add($label) | Out-Null
-            $sync[$category] = $label
-
-            # Sort entries by type (checkboxes first, then buttons, then comboboxes) and then alphabetically by Content
-            $entries = $organizedData[$panelKey][$category] | Sort-Object @{Expression = {
-                switch ($_.Type) {
-                    'Button' { 1 }
-                    'Combobox' { 2 }
-                    default { 0 }
-                }
-            }}, Content
-            foreach ($entryInfo in $entries) {
-                $count++
-                # Create the UI elements based on the entry type
-                switch ($entryInfo.Type) {
-                    "Toggle" {
-                        $dockPanel = New-Object Windows.Controls.DockPanel
-                        [System.Windows.Automation.AutomationProperties]::SetName($dockPanel, $entryInfo.Content)
-                        $checkBox = New-Object Windows.Controls.CheckBox
-                        $checkBox.Name = $entryInfo.Name
-                        $checkBox.HorizontalAlignment = "Right"
-                        $checkBox.UseLayoutRounding = $true
-                        [System.Windows.Automation.AutomationProperties]::SetName($checkBox, $entryInfo.Content)
-                        $dockPanel.Children.Add($checkBox) | Out-Null
-                        $checkBox.Style = $ColorfulToggleSwitchStyle
-
-                        $label = New-Object Windows.Controls.Label
-                        $label.Content = $entryInfo.Content
-                        $label.ToolTip = $entryInfo.Description
-                        $label.HorizontalAlignment = "Left"
-                        $label.SetResourceReference([Windows.Controls.Control]::FontSizeProperty, "FontSize")
-                        $label.SetResourceReference([Windows.Controls.Control]::ForegroundProperty, "MainForegroundColor")
-                        $label.UseLayoutRounding = $true
-                        $dockPanel.Children.Add($label) | Out-Null
-                        $itemsControl.Items.Add($dockPanel) | Out-Null
-
-                        $sync[$entryInfo.Name] = $checkBox
-                        $sync[$entryInfo.Name].IsChecked = (Get-WinUtilToggleStatus $entryInfo.Name)
-
-                        $sync[$entryInfo.Name].Add_Checked({
-                            [System.Object]$Sender = $args[0]
-                            Invoke-WPFSelectedCheckboxesUpdate -type "Add" -checkboxName $Sender.name
-                            # Skip applying tweaks while an import is restoring toggle states
-                            if (-not $sync.ImportInProgress) {
-                                Invoke-WinUtilTweaks $Sender.name
-                            }
-                        })
-
-                        $sync[$entryInfo.Name].Add_Unchecked({
-                            [System.Object]$Sender = $args[0]
-                            Invoke-WPFSelectedCheckboxesUpdate -type "Remove" -checkboxName $Sender.name
-                            # Skip undoing tweaks while an import is restoring toggle states
-                            if (-not $sync.ImportInProgress) {
-                                Invoke-WinUtiltweaks $Sender.name -undo $true
-                            }
-                        })
-                    }
-
-                    "ToggleButton" {
-                        $toggleButton = New-Object Windows.Controls.Primitives.ToggleButton
-                        $toggleButton.Name = $entryInfo.Name
-                        $toggleButton.Content = $entryInfo.Content[1]
-                        $toggleButton.ToolTip = $entryInfo.Description
-                        $toggleButton.HorizontalAlignment = "Left"
-                        $toggleButton.Style = $ToggleButtonStyle
-                        [System.Windows.Automation.AutomationProperties]::SetName($toggleButton, $entryInfo.Content[0])
-
-                        $toggleButton.Tag = @{
-                            contentOn = if ($entryInfo.Content.Count -ge 1) { $entryInfo.Content[0] } else { "" }
-                            contentOff = if ($entryInfo.Content.Count -ge 2) { $entryInfo.Content[1] } else { $contentOn }
-                        }
-
-                        $itemsControl.Items.Add($toggleButton) | Out-Null
-
-                        $sync[$entryInfo.Name] = $toggleButton
-
-                        $sync[$entryInfo.Name].Add_Checked({
-                            $this.Content = $this.Tag.contentOn
-                        })
-
-                        $sync[$entryInfo.Name].Add_Unchecked({
-                            $this.Content = $this.Tag.contentOff
-                        })
-
-                        if ($null -eq $sync.Buttons) {
-                            $sync.Buttons = [System.Collections.Generic.List[PSObject]]::new()
-                        }
-
-                        if ($sync.Buttons -notcontains $toggleButton.Name) {
-                            $toggleButton.Add_Click({
-                                [System.Object]$Sender = $args[0]
-                                Invoke-WPFButton $Sender.name
-                            })
-                            $sync.Buttons.Add($toggleButton.Name) | Out-Null
-                        }
-                    }
-
-                    "Combobox" {
-                        $horizontalStackPanel = New-Object Windows.Controls.StackPanel
-                        $horizontalStackPanel.Orientation = "Horizontal"
-                        $horizontalStackPanel.Margin = "0,5,0,0"
-                        [System.Windows.Automation.AutomationProperties]::SetName($horizontalStackPanel, $entryInfo.Content)
-
-                        $label = New-Object Windows.Controls.Label
-                        $label.Content = $entryInfo.Content
-                        $label.HorizontalAlignment = "Left"
-                        $label.VerticalAlignment = "Center"
-                        $label.SetResourceReference([Windows.Controls.Control]::FontSizeProperty, "ButtonFontSize")
-                        $label.UseLayoutRounding = $true
-                        $horizontalStackPanel.Children.Add($label) | Out-Null
-
-                        $comboBox = New-Object Windows.Controls.ComboBox
-                        $comboBox.Name = $entryInfo.Name
-                        $comboBox.SetResourceReference([Windows.Controls.Control]::HeightProperty, "ButtonHeight")
-                        $comboBox.SetResourceReference([Windows.Controls.Control]::WidthProperty, "ButtonWidth")
-                        $comboBox.HorizontalAlignment = "Left"
-                        $comboBox.VerticalAlignment = "Center"
-                        $comboBox.SetResourceReference([Windows.Controls.Control]::MarginProperty, "ButtonMargin")
-                        $comboBox.SetResourceReference([Windows.Controls.Control]::FontSizeProperty, "ButtonFontSize")
-                        $comboBox.UseLayoutRounding = $true
-                        [System.Windows.Automation.AutomationProperties]::SetName($comboBox, $entryInfo.Content)
-
-                        foreach ($comboitem in ($entryInfo.ComboItems -split " ")) {
-                            $comboBoxItem = New-Object Windows.Controls.ComboBoxItem
-                            $comboBoxItem.Content = $comboitem
-                            $comboBoxItem.SetResourceReference([Windows.Controls.Control]::FontSizeProperty, "ButtonFontSize")
-                            $comboBoxItem.UseLayoutRounding = $true
-                            $comboBox.Items.Add($comboBoxItem) | Out-Null
-                        }
-
-                        $horizontalStackPanel.Children.Add($comboBox) | Out-Null
-                        $itemsControl.Items.Add($horizontalStackPanel) | Out-Null
-
-                        $comboBox.SelectedIndex = 0
-
-                        # Set initial text
-                        if ($comboBox.Items.Count -gt 0) {
-                            $comboBox.Text = $comboBox.Items[0].Content
-                        }
-
-                        # Add SelectionChanged event handler to update the text property
-                        $comboBox.Add_SelectionChanged({
-                            $selectedItem = $this.SelectedItem
-                            if ($selectedItem) {
-                                $this.Text = $selectedItem.Content
-                            }
-                        })
-
-                        $sync[$entryInfo.Name] = $comboBox
-                    }
-
-                    "Button" {
-                        $button = New-Object Windows.Controls.Button
-                        $button.Name = $entryInfo.Name
-                        $button.Content = $entryInfo.Content
-                        $button.HorizontalAlignment = "Left"
-                        $button.SetResourceReference([Windows.Controls.Control]::MarginProperty, "ButtonMargin")
-                        $button.SetResourceReference([Windows.Controls.Control]::FontSizeProperty, "ButtonFontSize")
-                        if ($entryInfo.ButtonWidth) {
-                            $baseWidth = [int]$entryInfo.ButtonWidth
-                            $button.Width = [math]::Max($baseWidth, 350)
-                        }
-                        [System.Windows.Automation.AutomationProperties]::SetName($button, $entryInfo.Content)
-                        $itemsControl.Items.Add($button) | Out-Null
-
-                        $sync[$entryInfo.Name] = $button
-
-                        if ($null -eq $sync.Buttons) {
-                            $sync.Buttons = [System.Collections.Generic.List[PSObject]]::new()
-                        }
-
-                        if ($sync.Buttons -notcontains $button.Name) {
-                            $button.Add_Click({
-                                [System.Object]$Sender = $args[0]
-                                Invoke-WPFButton $Sender.name
-                            })
-                            $sync.Buttons.Add($button.Name) | Out-Null
-                        }
-                    }
-
-                    "RadioButton" {
-                        # Check if a container for this GroupName already exists
-                        if (-not $radioButtonGroups.ContainsKey($entryInfo.GroupName)) {
-                            # Create a StackPanel for this group
-                            $groupStackPanel = New-Object Windows.Controls.StackPanel
-                            $groupStackPanel.Orientation = "Vertical"
-                            [System.Windows.Automation.AutomationProperties]::SetName($groupStackPanel, $entryInfo.GroupName)
-
-                            # Add the group container to the ItemsControl
-                            $itemsControl.Items.Add($groupStackPanel) | Out-Null
-                        }
-                        else {
-                            # Retrieve the existing group container
-                            $groupStackPanel = $radioButtonGroups[$entryInfo.GroupName]
-                        }
-
-                        # Create the RadioButton
-                        $radioButton = New-Object Windows.Controls.RadioButton
-                        $radioButton.Name = $entryInfo.Name
-                        $radioButton.GroupName = $entryInfo.GroupName
-                        $radioButton.Content = $entryInfo.Content
-                        $radioButton.HorizontalAlignment = "Left"
-                        $radioButton.SetResourceReference([Windows.Controls.Control]::MarginProperty, "CheckBoxMargin")
-                        $radioButton.SetResourceReference([Windows.Controls.Control]::FontSizeProperty, "ButtonFontSize")
-                        $radioButton.ToolTip = $entryInfo.Description
-                        $radioButton.UseLayoutRounding = $true
-                        [System.Windows.Automation.AutomationProperties]::SetName($radioButton, $entryInfo.Content)
-
-                        if ($entryInfo.Checked -eq $true) {
-                            $radioButton.IsChecked = $true
-                        }
-
-                        # Add the RadioButton to the group container
-                        $groupStackPanel.Children.Add($radioButton) | Out-Null
-                        $sync[$entryInfo.Name] = $radioButton
-                    }
-
-                    "Note" {
-                        $textBlock = New-Object Windows.Controls.TextBlock
-                        $textBlock.TextWrapping = "Wrap"
-                        $textBlock.Margin = "5,5,5,5"
-                        $textBlock.UseLayoutRounding = $true
-
-                        $bulletRun = New-Object Windows.Documents.Run
-                        $bulletRun.Text = [char]0x25CF
-                        $bulletRun.Foreground = [Windows.Media.SolidColorBrush]::new([Windows.Media.Color]::FromRgb(110, 255, 114))
-                        $bulletRun.FontSize = 11.5
-
-                        $textRun = New-Object Windows.Documents.Run
-                        $textRun.Text = " $($entryInfo.Content)"
-                        $textRun.SetResourceReference([Windows.Controls.Control]::FontSizeProperty, "FontSize")
-                        $textRun.Foreground = [Windows.Media.SolidColorBrush]::new([Windows.Media.Color]::FromRgb(19, 143, 83))
-
-                        $textBlock.Inlines.Add($bulletRun)
-                        $textBlock.Inlines.Add($textRun)
-
-                        $itemsControl.Items.Add($textBlock) | Out-Null
-                    }
-
-                    default {
-                        $horizontalStackPanel = New-Object Windows.Controls.StackPanel
-                        $horizontalStackPanel.Orientation = "Horizontal"
-                        [System.Windows.Automation.AutomationProperties]::SetName($horizontalStackPanel, $entryInfo.Content)
-
-                        $checkBox = New-Object Windows.Controls.CheckBox
-                        $checkBox.Name = $entryInfo.Name
-                        $checkBox.Content = $entryInfo.Content
-                        $checkBox.SetResourceReference([Windows.Controls.Control]::FontSizeProperty, "FontSize")
-                        $checkBox.ToolTip = $entryInfo.Description
-                        $checkBox.SetResourceReference([Windows.Controls.Control]::MarginProperty, "CheckBoxMargin")
-                        $checkBox.UseLayoutRounding = $true
-                        [System.Windows.Automation.AutomationProperties]::SetName($checkBox, $entryInfo.Content)
-                        if ($entryInfo.Checked -eq $true) {
-                            $checkBox.IsChecked = $entryInfo.Checked
-                        }
-                        $horizontalStackPanel.Children.Add($checkBox) | Out-Null
-
-                        if ($entryInfo.Link) {
-                            $textBlock = New-Object Windows.Controls.TextBlock
-                            $textBlock.Name = $checkBox.Name + "Link"
-                            $textBlock.Text = "(?)"
-                            $textBlock.ToolTip = $entryInfo.Link
-                            $textBlock.Style = $HoverTextBlockStyle
-                            $textBlock.UseLayoutRounding = $true
-
-                            $textBlock.VerticalAlignment = "Center"
-                            $textBlock.SetResourceReference([Windows.Controls.Control]::FontSizeProperty, "FontSize")
-                            $textBlock.Tag = $checkBox
-
-                            $textBlock.Add_MouseUp({
-                                [System.Object]$Sender = $args[0]
-                                Start-Process $Sender.ToolTip -ErrorAction Stop
-                            })
-
-                            $updateLinkMargin = {
-                                [System.Object]$Sender = $args[0]
-                                $linkedCheckBox = $Sender.Tag
-                                $MarginTopBase = if ($linkedCheckBox) { $linkedCheckBox.Margin.Top } else { 0 }
-                                $Sender.Margin = New-Object Windows.Thickness(
-                                    [math]::Round($Sender.FontSize * 0.5),
-                                    ($MarginTopBase - [math]::Round($Sender.FontSize / 2)),
-                                    0, 0
-                                )
-                            }
-                            $textBlock.Add_Loaded($updateLinkMargin)
-                            $fontSizeDescriptor = [System.ComponentModel.DependencyPropertyDescriptor]::FromProperty(
-                                [Windows.Controls.Control]::FontSizeProperty,
-                                [Windows.Controls.TextBlock]
-                            )
-                            $fontSizeDescriptor.AddValueChanged($textBlock, $updateLinkMargin)
-
-                            $horizontalStackPanel.Children.Add($textBlock) | Out-Null
-
-                            $sync[$textBlock.Name] = $textBlock
-                        }
-
-                        $itemsControl.Items.Add($horizontalStackPanel) | Out-Null
-                        $sync[$entryInfo.Name] = $checkBox
-
-                        $sync[$entryInfo.Name].Add_Checked({
-                            [System.Object]$Sender = $args[0]
-                            Invoke-WPFSelectedCheckboxesUpdate -type "Add" -checkboxName $Sender.name
-                        })
-
-                        $sync[$entryInfo.Name].Add_Unchecked({
-                            [System.Object]$Sender = $args[0]
-                            Invoke-WPFSelectedCheckboxesUpdate -type "Remove" -checkboxName $Sender.name
-                        })
-                    }
-                }
-            }
-        }
-    }
-}
-
-
-
-function Invoke-WPFUIThread ($ScriptBlock) {
-    $sync.form.Dispatcher.Invoke([action]$ScriptBlock)
-}
-
-
-
-function Invoke-WPFUltimatePerformance ([switch]$Enable) {
-    if ($Enable) {
-        powercfg /setactive (powercfg /duplicatescheme e9a42b02-d5df-448d-aa00-03f14749eb61 | Select-String -Pattern '[A-Fa-f0-9-]{36}').Matches.Value
-        [System.Windows.MessageBox]::Show("Ultimate Power Plan plan installed and activated.","Success","OK","Information")
-    } else {
-        powercfg /restoredefaultschemes
-        [System.Windows.MessageBox]::Show("Power Plan was reset to defaults.","Success","OK","Information")
-    }
-}
-
-
-
-function Invoke-WPFUnInstall {
-    param(
-        [Parameter(Mandatory=$false)]
-        [PSObject[]]$PackagesToUninstall = $($sync.selectedApps | Foreach-Object { $sync.configs.applicationsHashtable.$_ })
-    )
-    <#
-
-    .SYNOPSIS
-        Uninstalls the selected programs
-    #>
-
-    if($sync.ProcessRunning) {
-        $msg = "[Invoke-WPFUnInstall] Install process is currently running"
-        Show-WinUtilMessage -Message $msg -Title "Winutil" -Button "OK" -Icon "Warning"
-        return
-    }
-
-    if ($PackagesToUninstall.Count -eq 0) {
-        $WarningMsg = "Please select the program(s) to uninstall"
-        Show-WinUtilMessage -Message $WarningMsg -Title $AppTitle -Button "OK" -Icon "Warning"
-        return
-    }
-
-    $ButtonType = "YesNo"
-    $MessageboxTitle = "Are you sure?"
-    $Messageboxbody = ("This will uninstall the following applications: `n $($PackagesToUninstall | Select-Object Name, Description| Out-String)")
-    $MessageIcon = "Information"
-
-    $confirm = Show-WinUtilMessage -Message $Messageboxbody -Title $MessageboxTitle -Button $ButtonType -Icon $MessageIcon
-
-    if($confirm -eq "No") {return}
-
-    $ManagerPreference = $sync.preferences.packagemanager
-    Write-WinUtilLog -Component "Uninstall" -Message "Uninstall requested for $(@($PackagesToUninstall).Count) selected package(s) using preference: $ManagerPreference"
-    $packageSummary = Get-WinUtilPackageLogSummary -Packages $PackagesToUninstall -Preference $ManagerPreference
-    Write-WinUtilLog -Component "Uninstall" -Message "Uninstall selected package(s): $($packageSummary -join '; ')"
-
-    Invoke-WPFRunspace -ParameterList @(("PackagesToUninstall", $PackagesToUninstall),("ManagerPreference", $ManagerPreference)) -ScriptBlock {
-        param($PackagesToUninstall, $ManagerPreference)
-
-        $packagesSorted = Get-WinUtilSelectedPackages -PackageList $PackagesToUninstall -Preference $ManagerPreference
-
-        $packagesWinget = $packagesSorted['Winget']
-        $packagesChoco = $packagesSorted['Choco']
-        $totalPackages = @($packagesWinget).Count + @($packagesChoco).Count
-        $completedPackages = 0
-        $hasUI = $null -ne $sync.Form -and $null -ne $sync.Form.Dispatcher
-        Write-WinUtilLog -Component "Uninstall" -Message "Uninstall package manager split: winget=$(@($packagesWinget).Count), choco=$(@($packagesChoco).Count)"
-
-        try {
-            $sync.ProcessRunning = $true
-            if ($hasUI) {
-                Set-WinUtilTweaksProgressIndicator -Visible $true -Label "Preparing app uninstall (0/$totalPackages)" -Percent 0
-                Invoke-WPFUIThread -ScriptBlock {
-                    if ($null -ne $sync.ItemsControl) {
-                        $sync.ItemsControl.IsEnabled = $false
-                    }
-                }
-            }
-
-            if ($packagesWinget -contains "Microsoft.Edge") {
-                New-Item -Path "$Env:SystemRoot\SystemApps\Microsoft.MicrosoftEdge_8wekyb3d8bbwe\MicrosoftEdge.exe" -Force
-            }
-
-            # Uninstall all selected programs in new window
-            if($packagesWinget.Count -gt 0) {
-                foreach ($program in $packagesWinget) {
-                    $position = $completedPackages + 1
-                    $startPercent = [int](($completedPackages / $totalPackages) * 100)
-                    if ($hasUI) {
-                        Set-WinUtilTweaksProgressIndicator -Visible $true -Label "Uninstalling $program ($position/$totalPackages)" -Percent $startPercent
-                    }
-
-                    Install-WinUtilProgramWinget -Action Uninstall -Programs @($program)
-                    $completedPackages++
-                    $completedPercent = [int](($completedPackages / $totalPackages) * 100)
-                    if ($hasUI) {
-                        Set-WinUtilTweaksProgressIndicator -Visible $true -Label "Uninstalled $program ($completedPackages/$totalPackages)" -Percent $completedPercent
-                        Invoke-WPFUIThread -ScriptBlock { Set-WinUtilTaskbaritem -value ($completedPercent / 100) }
-                    }
-                }
-            }
-            if($packagesChoco.Count -gt 0) {
-                $position = $completedPackages + 1
-                $startPercent = [int](($completedPackages / $totalPackages) * 100)
-                if ($hasUI) {
-                    Set-WinUtilTweaksProgressIndicator -Visible $true -Label "Uninstalling Chocolatey packages ($position/$totalPackages)" -Percent $startPercent
-                }
-
-                Install-WinUtilProgramChoco -Action Uninstall -Programs $packagesChoco
-                $completedPackages += @($packagesChoco).Count
-                $completedPercent = [int](($completedPackages / $totalPackages) * 100)
-                if ($hasUI) {
-                    Set-WinUtilTweaksProgressIndicator -Visible $true -Label "Uninstalled Chocolatey packages ($completedPackages/$totalPackages)" -Percent $completedPercent
-                    Invoke-WPFUIThread -ScriptBlock { Set-WinUtilTaskbaritem -value ($completedPercent / 100) }
-                }
-            }
-            Write-Host "==========================================="
-            Write-Host "--       Uninstalls have finished       ---"
-            Write-Host "==========================================="
-            Write-WinUtilLog -Component "Uninstall" -Message "Uninstall workflow completed."
-            if ($hasUI) {
-                Set-WinUtilTweaksProgressIndicator -Visible $true -Label "App uninstall finished" -Percent 100
-                Invoke-WPFUIThread -ScriptBlock { Set-WinUtilTaskbaritem -state "None" -overlay "checkmark" }
-            }
-        } catch {
-            Write-Host "==========================================="
-            Write-Host "错误: $_"
-            Write-Host "==========================================="
-            Write-WinUtilLog -Level "ERROR" -Component "Uninstall" -Message "Uninstall workflow failed: $($_.Exception.Message)"
-            if ($hasUI) {
-                Set-WinUtilTweaksProgressIndicator -Visible $true -Label "App uninstall failed" -Percent 100
-                Invoke-WPFUIThread -ScriptBlock { Set-WinUtilTaskbaritem -state "Error" -overlay "warning" }
-            }
-        } finally {
-            if ($hasUI) {
-                Invoke-WPFUIThread -ScriptBlock {
-                    if ($null -ne $sync.ItemsControl) {
-                        $sync.ItemsControl.IsEnabled = $true
-                    }
-                }
-            }
-            $sync.ProcessRunning = $False
-        }
-
-    }
-}
-
-
-
-function Invoke-WPFUpdatesdefault {
-    <#
-
-    .SYNOPSIS
-        Resets Windows Update settings to default
-
-    #>
-    Write-WinUtilLog -Component "Updates" -Message "Resetting Windows Update settings to default."
-
-    Write-Host "正在移除 WinUtil 管理的 Windows 更新设置..." -ForegroundColor Green
-    Write-WinUtilLog -Component "Updates" -Message "Removing Windows Update registry values managed by WinUtil."
-
-    $registryValues = @(
-        @{
-            Path = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU"
-            Names = @("NoAutoUpdate", "AUOptions", "NoAutoRebootWithLoggedOnUsers", "AUPowerManagement")
-        },
-        @{
-            Path = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate"
-            Names = @("ExcludeWUDriversInQualityUpdate", "DeferFeatureUpdates", "DeferFeatureUpdatesPeriodInDays", "DeferQualityUpdates", "DeferQualityUpdatesPeriodInDays")
-        },
-        @{
-            Path = "HKLM:\SOFTWARE\Microsoft\WindowsUpdate\UX\Settings"
-            Names = @("BranchReadinessLevel", "DeferFeatureUpdatesPeriodInDays", "DeferQualityUpdatesPeriodInDays")
-        },
-        @{
-            Path = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Device Metadata"
-            Names = @("PreventDeviceMetadataFromNetwork")
-        },
-        @{
-            Path = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\DriverSearching"
-            Names = @("DontPromptForWindowsUpdate", "DontSearchWindowsUpdate", "DriverUpdateWizardWuSearchEnabled")
-        },
-        @{
-            Path = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\DeliveryOptimization\Config"
-            Names = @("DODownloadMode")
-        }
-    )
-
-    foreach ($registryEntry in $registryValues) {
-        foreach ($valueName in $registryEntry.Names) {
-            Remove-ItemProperty -Path $registryEntry.Path -Name $valueName -ErrorAction SilentlyContinue
-        }
-    }
-
-    $explorerPolicyPath = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer"
-    $settingsPageVisibility = (Get-ItemProperty -Path $explorerPolicyPath -Name "SettingsPageVisibility" -ErrorAction SilentlyContinue).SettingsPageVisibility
-    if ($settingsPageVisibility -eq "hide:windowsupdate") {
-        Write-Host "正在移除 WinUtil 旧版 Windows 更新页面限制..."
-        Write-WinUtilLog -Component "Updates" -Message "Removing the legacy Windows Update settings page restriction."
-        Remove-ItemProperty -Path $explorerPolicyPath -Name "SettingsPageVisibility" -ErrorAction SilentlyContinue
-    }
-
-    Write-Host "正在重新启用 Windows 更新服务..." -ForegroundColor Green
-    Write-WinUtilLog -Component "Updates" -Message "Restoring Windows Update service startup types."
-
-    Write-Host "已将 BITS 恢复为手动。"
-    Write-WinUtilLog -Component "Updates" -Message "Restoring BITS service to Manual."
-    Set-Service -Name BITS -StartupType Manual
-
-    Write-Host "已将 wuauserv 恢复为手动。"
-    Write-WinUtilLog -Component "Updates" -Message "Restoring wuauserv service to Manual."
-    Set-Service -Name wuauserv -StartupType Manual
-
-    Write-Host "已将 UsoSvc 恢复为自动。"
-    Write-WinUtilLog -Component "Updates" -Message "Starting UsoSvc service and restoring startup type to Automatic."
-    Set-Service -Name UsoSvc -StartupType Automatic
-    Start-Service -Name UsoSvc
-
-    Write-Host "正在启用更新相关的计划任务..." -ForegroundColor Green
-    Write-WinUtilLog -Component "Updates" -Message "Enabling update related scheduled tasks."
-
-    $Tasks =
-        '\Microsoft\Windows\InstallService\*',
-        '\Microsoft\Windows\UpdateOrchestrator\*',
-        '\Microsoft\Windows\UpdateAssistant\*',
-        '\Microsoft\Windows\WaaSMedic\*',
-        '\Microsoft\Windows\WindowsUpdate\*',
-        '\Microsoft\WindowsUpdate\*'
-
-    foreach ($Task in $Tasks) {
-        Get-ScheduledTask -TaskPath $Task -ErrorAction SilentlyContinue | Enable-ScheduledTask -ErrorAction SilentlyContinue
-    }
-
-    Write-Host "===================================================" -ForegroundColor Green
-    Write-Host "---  Windows Update Settings Reset to Default   ---" -ForegroundColor Green
-    Write-Host "===================================================" -ForegroundColor Green
-
-    Write-Host "注意：您必须重新启动系统才能使所有更改生效。" -ForegroundColor Yellow
-    Write-WinUtilLog -Component "Updates" -Message "Windows Update default workflow completed. Restart required."
-}
-
-
-
-function Invoke-WPFUpdatesdisable {
-    <#
-
-    .SYNOPSIS
-        Disables Windows Update
-
-    .NOTES
-        Disabling Windows Update is not recommended. This is only for advanced users who know what they are doing.
-
-    #>
-    $confirmation = Show-WinUtilMessage `
-        -Message "Disabling Windows Update stops update services, disables scheduled tasks, and clears downloaded update files. Security updates will not be installed until defaults are restored. Continue?" `
-        -Title "Disable Windows Update?" `
-        -Button "YesNo" `
-        -Icon "Warning"
-
-    if ($confirmation -ne "Yes") {
-        Write-WinUtilLog -Component "Updates" -Message "Windows Update disable workflow cancelled."
-        return
-    }
-
-    Write-WinUtilLog -Component "Updates" -Message "Disabling Windows Update settings."
-
-    Write-Host "正在配置注册表设置..." -ForegroundColor Yellow
-    Write-WinUtilLog -Component "Updates" -Message "Configuring Windows Update registry policy values for disable mode."
-    New-Item -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU" -Force
-
-    Set-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU" -Name "NoAutoUpdate" -Type DWord -Value 1
-    Set-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU" -Name "AUOptions" -Type DWord -Value 1
-
-    New-Item -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\DeliveryOptimization\Config" -Force
-    Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\DeliveryOptimization\Config" -Name "DODownloadMode" -Type DWord -Value 0
-
-    foreach ($serviceName in @("BITS", "wuauserv", "UsoSvc")) {
-        Write-Host "正在停止并禁用 $serviceName 服务。"
-        Write-WinUtilLog -Component "Updates" -Message "Stopping and disabling $serviceName service."
-        Stop-Service -Name $serviceName -Force -ErrorAction SilentlyContinue
-        Set-Service -Name $serviceName -StartupType Disabled
-    }
-
-    Remove-Item -Path "C:\Windows\SoftwareDistribution\*" -Recurse -Force -ErrorAction SilentlyContinue
-    Write-Host "已清除 SoftwareDistribution 文件夹。"
-    Write-WinUtilLog -Component "Updates" -Message "Cleared SoftwareDistribution folder."
-
-    Write-Host "正在禁用更新相关的计划任务..." -ForegroundColor Yellow
-    Write-WinUtilLog -Component "Updates" -Message "Disabling update related scheduled tasks."
-
-    $Tasks =
-        '\Microsoft\Windows\InstallService\*',
-        '\Microsoft\Windows\UpdateOrchestrator\*',
-        '\Microsoft\Windows\UpdateAssistant\*',
-        '\Microsoft\Windows\WaaSMedic\*',
-        '\Microsoft\Windows\WindowsUpdate\*',
-        '\Microsoft\WindowsUpdate\*'
-
-    foreach ($Task in $Tasks) {
-        Get-ScheduledTask -TaskPath $Task -ErrorAction SilentlyContinue | Disable-ScheduledTask -ErrorAction SilentlyContinue
-    }
-
-    Write-Host "=================================" -ForegroundColor Green
-    Write-Host "--- Windows Update Is Disabled ---" -ForegroundColor Green
-    Write-Host "=================================" -ForegroundColor Green
-
-    Write-Host "注意：您必须重新启动系统才能使所有更改生效。" -ForegroundColor Yellow
-    Write-WinUtilLog -Component "Updates" -Message "Windows Update disable workflow completed. Restart required."
-}
-
-
-
-function Invoke-WPFUpdatessecurity {
-    <#
-
-    .SYNOPSIS
-        Sets Windows Update to recommended settings
-
-    .DESCRIPTION
-        1. Disables driver offering through Windows Update
-        2. Defers feature updates for 365 days
-        3. Defers quality updates for 4 days
-        4. Prevents automatic restarts while a user is signed in
-
-    #>
-
-    Write-Host "正在禁用通过 Windows 更新提供的驱动..."
-    Write-WinUtilLog -Component "Updates" -Message "Applying recommended Windows Update settings."
-    Write-WinUtilLog -Component "Updates" -Message "Disabling driver offering through Windows Update."
-
-    $windowsUpdatePolicyPath = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate"
-    $automaticUpdatePolicyPath = Join-Path $windowsUpdatePolicyPath "AU"
-
-    Write-Host "正在恢复 Windows 更新可用性..."
-    Write-WinUtilLog -Component "Updates" -Message "Restoring Windows Update services and scheduled tasks before applying recommended settings."
-
-    Remove-ItemProperty -Path $automaticUpdatePolicyPath -Name "NoAutoUpdate" -ErrorAction SilentlyContinue
-    Remove-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\DeliveryOptimization\Config" -Name "DODownloadMode" -ErrorAction SilentlyContinue
-
-    Set-Service -Name BITS -StartupType Manual
-    Set-Service -Name wuauserv -StartupType Manual
-    Set-Service -Name UsoSvc -StartupType Automatic
-    Start-Service -Name UsoSvc
-
-    $Tasks =
-        '\Microsoft\Windows\InstallService\*',
-        '\Microsoft\Windows\UpdateOrchestrator\*',
-        '\Microsoft\Windows\UpdateAssistant\*',
-        '\Microsoft\Windows\WaaSMedic\*',
-        '\Microsoft\Windows\WindowsUpdate\*',
-        '\Microsoft\WindowsUpdate\*'
-
-    foreach ($Task in $Tasks) {
-        Get-ScheduledTask -TaskPath $Task -ErrorAction SilentlyContinue | Enable-ScheduledTask -ErrorAction SilentlyContinue
-    }
-
-    New-Item -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Device Metadata" -Force
-    Set-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Device Metadata" -Name "PreventDeviceMetadataFromNetwork" -Type DWord -Value 1
-
-    New-Item -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\DriverSearching" -Force
-
-    Set-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\DriverSearching" -Name "DontPromptForWindowsUpdate" -Type DWord -Value 1
-    Set-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\DriverSearching" -Name "DontSearchWindowsUpdate" -Type DWord -Value 1
-    Set-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\DriverSearching" -Name "DriverUpdateWizardWuSearchEnabled" -Type DWord -Value 0
-
-    New-Item -Path $windowsUpdatePolicyPath -Force
-    Set-ItemProperty -Path $windowsUpdatePolicyPath -Name "ExcludeWUDriversInQualityUpdate" -Type DWord -Value 1
-
-    Write-Host "将功能更新推迟 365 天，质量更新推迟 4 天..."
-    Write-WinUtilLog -Component "Updates" -Message "Deferring feature updates by 365 days and quality updates by 4 days."
-
-    Set-ItemProperty -Path $windowsUpdatePolicyPath -Name "DeferFeatureUpdates" -Type DWord -Value 1
-    Set-ItemProperty -Path $windowsUpdatePolicyPath -Name "DeferFeatureUpdatesPeriodInDays" -Type DWord -Value 365
-    Set-ItemProperty -Path $windowsUpdatePolicyPath -Name "DeferQualityUpdates" -Type DWord -Value 1
-    Set-ItemProperty -Path $windowsUpdatePolicyPath -Name "DeferQualityUpdatesPeriodInDays" -Type DWord -Value 4
-
-    $legacySettingsPath = "HKLM:\SOFTWARE\Microsoft\WindowsUpdate\UX\Settings"
-    foreach ($legacyValue in @("BranchReadinessLevel", "DeferFeatureUpdatesPeriodInDays", "DeferQualityUpdatesPeriodInDays")) {
-        Remove-ItemProperty -Path $legacySettingsPath -Name $legacyValue -ErrorAction SilentlyContinue
-    }
-
-    Write-Host "防止用户在登录时自动重启..."
-    Write-WinUtilLog -Component "Updates" -Message "Configuring scheduled automatic updates without restarting while users are signed in."
-
-    New-Item -Path $automaticUpdatePolicyPath -Force
-    # NoAutoRebootWithLoggedOnUsers only applies when automatic updates use option 4.
-    Set-ItemProperty -Path $automaticUpdatePolicyPath -Name "AUOptions" -Type DWord -Value 4
-    Set-ItemProperty -Path $automaticUpdatePolicyPath -Name "NoAutoRebootWithLoggedOnUsers" -Type DWord -Value 1
-    Set-ItemProperty -Path $automaticUpdatePolicyPath -Name "AUPowerManagement" -Type DWord -Value 0
-
-    Write-Host "================================="
-    Write-Host "-- Updates Set to Recommended ---"
-    Write-Host "================================="
-    Write-WinUtilLog -Component "Updates" -Message "Recommended Windows Update settings workflow completed."
-}
-
-
-
-function Invoke-WPFtweaksbutton {
-  <#
-
-    .SYNOPSIS
-        Invokes the functions associated with each group of checkboxes
-
-  #>
-
-  if($sync.ProcessRunning) {
-    $msg = "[Invoke-WPFtweaksbutton] Install process is currently running."
-    [System.Windows.MessageBox]::Show($msg, "Winutil", [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Warning)
-    return
-  }
-
-  $Tweaks = $sync.selectedTweaks
-  $dnsProvider = $sync["WPFchangedns"].text
-  if (-not ($dnsProvider)) {
-    $dnsProvider = "Default"
-  }
-  $restorePointTweak = "WPFTweaksRestorePoint"
-  $restorePointSelected = $Tweaks -contains $restorePointTweak
-  $tweaksToRun = @($Tweaks | Where-Object { $_ -ne $restorePointTweak })
-  $totalSteps = [Math]::Max($Tweaks.Count, 1)
-  $completedSteps = 0
-  Write-WinUtilLog -Component "Tweaks" -Message "Tweaks requested: $(@($Tweaks).Count) selected tweak(s), DNS provider: $dnsProvider"
-
-  if ($tweaks.count -eq 0 -and $dnsProvider -eq "Default") {
-    $msg = "Please check the tweaks you wish to perform."
-    [System.Windows.MessageBox]::Show($msg, "Winutil", [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Warning)
-    return
-  }
-
-  if ($restorePointSelected) {
-    $sync.ProcessRunning = $true
-
-    if ($Tweaks.Count -eq 1) {
-        Invoke-WPFUIThread -ScriptBlock { Set-WinUtilTaskbaritem -state "Indeterminate" -value 0.01 -overlay "logo" }
-    } else {
-        Invoke-WPFUIThread -ScriptBlock { Set-WinUtilTaskbaritem -state "Normal" -value 0.01 -overlay "logo" }
-    }
-
-    Set-WinUtilTweaksProgressIndicator -Visible $true -Label "Creating restore point" -Percent 0
-    Write-WinUtilLog -Component "Tweaks" -Message "Creating restore point before applying selected tweaks."
-    Invoke-WinUtilTweaks $restorePointTweak
-    $completedSteps = 1
-
-    if ($tweaksToRun.Count -eq 0 -and $dnsProvider -eq "Default") {
-      Set-WinUtilTweaksProgressIndicator -Visible $true -Label "Tweaks finished" -Percent 100
-      $sync.ProcessRunning = $false
-      Invoke-WPFUIThread -ScriptBlock { Set-WinUtilTaskbaritem -state "None" -overlay "checkmark" }
-      Write-Host "================================="
-      Write-Host "--     优化已完成    ---"
-      Write-Host "================================="
-      Write-WinUtilLog -Component "Tweaks" -Message "Tweaks workflow completed after restore point."
-      return
-    }
-  }
-
-  # The leading "," in the ParameterList is necessary because we only provide one argument and powershell cannot be convinced that we want a nested loop with only one argument otherwise
-  Invoke-WPFRunspace -ParameterList @(("tweaks", $tweaksToRun), ("dnsProvider", $dnsProvider), ("completedSteps", $completedSteps), ("totalSteps", $totalSteps)) -ScriptBlock {
-    param($tweaks, $dnsProvider, $completedSteps, $totalSteps)
-
-    $sync.ProcessRunning = $true
-
-    if ($completedSteps -eq 0) {
-      if ($Tweaks.count -eq 1) {
-        Invoke-WPFUIThread -ScriptBlock { Set-WinUtilTaskbaritem -state "Indeterminate" -value 0.01 -overlay "logo" }
-      } else {
-        Invoke-WPFUIThread -ScriptBlock{ Set-WinUtilTaskbaritem -state "Normal" -value 0.01 -overlay "logo" }
-      }
-    }
-
-    if ($dnsProvider -ne "Default") {
-      Set-WinUtilDNS -DNSProvider $dnsProvider
-    }
-
-    for ($i = 0; $i -lt $tweaks.Count; $i++) {
-      Set-WinUtilTweaksProgressIndicator -Visible $true -Label "Applying $($tweaks[$i]) ($($completedSteps + 1)/$totalSteps)" -Percent ($completedSteps / $totalSteps * 100)
-      Invoke-WinUtilTweaks $tweaks[$i]
-      $completedSteps++
-      $progress = $completedSteps / $totalSteps
-      Invoke-WPFUIThread -ScriptBlock { Set-WinUtilTaskbaritem -value $progress }
-    }
-    Set-WinUtilTweaksProgressIndicator -Visible $true -Label "Tweaks finished" -Percent 100
-    $sync.ProcessRunning = $false
-    Invoke-WPFUIThread -ScriptBlock { Set-WinUtilTaskbaritem -state "None" -overlay "checkmark" }
-    Write-Host "================================="
-    Write-Host "--     优化已完成    ---"
-    Write-Host "================================="
-    Write-WinUtilLog -Component "Tweaks" -Message "Tweaks workflow completed."
-  }
-}
-
-
-
-function Invoke-WPFundoall {
-    <#
-
-    .SYNOPSIS
-        Undoes every selected tweak
-
-    #>
-
-    if($sync.ProcessRunning) {
-        $msg = "[Invoke-WPFundoall] Install process is currently running."
-        [System.Windows.MessageBox]::Show($msg, "Winutil", [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Warning)
-        return
-    }
-
-    $tweaks = $sync.selectedTweaks
-
-    if ($tweaks.count -eq 0) {
-        $msg = "Please check the tweaks you wish to undo."
-        [System.Windows.MessageBox]::Show($msg, "Winutil", [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Warning)
-        return
-    }
-
-    Invoke-WPFRunspace -ArgumentList $tweaks -ScriptBlock {
-        param($tweaks)
-
-        $sync.ProcessRunning = $true
-        Write-WinUtilLog -Component "Tweaks" -Message "Undo tweaks requested: $(@($tweaks).Count) selected tweak(s)."
-        if ($tweaks.count -eq 1) {
-            Invoke-WPFUIThread -ScriptBlock { Set-WinUtilTaskbaritem -state "Indeterminate" -value 0.01 -overlay "logo" }
-        } else {
-            Invoke-WPFUIThread -ScriptBlock { Set-WinUtilTaskbaritem -state "Normal" -value 0.01 -overlay "logo" }
-        }
-
-
-        for ($i = 0; $i -lt $tweaks.Count; $i++) {
-            Set-WinUtilTweaksProgressIndicator -Visible $true -Label "Undoing $($tweaks[$i]) ($($i + 1)/$($tweaks.Count))" -Percent ($i / $tweaks.Count * 100)
-            Invoke-WinUtiltweaks $tweaks[$i] -undo $true
-            Invoke-WPFUIThread -ScriptBlock { Set-WinUtilTaskbaritem -value ($i/$tweaks.Count) }
-        }
-
-        Set-WinUtilTweaksProgressIndicator -Visible $true -Label "Undo Tweaks Finished" -Percent 100
-        $sync.ProcessRunning = $false
-        Invoke-WPFUIThread -ScriptBlock { Set-WinUtilTaskbaritem -state "None" -overlay "checkmark" }
-        Write-Host "=================================="
-        Write-Host "---  撤销优化已完成  ---"
-        Write-Host "=================================="
-        Write-WinUtilLog -Component "Tweaks" -Message "Undo tweaks workflow completed."
-
-    }
-}
-
-
-
-function Invoke-WinUtilAutoRun {
-    <#
-
-    .SYNOPSIS
-        Runs Install, Tweaks, and Features with optional UI invocation.
-    #>
-
-    function BusyWait {
-        Start-Sleep -Milliseconds 100
-        while ($sync.ProcessRunning) {
-            Start-Sleep -Milliseconds 100
-        }
-    }
-
-    if ($sync.selectedTweaks.Count -gt 0) {
-        Write-Host "正在应用优化..."
-        Invoke-WPFtweaksbutton
-        BusyWait
-    }
-
-    if ($sync.selectedFeatures.Count -gt 0) {
-        Write-Host "正在应用功能..."
-        Invoke-WPFFeatureInstall
-        BusyWait
-    }
-
-    if ($sync.selectedApps.Count -gt 0) {
-        Write-Host "正在安装应用..."
-        Invoke-WPFInstall
-        BusyWait
-    }
-
-    if ($sync.selectedAppx.Count -gt 0) {
-        Write-Host "正在移除 AppX 包..."
-        Invoke-WPFAppxRemoval
-        BusyWait
-    }
-
-    Write-Host "完成。"
-}
-
-
-
 $sync.configs = @{}
 
+$sync.configs.applications = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String('ewogICJXUEZJbnN0YWxsMXBhc3N3b3JkIjogewogICAgImNhdGVnb3J5IjogIuW3peWFt+exuyIsCiAgICAiY2hvY28iOiAiMXBhc3N3b3JkIiwKICAgICJjb250ZW50IjogIjFQYXNzd29yZCDlr4bnoIHnrqHnkIblmagiLAogICAgImRlc2NyaXB0aW9uIjogIjFQYXNzd29yZCDmmK/kuIDmrL7lr4bnoIHnrqHnkIblmajvvIzlj6/ku6XlronlhajlnLDlrZjlgqjlkoznrqHnkIbmgqjnmoTlr4bnoIHjgIIiLAogICAgImxpbmsiOiAiaHR0cHM6Ly8xcGFzc3dvcmQuY29tLyIsCiAgICAid2luZ2V0IjogIkFnaWxlQml0cy4xUGFzc3dvcmQiLAogICAgImZvc3MiOiBmYWxzZQogIH0sCiAgIldQRkluc3RhbGw3emlwIjogewogICAgImNhdGVnb3J5IjogIuW3peWFt+exuyIsCiAgICAiY2hvY28iOiAiN3ppcCIsCiAgICAiY29udGVudCI6ICI3LVppcCDljovnvKnlt6XlhbciLAogICAgImRlc2NyaXB0aW9uIjogIjctWmlwIOaYr+S4gOasvuWFjei0ueW8gOa6kOeahOWOi+e8qeW3peWFt++8jOaUr+aMgeWkmuenjeWOi+e8qeagvOW8j++8jOaPkOS+m+mrmOWOi+e8qeavlO+8jOaYr+aWh+S7tuWOi+e8qeeahOeDremXqOmAieaLqeOAgiIsCiAgICAibGluayI6ICJodHRwczovL3d3dy43LXppcC5vcmcvIiwKICAgICJ3aW5nZXQiOiAiN3ppcC43emlwIiwKICAgICJmb3NzIjogdHJ1ZQogIH0sCiAgIldQRkluc3RhbGxhZG9iZSI6IHsKICAgICJjYXRlZ29yeSI6ICLlpJrlqpLkvZPlt6XlhbciLAogICAgImNob2NvIjogImFkb2JlcmVhZGVyIiwKICAgICJjb250ZW50IjogIkFkb2JlIEFjcm9iYXQgUmVhZGVyIFBERumYheivu+WZqCIsCiAgICAiZGVzY3JpcHRpb24iOiAiQWRvYmUgQWNyb2JhdCBSZWFkZXIg5piv5LiA5qy+5YWN6LS555qEIFBERiDpmIXor7vlmajvvIzmj5Dkvpvmn6XnnIvjgIHmiZPljbDlkozms6jph4ogUERGIOaWh+aho+eahOWfuuacrOWKn+iDveOAgiIsCiAgICAibGluayI6ICJodHRwczovL3d3dy5hZG9iZS5jb20vYWNyb2JhdC9wZGYtcmVhZGVyLmh0bWwiLAogICAgIndpbmdldCI6ICJBZG9iZS5BY3JvYmF0LlJlYWRlci42NC1iaXQiLAogICAgImZvc3MiOiBmYWxzZQogIH0sCiAgIldQRkluc3RhbGxhZHZhbmNlZGlwIjogewogICAgImNhdGVnb3J5IjogIuS4k+S4muW3peWFtyIsCiAgICAiY2hvY28iOiAiYWR2YW5jZWQtaXAtc2Nhbm5lciIsCiAgICAiY29udGVudCI6ICJBZHZhbmNlZCBJUCBTY2FubmVyIOe9kee7nOaJq+aPjyIsCiAgICAiZGVzY3JpcHRpb24iOiAiQWR2YW5jZWQgSVAgU2Nhbm5lciDmmK/kuIDmrL7lv6vpgJ/mmJPnlKjnmoTnvZHnu5zmiavmj4/lt6XlhbfvvIznlKjkuo7liIbmnpDlsYDln5/nvZHlubbmj5Dkvpvov57mjqXorr7lpIfnmoTkv6Hmga/jgIIiLAogICAgImxpbmsiOiAiaHR0cHM6Ly93d3cuYWR2YW5jZWQtaXAtc2Nhbm5lci5jb20vIiwKICAgICJ3aW5nZXQiOiAiRmFtYXRlY2guQWR2YW5jZWRJUFNjYW5uZXIiLAogICAgImZvc3MiOiBmYWxzZQogIH0sCiAgIldQRkluc3RhbGxhaW1wIjogewogICAgImNhdGVnb3J5IjogIuWkmuWqkuS9k+W3peWFtyIsCiAgICAiY2hvY28iOiAiYWltcCIsCiAgICAiY29udGVudCI6ICJBSU1QIOmfs+S5kOaSreaUvuWZqCIsCiAgICAiZGVzY3JpcHRpb24iOiAiQUlNUCDmmK/kuIDmrL7lip/og73kuLDlr4znmoTpn7PkuZDmkq3mlL7lmajvvIzmlK/mjIHlpJrnp43pn7PpopHmoLzlvI/jgIHmkq3mlL7liJfooajlkozlj6/lrprliLbnmoTnlKjmiLfnlYzpnaLjgIIiLAogICAgImxpbmsiOiAiaHR0cHM6Ly93d3cuYWltcC5ydS8iLAogICAgIndpbmdldCI6ICJBSU1QLkFJTVAiLAogICAgImZvc3MiOiBmYWxzZQogIH0sCiAgIldQRkluc3RhbGxhbmdyeWlwc2Nhbm5lciI6IHsKICAgICJjYXRlZ29yeSI6ICLkuJPkuJrlt6XlhbciLAogICAgImNob2NvIjogImFuZ3J5aXAiLAogICAgImNvbnRlbnQiOiAiQW5ncnkgSVAgU2Nhbm5lciBJUOaJq+aPj+WZqCIsCiAgICAiZGVzY3JpcHRpb24iOiAiQW5ncnkgSVAgU2Nhbm5lciDmmK/kuIDmrL7lvIDmupDot6jlubPlj7DnmoTnvZHnu5zmiavmj4/lmajvvIznlKjkuo7miavmj48gSVAg5Zyw5Z2A5ZKM56uv5Y+j77yM5o+Q5L6b572R57uc6L+e5o6l5L+h5oGv44CCIiwKICAgICJsaW5rIjogImh0dHBzOi8vYW5ncnlpcC5vcmcvIiwKICAgICJ3aW5nZXQiOiAiYW5ncnl6aWJlci5BbmdyeUlQU2Nhbm5lciIsCiAgICAiZm9zcyI6IHRydWUKICB9LAogICJXUEZJbnN0YWxsYW55ZGVzayI6IHsKICAgICJjYXRlZ29yeSI6ICLlt6XlhbfnsbsiLAogICAgImNob2NvIjogImFueWRlc2siLAogICAgImNvbnRlbnQiOiAiQW55RGVzayDov5znqIvmoYzpnaIiLAogICAgImRlc2NyaXB0aW9uIjogIkFueURlc2sg5piv5LiA5qy+6L+c56iL5qGM6Z2i6L2v5Lu277yM5L2/55So5oi36IO95aSf6L+c56iL6K6/6Zeu5ZKM5o6n5Yi26K6h566X5py677yM5Lul5b+r6YCf6L+e5o6l5ZKM5L2O5bu26L+f6JGX56ew44CCIiwKICAgICJsaW5rIjogImh0dHBzOi8vYW55ZGVzay5jb20vIiwKICAgICJ3aW5nZXQiOiAiQW55RGVzay5BbnlEZXNrIiwKICAgICJmb3NzIjogZmFsc2UKICB9LAogICJXUEZJbnN0YWxsYXVkYWNpdHkiOiB7CiAgICAiY2F0ZWdvcnkiOiAi5aSa5aqS5L2T5bel5YW3IiwKICAgICJjaG9jbyI6ICJhdWRhY2l0eSIsCiAgICAiY29udGVudCI6ICJBdWRhY2l0eSDpn7PpopHnvJbovpEiLAogICAgImRlc2NyaXB0aW9uIjogIkF1ZGFjaXR5IOaYr+S4gOasvuWFjei0ueW8gOa6kOeahOmfs+mikee8lui+kei9r+S7tu+8jOS7peWFtuW8uuWkp+eahOW9lemfs+WSjOe8lui+keWKn+iDveiAjOmXu+WQjeOAgiIsCiAgICAibGluayI6ICJodHRwczovL3d3dy5hdWRhY2l0eXRlYW0ub3JnLyIsCiAgICAid2luZ2V0IjogIkF1ZGFjaXR5LkF1ZGFjaXR5IiwKICAgICJmb3NzIjogdHJ1ZQogIH0sCiAgIldQRkluc3RhbGxhdXRvcnVucyI6IHsKICAgICJjYXRlZ29yeSI6ICLlvq7ova/lt6XlhbciLAogICAgImNob2NvIjogImF1dG9ydW5zIiwKICAgICJjb250ZW50IjogIkF1dG9ydW5zIOWQr+WKqOmhueeuoeeQhiIsCiAgICAiZGVzY3JpcHRpb24iOiAi5q2k5bel5YW35pi+56S65ZOq5Lqb56iL5bqP6YWN572u5Li65Zyo57O757uf5ZCv5Yqo5oiW55m75b2V5pe26L+Q6KGM44CCIiwKICAgICJsaW5rIjogImh0dHBzOi8vbGVhcm4ubWljcm9zb2Z0LmNvbS9lbi11cy9zeXNpbnRlcm5hbHMvZG93bmxvYWRzL2F1dG9ydW5zIiwKICAgICJ3aW5nZXQiOiAiTWljcm9zb2Z0LlN5c2ludGVybmFscy5BdXRvcnVucyIsCiAgICAiZm9zcyI6IGZhbHNlCiAgfSwKICAiV1BGSW5zdGFsbHJkY21hbiI6IHsKICAgICJjYXRlZ29yeSI6ICLlvq7ova/lt6XlhbciLAogICAgImNob2NvIjogInJkY21hbiIsCiAgICAiY29udGVudCI6ICJSRENNYW4g6L+c56iL5qGM6Z2i566h55CGIiwKICAgICJkZXNjcmlwdGlvbiI6ICJSRENNYW4g566h55CG5aSa5Liq6L+c56iL5qGM6Z2i6L+e5o6l77yM6YCC55So5LqO6ZyA6KaB5a6a5pyf6K6/6Zeu5q+P5Y+w5py65Zmo55qE5pyN5Yqh5Zmo5a6e6aqM5a6k44CCIiwKICAgICJsaW5rIjogImh0dHBzOi8vbGVhcm4ubWljcm9zb2Z0LmNvbS9lbi11cy9zeXNpbnRlcm5hbHMvZG93bmxvYWRzL3JkY21hbiIsCiAgICAid2luZ2V0IjogIk1pY3Jvc29mdC5TeXNpbnRlcm5hbHMuUkRDTWFuIiwKICAgICJmb3NzIjogZmFsc2UKICB9LAogICJXUEZJbnN0YWxsYXV0b2hvdGtleSI6IHsKICAgICJjYXRlZ29yeSI6ICLlt6XlhbfnsbsiLAogICAgImNob2NvIjogImF1dG9ob3RrZXkiLAogICAgImNvbnRlbnQiOiAiQXV0b0hvdGtleSDoh6rliqjohJrmnKwiLAogICAgImRlc2NyaXB0aW9uIjogIkF1dG9Ib3RrZXkg5piv5LiA5qy+IFdpbmRvd3Mg6ISa5pys6K+t6KiA77yM5YWB6K6455So5oi35Yib5bu66Ieq5a6a5LmJ6Ieq5Yqo5YyW6ISa5pys5ZKM5a6P44CCIiwKICAgICJsaW5rIjogImh0dHBzOi8vd3d3LmF1dG9ob3RrZXkuY29tLyIsCiAgICAid2luZ2V0IjogIkF1dG9Ib3RrZXkuQXV0b0hvdGtleSIsCiAgICAiZm9zcyI6IHRydWUKICB9LAogICJXUEZJbnN0YWxsYml0d2FyZGVuIjogewogICAgImNhdGVnb3J5IjogIuW3peWFt+exuyIsCiAgICAiY2hvY28iOiAiYml0d2FyZGVuIiwKICAgICJjb250ZW50IjogIkJpdHdhcmRlbiDlr4bnoIHnrqHnkIYiLAogICAgImRlc2NyaXB0aW9uIjogIkJpdHdhcmRlbiDmmK/kuIDmrL7lvIDmupDlr4bnoIHnrqHnkIbop6PlhrPmlrnmoYjvvIzlnKjlpJrorr7lpIfpl7TlronlhajlrZjlgqjlkoznrqHnkIblr4bnoIHjgIIiLAogICAgImxpbmsiOiAiaHR0cHM6Ly9iaXR3YXJkZW4uY29tLyIsCiAgICAid2luZ2V0IjogIkJpdHdhcmRlbi5CaXR3YXJkZW4iLAogICAgImZvc3MiOiB0cnVlCiAgfSwKICAiV1BGSW5zdGFsbGJsZW5kZXIiOiB7CiAgICAiY2F0ZWdvcnkiOiAi5aSa5aqS5L2T5bel5YW3IiwKICAgICJjaG9jbyI6ICJibGVuZGVyIiwKICAgICJjb250ZW50IjogIkJsZW5kZXIgM0Qg5Zu+5b2iIiwKICAgICJkZXNjcmlwdGlvbiI6ICJCbGVuZGVyIOaYr+S4gOasvuWKn+iDveW8uuWkp+eahOW8gOa6kCAzRCDliJvkvZzlpZfku7bvvIzmj5Dkvpvlu7rmqKHjgIHpm5XliLvjgIHliqjnlLvlkozmuLLmn5Plt6XlhbfjgIIiLAogICAgImxpbmsiOiAiaHR0cHM6Ly93d3cuYmxlbmRlci5vcmcvIiwKICAgICJ3aW5nZXQiOiAiQmxlbmRlckZvdW5kYXRpb24uQmxlbmRlciIsCiAgICAiZm9zcyI6IHRydWUKICB9LAogICJXUEZJbnN0YWxsYnJhdmUiOiB7CiAgICAiY2F0ZWdvcnkiOiAi5rWP6KeI5ZmoIiwKICAgICJjaG9jbyI6ICJicmF2ZSIsCiAgICAiY29udGVudCI6ICJCcmF2ZSDmtY/op4jlmagiLAogICAgImRlc2NyaXB0aW9uIjogIkJyYXZlIOaYr+S4gOasvuazqOmHjemakOengeeahOe9kemhtea1j+iniOWZqO+8jOWPr+aLpuaIquW5v+WRiuWSjOi3n+i4quWZqO+8jOaPkOS+m+abtOW/q+abtOWuieWFqOeahOa1j+iniOS9k+mqjOOAgiIsCiAgICAibGluayI6ICJodHRwczovL3d3dy5icmF2ZS5jb20iLAogICAgIndpbmdldCI6ICJCcmF2ZS5CcmF2ZSIsCiAgICAiZm9zcyI6IHRydWUKICB9LAogICJXUEZJbnN0YWxsYnVsa2NyYXB1bmluc3RhbGxlciI6IHsKICAgICJjYXRlZ29yeSI6ICLlt6XlhbfnsbsiLAogICAgImNob2NvIjogImJ1bGstY3JhcC11bmluc3RhbGxlciIsCiAgICAiY29udGVudCI6ICJCdWxrIENyYXAgVW5pbnN0YWxsZXIg5om56YeP5Y246L29IiwKICAgICJkZXNjcmlwdGlvbiI6ICJCdWxrIENyYXAgVW5pbnN0YWxsZXIg5piv5LiA5qy+5YWN6LS55byA5rqQIFdpbmRvd3Mg5Y246L295bel5YW377yM5biu5Yqp55So5oi35om56YeP5Y246L2956iL5bqP44CCIiwKICAgICJsaW5rIjogImh0dHBzOi8vd3d3LmJjdW5pbnN0YWxsZXIuY29tLyIsCiAgICAid2luZ2V0IjogIktsb2NtYW4uQnVsa0NyYXBVbmluc3RhbGxlciIsCiAgICAiZm9zcyI6IHRydWUKICB9LAogICJXUEZJbnN0YWxsYmx1cmF1dG9jbGlja2VyIjogewogICAgImNhdGVnb3J5IjogIuW3peWFt+exuyIsCiAgICAiY2hvY28iOiAibmEiLAogICAgImNvbnRlbnQiOiAiQmx1ckF1dG9DbGlja2VyIOiHquWKqOeCueWHu+WZqCIsCiAgICAiZGVzY3JpcHRpb24iOiAi5LiA5qy+5YW35pyJ6auY57qn5Yqf6IO95LiU5oCn6IO95LyY5LqO5ZCM57G75Lqn5ZOB55qE6Ieq5Yqo54K55Ye75Zmo44CCIiwKICAgICJsaW5rIjogImh0dHBzOi8vYmx1cjAwOS52ZXJjZWwuYXBwL3Byb2plY3RzL2JsdXItYXV0b2NsaWNrZXIvIiwKICAgICJ3aW5nZXQiOiAiQmx1cjAwOS5CbHVyQXV0b0NsaWNrZXIiLAogICAgImZvc3MiOiB0cnVlCiAgfSwKICAiV1BGSW5zdGFsbGNhbGlicmUiOiB7CiAgICAiY2F0ZWdvcnkiOiAi5aSa5aqS5L2T5bel5YW3IiwKICAgICJjaG9jbyI6ICJjYWxpYnJlIiwKICAgICJjb250ZW50IjogIkNhbGlicmUg55S15a2Q5Lmm566h55CGIiwKICAgICJkZXNjcmlwdGlvbiI6ICJDYWxpYnJlIOaYr+S4gOasvuWKn+iDveW8uuWkp+S4lOaYk+S6juS9v+eUqOeahOeUteWtkOS5pueuoeeQhuWZqOOAgemYheivu+WZqOWSjOi9rOaNouWZqOOAgiIsCiAgICAibGluayI6ICJodHRwczovL2NhbGlicmUtZWJvb2suY29tLyIsCiAgICAid2luZ2V0IjogImNhbGlicmUuY2FsaWJyZSIsCiAgICAiZm9zcyI6IHRydWUKICB9LAogICJXUEZJbnN0YWxsY2VtdSI6IHsKICAgICJjYXRlZ29yeSI6ICLmuLjmiI8iLAogICAgImNob2NvIjogImNlbXUiLAogICAgImNvbnRlbnQiOiAiQ2VtdSBXaWkgVSDmqKHmi5/lmagiLAogICAgImRlc2NyaXB0aW9uIjogIkNlbXUg5piv5LiA5qy+6auY5bqm5a6e6aqM5oCn55qEIFdpaSBVIOaooeaLn+WZqOi9r+S7tuOAgiIsCiAgICAibGluayI6ICJodHRwczovL2NlbXUuaW5mby8iLAogICAgIndpbmdldCI6ICJDZW11LkNlbXUiLAogICAgImZvc3MiOiB0cnVlCiAgfSwKICAiV1BGSW5zdGFsbGNoYXRncHQiOiB7CiAgICAiY2F0ZWdvcnkiOiAi5byA5Y+R5bel5YW3IiwKICAgICJjaG9jbyI6ICJuYSIsCiAgICAiY29udGVudCI6ICJDaGF0R1BUIOahjOmdoueJiCIsCiAgICAiZGVzY3JpcHRpb24iOiAiQ2hhdEdQVCDlrpjmlrkgV2luZG93cyDmoYzpnaLlupTnlKjvvIzpgJrov4cgTWljcm9zb2Z0IFN0b3JlIOWIhuWPkeOAgiIsCiAgICAibGluayI6ICJodHRwczovL2FwcHMubWljcm9zb2Z0LmNvbS9kZXRhaWwvOW50MXIxYzJoaDdqIiwKICAgICJ3aW5nZXQiOiAibXNzdG9yZTo5TlQxUjFDMkhIN0oiLAogICAgImZvc3MiOiBmYWxzZQogIH0sCiAgIldQRkluc3RhbGxjaGF0dGVyaW5vIjogewogICAgImNhdGVnb3J5IjogIumAmuiur+W3peWFtyIsCiAgICAiY2hvY28iOiAiY2hhdHRlcmlubyIsCiAgICAiY29udGVudCI6ICJDaGF0dGVyaW5vIFR3aXRjaCDogYrlpKkiLAogICAgImRlc2NyaXB0aW9uIjogIkNoYXR0ZXJpbm8g5piv5LiA5qy+IFR3aXRjaCDogYrlpKnlrqLmiLfnq6/vvIzmj5DkvpvnroDmtIHlj6/lrprliLbnmoTnlYzpnaLjgIIiLAogICAgImxpbmsiOiAiaHR0cHM6Ly93d3cuY2hhdHRlcmluby5jb20vIiwKICAgICJ3aW5nZXQiOiAiQ2hhdHRlcmlub1RlYW0uQ2hhdHRlcmlubyIsCiAgICAiZm9zcyI6IHRydWUKICB9LAogICJXUEZJbnN0YWxsY2hyb21lIjogewogICAgImNhdGVnb3J5IjogIua1j+iniOWZqCIsCiAgICAiY2hvY28iOiAiZ29vZ2xlY2hyb21lIiwKICAgICJjb250ZW50IjogIkNocm9tZSDmtY/op4jlmagiLAogICAgImRlc2NyaXB0aW9uIjogIkdvb2dsZSBDaHJvbWUg5piv5LiA5qy+5bm/5rOb5L2/55So55qE572R6aG15rWP6KeI5Zmo77yM5Lul6YCf5bqm44CB566A5rSB5ZKM5LiOIEdvb2dsZSDmnI3liqHpm4bmiJDogIzpl7vlkI3jgIIiLAogICAgImxpbmsiOiAiaHR0cHM6Ly93d3cuZ29vZ2xlLmNvbS9jaHJvbWUvIiwKICAgICJ3aW5nZXQiOiAiR29vZ2xlLkNocm9tZSIsCiAgICAiZm9zcyI6IGZhbHNlCiAgfSwKICAiV1BGSW5zdGFsbGNocm9taXVtIjogewogICAgImNhdGVnb3J5IjogIua1j+iniOWZqCIsCiAgICAiY2hvY28iOiAiY2hyb21pdW0iLAogICAgImNvbnRlbnQiOiAiQ2hyb21pdW0g5rWP6KeI5ZmoIiwKICAgICJkZXNjcmlwdGlvbiI6ICJDaHJvbWl1bSDmmK/kvZzkuLrljIXmi6wgQ2hyb21lIOWcqOWGheeahOWkmuenjea1j+iniOWZqOWfuuehgOeahOW8gOa6kOmhueebruOAgiIsCiAgICAibGluayI6ICJodHRwczovL2dpdGh1Yi5jb20vSGliYmlraS9jaHJvbWl1bS13aW42NCIsCiAgICAid2luZ2V0IjogIkhpYmJpa2kuQ2hyb21pdW0iLAogICAgImZvc3MiOiB0cnVlCiAgfSwKICAiV1BGSW5zdGFsbGNpbmViZW5jaHIyMyI6IHsKICAgICJjYXRlZ29yeSI6ICLkuJPkuJrlt6XlhbciLAogICAgImNob2NvIjogIm5hIiwKICAgICJjb250ZW50IjogIkNpbmViZW5jaCBSMjMg5oCn6IO95rWL6K+VIiwKICAgICJkZXNjcmlwdGlvbiI6ICJDaW5lYmVuY2ggUjIzIOaYr+S4gOasvui3qOezu+e7n+avlOi+gyBDUFUg5riy5p+T5oCn6IO955qE5Z+65YeG5rWL6K+V5bel5YW344CCIiwKICAgICJsaW5rIjogImh0dHBzOi8vd3d3Lm1heG9uLm5ldC9lbi9jaW5lYmVuY2giLAogICAgIndpbmdldCI6ICJNYXhvbi5DaW5lYmVuY2hSMjMiLAogICAgImZvc3MiOiBmYWxzZQogIH0sCiAgIldQRkluc3RhbGxjbGF1ZGUiOiB7CiAgICAiY2F0ZWdvcnkiOiAi5byA5Y+R5bel5YW3IiwKICAgICJjaG9jbyI6ICJjbGF1ZGUiLAogICAgImNvbnRlbnQiOiAiQ2xhdWRlIOahjOmdoueJiCIsCiAgICAiZGVzY3JpcHRpb24iOiAiQW50aHJvcGljIOeahCBDbGF1ZGUg5qGM6Z2i5bqU55So56iL5bqP77yM55So5LqO5LiT5rOo55qEIEFJIOi+heWKqeW3peS9nOWSjOiBiuWkqeOAgiIsCiAgICAibGluayI6ICJodHRwczovL2NsYXVkZS5haS9kb3dubG9hZCIsCiAgICAid2luZ2V0IjogIkFudGhyb3BpYy5DbGF1ZGUiLAogICAgImZvc3MiOiBmYWxzZQogIH0sCiAgIldQRkluc3RhbGxjbGF1ZGUtY29kZSI6IHsKICAgICJjYXRlZ29yeSI6ICLlvIDlj5Hlt6XlhbciLAogICAgImNob2NvIjogImNsYXVkZS1jb2RlIiwKICAgICJjb250ZW50IjogIkNsYXVkZSBDb2RlIOe8lueoi+WKqeaJiyIsCiAgICAiZGVzY3JpcHRpb24iOiAiQW50aHJvcGljIOeahOS7o+eQhue8lueoi+W3peWFt++8jOmAgueUqOS6jue7iOerr+WSjCBJREUg5byA5Y+R5bel5L2c5rWB44CCIiwKICAgICJsaW5rIjogImh0dHBzOi8vY29kZS5jbGF1ZGUuY29tLyIsCiAgICAid2luZ2V0IjogIkFudGhyb3BpYy5DbGF1ZGVDb2RlIiwKICAgICJmb3NzIjogZmFsc2UKICB9LAogICJXUEZJbnN0YWxsY21ha2UiOiB7CiAgICAiY2F0ZWdvcnkiOiAi5byA5Y+R5bel5YW3IiwKICAgICJjaG9jbyI6ICJjbWFrZSIsCiAgICAiY29udGVudCI6ICJDTWFrZSDmnoTlu7rlt6XlhbciLAogICAgImRlc2NyaXB0aW9uIjogIkNNYWtlIOaYr+S4gOasvuW8gOa6kOi3qOW5s+WPsOeahOW3peWFt+mbhu+8jOeUqOS6juaehOW7uuOAgea1i+ivleWSjOaJk+WMhei9r+S7tuOAgiIsCiAgICAibGluayI6ICJodHRwczovL2NtYWtlLm9yZy8iLAogICAgIndpbmdldCI6ICJLaXR3YXJlLkNNYWtlIiwKICAgICJmb3NzIjogdHJ1ZQogIH0sCiAgIldQRkluc3RhbGxjb2RleCI6IHsKICAgICJjYXRlZ29yeSI6ICLlvIDlj5Hlt6XlhbciLAogICAgImNob2NvIjogImNvZGV4IiwKICAgICJjb250ZW50IjogIkNvZGV4IENMSSDnvJbnqIvku6PnkIYiLAogICAgImRlc2NyaXB0aW9uIjogIkNvZGV4IENMSSDmmK8gT3BlbkFJIOeahOe8lueoi+S7o+eQhu+8jOWcqOaCqOeahOe7iOerr+S4reacrOWcsOi/kOihjOOAgiIsCiAgICAibGluayI6ICJodHRwczovL2RldmVsb3BlcnMub3BlbmFpLmNvbS9jb2RleC9jbGkiLAogICAgIndpbmdldCI6ICJPcGVuQUkuQ29kZXgiLAogICAgImZvc3MiOiB0cnVlCiAgfSwKICAiV1BGSW5zdGFsbGNwdXoiOiB7CiAgICAiY2F0ZWdvcnkiOiAi5LiT5Lia5bel5YW3IiwKICAgICJjaG9jbyI6ICJjcHUteiIsCiAgICAiY29udGVudCI6ICJDUFUtWiDnoazku7bmo4DmtYsiLAogICAgImRlc2NyaXB0aW9uIjogIkNQVS1aIOaYr+S4gOasviBXaW5kb3dzIOezu+e7n+ebkeaOp+WSjOiviuaWreW3peWFt++8jOaPkOS+m+ehrOS7tue7hOS7tueahOivpue7huS/oeaBr+OAgiIsCiAgICAibGluayI6ICJodHRwczovL3d3dy5jcHVpZC5jb20vc29mdHdhcmVzL2NwdS16Lmh0bWwiLAogICAgIndpbmdldCI6ICJDUFVJRC5DUFUtWiIsCiAgICAiZm9zcyI6IGZhbHNlCiAgfSwKICAiV1BGSW5zdGFsbGNyeXN0YWxkaXNraW5mbyI6IHsKICAgICJjYXRlZ29yeSI6ICLlt6XlhbfnsbsiLAogICAgImNob2NvIjogImNyeXN0YWxkaXNraW5mbyIsCiAgICAiY29udGVudCI6ICJDcnlzdGFsRGlza0luZm8g56OB55uY5qOA5rWLIiwKICAgICJkZXNjcmlwdGlvbiI6ICJDcnlzdGFsRGlza0luZm8g5piv5LiA5qy+56OB55uY5YGl5bq355uR5o6n5bel5YW377yM5o+Q5L6b56Gs55uY54q25oCB5ZKM5oCn6IO95L+h5oGv44CCIiwKICAgICJsaW5rIjogImh0dHBzOi8vY3J5c3RhbG1hcmsuaW5mby9lbi9zb2Z0d2FyZS9jcnlzdGFsZGlza2luZm8vIiwKICAgICJ3aW5nZXQiOiAiQ3J5c3RhbERld1dvcmxkLkNyeXN0YWxEaXNrSW5mbyIsCiAgICAiZm9zcyI6IHRydWUKICB9LAogICJXUEZJbnN0YWxsY3J5c3RhbGRpc2ttYXJrIjogewogICAgImNhdGVnb3J5IjogIuW3peWFt+exuyIsCiAgICAiY2hvY28iOiAiY3J5c3RhbGRpc2ttYXJrIiwKICAgICJjb250ZW50IjogIkNyeXN0YWxEaXNrTWFyayDno4Hnm5jmtYvor5UiLAogICAgImRlc2NyaXB0aW9uIjogIkNyeXN0YWxEaXNrTWFyayDmmK/kuIDmrL7no4Hnm5jln7rlh4bmtYvor5Xlt6XlhbfvvIzmtYvph4/lrZjlgqjorr7lpIfnmoTor7vlhpnpgJ/luqbjgIIiLAogICAgImxpbmsiOiAiaHR0cHM6Ly9jcnlzdGFsbWFyay5pbmZvL2VuL3NvZnR3YXJlL2NyeXN0YWxkaXNrbWFyay8iLAogICAgIndpbmdldCI6ICJDcnlzdGFsRGV3V29ybGQuQ3J5c3RhbERpc2tNYXJrIiwKICAgICJmb3NzIjogdHJ1ZQogIH0sCiAgIldQRkluc3RhbGxjdXJzb3IiOiB7CiAgICAiY2F0ZWdvcnkiOiAi5byA5Y+R5bel5YW3IiwKICAgICJjaG9jbyI6ICJjdXJzb3JpZGUiLAogICAgImNvbnRlbnQiOiAiQ3Vyc29yIEFJ57yW6L6R5ZmoIiwKICAgICJkZXNjcmlwdGlvbiI6ICJBSSDpqbHliqjnmoTku6PnoIHnvJbovpHlmago5Z+65LqOIFZTIENvZGUp77yM5YW35pyJ5Luj55CG57yW56iL5Yqf6IO95ZKM6ZuG5oiQIEFJIOi+heWKqeOAgiIsCiAgICAibGluayI6ICJodHRwczovL2N1cnNvci5jb20vIiwKICAgICJ3aW5nZXQiOiAiQW55c3BoZXJlLkN1cnNvciIsCiAgICAiZm9zcyI6IGZhbHNlCiAgfSwKICAiV1BGSW5zdGFsbGRkdSI6IHsKICAgICJjYXRlZ29yeSI6ICLkuJPkuJrlt6XlhbciLAogICAgImNob2NvIjogImRkdSIsCiAgICAiY29udGVudCI6ICJEaXNwbGF5IERyaXZlciBVbmluc3RhbGxlciDmmL7ljaHpqbHliqjljbjovb0iLAogICAgImRlc2NyaXB0aW9uIjogIkRpc3BsYXkgRHJpdmVyIFVuaW5zdGFsbGVyIChERFUpIOaYr+S4gOasvuWujOWFqOWNuOi9veaYvuWNoempseWKqOeoi+W6j+eahOW3peWFt+OAgiIsCiAgICAibGluayI6ICJodHRwczovL3d3dy53YWduYXJkc29mdC5jb20vZGlzcGxheS1kcml2ZXItdW5pbnN0YWxsZXItRERVLSIsCiAgICAid2luZ2V0IjogIldhZ25hcmRzb2Z0LkRpc3BsYXlEcml2ZXJVbmluc3RhbGxlciIsCiAgICAiZm9zcyI6IHRydWUKICB9LAogICJXUEZJbnN0YWxsZGlzY29yZCI6IHsKICAgICJjYXRlZ29yeSI6ICLpgJrorq/lt6XlhbciLAogICAgImNob2NvIjogImRpc2NvcmQiLAogICAgImNvbnRlbnQiOiAiRGlzY29yZCDpgJrorq/lubPlj7AiLAogICAgImRlc2NyaXB0aW9uIjogIkRpc2NvcmQg5piv5LiA5qy+5rWB6KGM55qE6YCa6K6v5bmz5Y+w77yM5o+Q5L6b6K+t6Z+z44CB6KeG6aKR5ZKM5paH5a2X6IGK5aSp44CCIiwKICAgICJsaW5rIjogImh0dHBzOi8vZGlzY29yZC5jb20vIiwKICAgICJ3aW5nZXQiOiAiRGlzY29yZC5EaXNjb3JkIiwKICAgICJmb3NzIjogZmFsc2UKICB9LAogICJXUEZJbnN0YWxsZGlzbXRvb2xzIjogewogICAgImNhdGVnb3J5IjogIuW+rui9r+W3peWFtyIsCiAgICAiY2hvY28iOiAiZGlzbXRvb2xzIiwKICAgICJjb250ZW50IjogIkRJU01Ub29scyDplZzlg4/lt6XlhbciLAogICAgImRlc2NyaXB0aW9uIjogIkRJU01Ub29scyDmmK/kuIDmrL7lv6vpgJ/lj6/lrprliLbnmoQgRElTTSDlt6XlhbcgR1VJ77yM5pSv5oyBIFdpbmRvd3MgNyDlj4rku6XkuIrniYjmnKznmoTmmKDlg4/lpITnkIbjgIIiLAogICAgImxpbmsiOiAiaHR0cHM6Ly9naXRodWIuY29tL0NvZGluZ1dvbmRlcnMvRElTTVRvb2xzIiwKICAgICJ3aW5nZXQiOiAiQ29kaW5nV29uZGVyc1NvZnR3YXJlLkRJU01Ub29scy5TdGFibGUiLAogICAgImZvc3MiOiB0cnVlCiAgfSwKICAiV1BGSW5zdGFsbG50bGl0ZSI6IHsKICAgICJjYXRlZ29yeSI6ICLlvq7ova/lt6XlhbciLAogICAgImNob2NvIjogIm50bGl0ZS1mcmVlIiwKICAgICJjb250ZW50IjogIk5UTGl0ZSDns7vnu5/nsr7nroAiLAogICAgImRlc2NyaXB0aW9uIjogIumbhuaIkOabtOaWsOOAgempseWKqOeoi+W6j++8jOiHquWKqOWMliBXaW5kb3dzIOWSjOW6lOeUqOeoi+W6j+iuvue9ru+8jOWKoOmAnyBXaW5kb3dzIOmDqOe9sua1geeoi+OAgiIsCiAgICAibGluayI6ICJodHRwczovL250bGl0ZS5jb20iLAogICAgIndpbmdldCI6ICJObGl0ZXNvZnQuTlRMaXRlIiwKICAgICJmb3NzIjogZmFsc2UKICB9LAogICJXUEZJbnN0YWxsZG9yaW9uIjogewogICAgImNhdGVnb3J5IjogIumAmuiur+W3peWFtyIsCiAgICAiY2hvY28iOiAiZG9yaW9uIiwKICAgICJjb250ZW50IjogIkRvcmlvbiDovbvph49EaXNjb3JkIiwKICAgICJkZXNjcmlwdGlvbiI6ICLovbvph4/nuqcgRGlzY29yZCDmm7/ku6PlrqLmiLfnq6/vvIzljaDnlKjmm7TlsI/jgIHlkK/liqjmm7Tlv6vvvIzmlK/mjIHkuLvpopjlkozmj5Lku7bvvIEiLAogICAgImxpbmsiOiAiaHR0cHM6Ly9naXRodWIuY29tL1NwaWtlSEQvRG9yaW9uIiwKICAgICJ3aW5nZXQiOiAiU3Bpa2VIRC5Eb3Jpb24iLAogICAgImZvc3MiOiB0cnVlCiAgfSwKICAiV1BGSW5zdGFsbGRvdG5ldDYiOiB7CiAgICAiY2F0ZWdvcnkiOiAi5b6u6L2v5bel5YW3IiwKICAgICJjaG9jbyI6ICJkb3RuZXQtNi4wLXJ1bnRpbWUiLAogICAgImNvbnRlbnQiOiAiLk5FVCDmoYzpnaLov5DooYzml7YgNiIsCiAgICAiZGVzY3JpcHRpb24iOiAiLk5FVCDmoYzpnaLov5DooYzml7YgNiDmmK/ov5DooYzkvb/nlKggLk5FVCA2IOW8gOWPkeeahOW6lOeUqOeoi+W6j+aJgOmcgOeahOi/kOihjOaXtueOr+Wig+OAgiIsCiAgICAibGluayI6ICJodHRwczovL2RvdG5ldC5taWNyb3NvZnQuY29tL2Rvd25sb2FkL2RvdG5ldC82LjAiLAogICAgIndpbmdldCI6ICJNaWNyb3NvZnQuRG90TmV0LkRlc2t0b3BSdW50aW1lLjYiLAogICAgImZvc3MiOiB0cnVlCiAgfSwKICAiV1BGSW5zdGFsbGRvdG5ldDgiOiB7CiAgICAiY2F0ZWdvcnkiOiAi5b6u6L2v5bel5YW3IiwKICAgICJjaG9jbyI6ICJkb3RuZXQtOC4wLXJ1bnRpbWUiLAogICAgImNvbnRlbnQiOiAiLk5FVCDmoYzpnaLov5DooYzml7YgOCIsCiAgICAiZGVzY3JpcHRpb24iOiAiLk5FVCDmoYzpnaLov5DooYzml7YgOCDmmK/ov5DooYzkvb/nlKggLk5FVCA4IOW8gOWPkeeahOW6lOeUqOeoi+W6j+aJgOmcgOeahOi/kOihjOaXtueOr+Wig+OAgiIsCiAgICAibGluayI6ICJodHRwczovL2RvdG5ldC5taWNyb3NvZnQuY29tL2Rvd25sb2FkL2RvdG5ldC84LjAiLAogICAgIndpbmdldCI6ICJNaWNyb3NvZnQuRG90TmV0LkRlc2t0b3BSdW50aW1lLjgiLAogICAgImZvc3MiOiB0cnVlCiAgfSwKICAiV1BGSW5zdGFsbGRvdG5ldDkiOiB7CiAgICAiY2F0ZWdvcnkiOiAi5b6u6L2v5bel5YW3IiwKICAgICJjaG9jbyI6ICJkb3RuZXQtOS4wLXJ1bnRpbWUiLAogICAgImNvbnRlbnQiOiAiLk5FVCDmoYzpnaLov5DooYzml7YgOSIsCiAgICAiZGVzY3JpcHRpb24iOiAiLk5FVCDmoYzpnaLov5DooYzml7YgOSDmmK/ov5DooYzkvb/nlKggLk5FVCA5IOW8gOWPkeeahOW6lOeUqOeoi+W6j+aJgOmcgOeahOi/kOihjOaXtueOr+Wig+OAgiIsCiAgICAibGluayI6ICJodHRwczovL2RvdG5ldC5taWNyb3NvZnQuY29tL2Rvd25sb2FkL2RvdG5ldC85LjAiLAogICAgIndpbmdldCI6ICJNaWNyb3NvZnQuRG90TmV0LkRlc2t0b3BSdW50aW1lLjkiLAogICAgImZvc3MiOiB0cnVlCiAgfSwKICAiV1BGSW5zdGFsbGRvdG5ldDEwIjogewogICAgImNhdGVnb3J5IjogIuW+rui9r+W3peWFtyIsCiAgICAiY2hvY28iOiAiZG90bmV0LTEwLjAtcnVudGltZSIsCiAgICAiY29udGVudCI6ICIuTkVUIOahjOmdoui/kOihjOaXtiAxMCIsCiAgICAiZGVzY3JpcHRpb24iOiAiLk5FVCDmoYzpnaLov5DooYzml7YgMTAg5piv6L+Q6KGM5L2/55SoIC5ORVQgMTAg5byA5Y+R55qE5bqU55So56iL5bqP5omA6ZyA55qE6L+Q6KGM5pe2546v5aKD44CCIiwKICAgICJsaW5rIjogImh0dHBzOi8vZG90bmV0Lm1pY3Jvc29mdC5jb20vZG93bmxvYWQvZG90bmV0LzEwLjAiLAogICAgIndpbmdldCI6ICJNaWNyb3NvZnQuRG90TmV0LkRlc2t0b3BSdW50aW1lLjEwIiwKICAgICJmb3NzIjogdHJ1ZQogIH0sCiAgIldQRkluc3RhbGxkcm9wYm94IjogewogICAgImNhdGVnb3J5IjogIuW3peWFt+exuyIsCiAgICAiY2hvY28iOiAiZHJvcGJveCIsCiAgICAiY29udGVudCI6ICJEcm9wYm94IOS6keWtmOWCqCIsCiAgICAiZGVzY3JpcHRpb24iOiAiRHJvcGJveCDmmK/kuIDmrL7kupHlrZjlgqjlrqLmiLfnq6/vvIznlKjkuo7lkIzmraXmlofku7bjgIHlhbHkuqvlhoXlrrnlubblnKjlpJrorr7lpIfpl7Tkv53mjIHmlofmoaPlj6/nlKjjgIIiLAogICAgImxpbmsiOiAiaHR0cHM6Ly93d3cuZHJvcGJveC5jb20vZGVza3RvcCIsCiAgICAid2luZ2V0IjogIkRyb3Bib3guRHJvcGJveCIsCiAgICAiZm9zcyI6IGZhbHNlCiAgfSwKICAiV1BGSW5zdGFsbGVhYXBwIjogewogICAgImNhdGVnb3J5IjogIua4uOaIjyIsCiAgICAiY2hvY28iOiAiZWEtYXBwIiwKICAgICJjb250ZW50IjogIkVBIEFwcCDmuLjmiI/lubPlj7AiLAogICAgImRlc2NyaXB0aW9uIjogIkVBIEFwcCDmmK/orr/pl67lkozmuLjnjqkgRWxlY3Ryb25pYyBBcnRzIOa4uOaIj+eahOW5s+WPsOOAgiIsCiAgICAibGluayI6ICJodHRwczovL3d3dy5lYS5jb20vZWEtYXBwIiwKICAgICJ3aW5nZXQiOiAiRWxlY3Ryb25pY0FydHMuRUFEZXNrdG9wIiwKICAgICJmb3NzIjogZmFsc2UKICB9LAogICJXUEZJbnN0YWxsZWFydHJ1bXBldCI6IHsKICAgICJjYXRlZ29yeSI6ICLlpJrlqpLkvZPlt6XlhbciLAogICAgImNob2NvIjogImVhcnRydW1wZXQiLAogICAgImNvbnRlbnQiOiAiRWFyVHJ1bXBldCDpn7PpopHmjqfliLYiLAogICAgImRlc2NyaXB0aW9uIjogIkVhclRydW1wZXQg5piv5LiA5qy+IFdpbmRvd3Mg6Z+z6aKR5o6n5Yi25bqU55So77yM5o+Q5L6b566A5Y2V55u06KeC55qE55WM6Z2i5p2l566h55CG5aOw6Z+z6K6+572u44CCIiwKICAgICJsaW5rIjogImh0dHBzOi8vZWFydHJ1bXBldC5hcHAvIiwKICAgICJ3aW5nZXQiOiAiRmlsZS1OZXctUHJvamVjdC5FYXJUcnVtcGV0IiwKICAgICJmb3NzIjogdHJ1ZQogIH0sCiAgIldQRkluc3RhbGxlZGdlIjogewogICAgImNhdGVnb3J5IjogIua1j+iniOWZqCIsCiAgICAiY2hvY28iOiAibWljcm9zb2Z0LWVkZ2UiLAogICAgImNvbnRlbnQiOiAiRWRnZSDmtY/op4jlmagiLAogICAgImRlc2NyaXB0aW9uIjogIk1pY3Jvc29mdCBFZGdlIOaYr+S4gOasvuWfuuS6jiBDaHJvbWl1bSDnmoTnjrDku6PnvZHpobXmtY/op4jlmajjgIIiLAogICAgImxpbmsiOiAiaHR0cHM6Ly93d3cubWljcm9zb2Z0LmNvbS9lZGdlIiwKICAgICJ3aW5nZXQiOiAiTWljcm9zb2Z0LkVkZ2UiLAogICAgImZvc3MiOiBmYWxzZQogIH0sCiAgIldQRkluc3RhbGxlbnRlYXV0aCI6IHsKICAgICJjYXRlZ29yeSI6ICLlt6XlhbfnsbsiLAogICAgImNob2NvIjogImVudGUtYXV0aCIsCiAgICAiY29udGVudCI6ICJFbnRlIEF1dGgg6aqM6K+B5ZmoIiwKICAgICJkZXNjcmlwdGlvbiI6ICJFbnRlIEF1dGgg5piv5LiA5qy+5YWN6LS544CB6Leo5bmz5Y+w44CB56uv5Yiw56uv5Yqg5a+G55qE6aqM6K+B5Zmo5bqU55So44CCIiwKICAgICJsaW5rIjogImh0dHBzOi8vZW50ZS5pby9hdXRoLyIsCiAgICAid2luZ2V0IjogImVudGUtaW8uYXV0aC1kZXNrdG9wIiwKICAgICJmb3NzIjogdHJ1ZQogIH0sCiAgIldQRkluc3RhbGxlcGljZ2FtZXMiOiB7CiAgICAiY2F0ZWdvcnkiOiAi5ri45oiPIiwKICAgICJjaG9jbyI6ICJlcGljZ2FtZXNsYXVuY2hlciIsCiAgICAiY29udGVudCI6ICJFcGljIEdhbWVzIOWQr+WKqOWZqCIsCiAgICAiZGVzY3JpcHRpb24iOiAiRXBpYyBHYW1lcyBMYXVuY2hlciDmmK/orr/pl67lkozmuLjnjqkgRXBpYyBHYW1lcyDllYblupfmuLjmiI/nmoTlrqLmiLfnq6/jgIIiLAogICAgImxpbmsiOiAiaHR0cHM6Ly93d3cuZXBpY2dhbWVzLmNvbS9zdG9yZS9lbi1VUy8iLAogICAgIndpbmdldCI6ICJFcGljR2FtZXMuRXBpY0dhbWVzTGF1bmNoZXIiLAogICAgImZvc3MiOiBmYWxzZQogIH0sCiAgIldQRkluc3RhbGxmaWxlcyI6IHsKICAgICJjYXRlZ29yeSI6ICLlt6XlhbfnsbsiLAogICAgImNob2NvIjogImZpbGVzIiwKICAgICJjb250ZW50IjogIkZpbGVzIOaWh+S7tueuoeeQhuWZqCIsCiAgICAiZGVzY3JpcHRpb24iOiAi5pu/5Luj5oCn5paH5Lu26LWE5rqQ566h55CG5Zmo44CCIiwKICAgICJsaW5rIjogImh0dHBzOi8vZ2l0aHViLmNvbS9maWxlcy1jb21tdW5pdHkvRmlsZXMiLAogICAgIndpbmdldCI6ICJGaWxlc0NvbW11bml0eS5GaWxlcyIsCiAgICAiZm9zcyI6IHRydWUKICB9LAogICJXUEZJbnN0YWxsZmlyZWZveCI6IHsKICAgICJjYXRlZ29yeSI6ICLmtY/op4jlmagiLAogICAgImNob2NvIjogImZpcmVmb3giLAogICAgImNvbnRlbnQiOiAiRmlyZWZveCDmtY/op4jlmagiLAogICAgImRlc2NyaXB0aW9uIjogIk1vemlsbGEgRmlyZWZveCDmmK/kuIDmrL7lvIDmupDnvZHpobXmtY/op4jlmajvvIzku6XlhbblrprliLbpgInpobnjgIHpmpDnp4Hlip/og73lkozmianlsZXogIzpl7vlkI3jgIIiLAogICAgImxpbmsiOiAiaHR0cHM6Ly93d3cubW96aWxsYS5vcmcvZW4tVVMvZmlyZWZveC9uZXcvIiwKICAgICJ3aW5nZXQiOiAiTW96aWxsYS5GaXJlZm94IiwKICAgICJmb3NzIjogdHJ1ZQogIH0sCiAgIldQRkluc3RhbGxmaXJlZm94ZXNyIjogewogICAgImNhdGVnb3J5IjogIua1j+iniOWZqCIsCiAgICAiY2hvY28iOiAiRmlyZWZveEVTUiIsCiAgICAiY29udGVudCI6ICJGaXJlZm94IEVTUiDplb/mnJ/mlK/mjIHniYgiLAogICAgImRlc2NyaXB0aW9uIjogIk1vemlsbGEgRmlyZWZveCDmmK/lvIDmupDnvZHpobXmtY/op4jlmajvvIxFU1LvvIjmianlsZXmlK/mjIHniYjvvInmr48gNDIg5ZGo5pS25Yiw5LiA5qyh5Li76KaB5pu05paw44CCIiwKICAgICJsaW5rIjogImh0dHBzOi8vd3d3Lm1vemlsbGEub3JnL2VuLVVTL2ZpcmVmb3gvZW50ZXJwcmlzZS8iLAogICAgIndpbmdldCI6ICJNb3ppbGxhLkZpcmVmb3guRVNSIiwKICAgICJmb3NzIjogdHJ1ZQogIH0sCiAgIldQRkluc3RhbGxmbG9vcnAiOiB7CiAgICAiY2F0ZWdvcnkiOiAi5rWP6KeI5ZmoIiwKICAgICJjaG9jbyI6ICJmbG9vcnAiLAogICAgImNvbnRlbnQiOiAiRmxvb3JwIOa1j+iniOWZqCIsCiAgICAiZGVzY3JpcHRpb24iOiAiRmxvb3JwIOaYr+S4gOasvuW8gOa6kOe9kemhtea1j+iniOWZqOmhueebru+8jOaXqOWcqOaPkOS+m+eugOWNleW/q+mAn+eahOa1j+iniOS9k+mqjOOAgiIsCiAgICAibGluayI6ICJodHRwczovL2Zsb29ycC5hcHAvIiwKICAgICJ3aW5nZXQiOiAiQWJsYXplLkZsb29ycCIsCiAgICAiZm9zcyI6IHRydWUKICB9LAogICJXUEZJbnN0YWxsZmx1eCI6IHsKICAgICJjYXRlZ29yeSI6ICLlt6XlhbfnsbsiLAogICAgImNob2NvIjogImZsdXgiLAogICAgImNvbnRlbnQiOiAiRi5sdXgg5oqk55y86LCD6ImyIiwKICAgICJkZXNjcmlwdGlvbiI6ICJGLmx1eCDosIPmlbTlsY/luZXoibLmuKnvvIzlh4/lsJHlpJzpl7Tkvb/nlKjml7bnmoTnnLznnZvnlrLlirPjgIIiLAogICAgImxpbmsiOiAiaHR0cHM6Ly9qdXN0Z2V0Zmx1eC5jb20vIiwKICAgICJ3aW5nZXQiOiAiZmx1eC5mbHV4IiwKICAgICJmb3NzIjogZmFsc2UKICB9LAogICJXUEZJbnN0YWxsZ2Vmb3JjZW5vdyI6IHsKICAgICJjYXRlZ29yeSI6ICLmuLjmiI8iLAogICAgImNob2NvIjogIm52aWRpYS1nZWZvcmNlLW5vdyIsCiAgICAiY29udGVudCI6ICJHZUZvcmNlIE5PVyDkupHmuLjmiI8iLAogICAgImRlc2NyaXB0aW9uIjogIkdlRm9yY2UgTk9XIOaYr+S4gOasvuS6kea4uOaIj+acjeWKoe+8jOWPr+iuqeaCqOWcqOiuvuWkh+S4iueOqemrmOWTgei0qOeahCBQQyDmuLjmiI/jgIIiLAogICAgImxpbmsiOiAiaHR0cHM6Ly93d3cubnZpZGlhLmNvbS9lbi11cy9nZWZvcmNlLW5vdy8iLAogICAgIndpbmdldCI6ICJOdmlkaWEuR2VGb3JjZU5vdyIsCiAgICAiZm9zcyI6IGZhbHNlCiAgfSwKICAiV1BGSW5zdGFsbGdpbXAiOiB7CiAgICAiY2F0ZWdvcnkiOiAi5aSa5aqS5L2T5bel5YW3IiwKICAgICJjaG9jbyI6ICJnaW1wIiwKICAgICJjb250ZW50IjogIkdJTVAg5Zu+5YOP57yW6L6RIiwKICAgICJkZXNjcmlwdGlvbiI6ICJHSU1QIOaYr+S4gOasvuWkmuWKn+iDveW8gOa6kOWFieagheWbvuW9oue8lui+keWZqO+8jOeUqOS6jueFp+eJh+S/rumlsOOAgeWbvuWDj+e8lui+keWSjOWbvuWDj+WQiOaIkOOAgiIsCiAgICAibGluayI6ICJodHRwczovL3d3dy5naW1wLm9yZy8iLAogICAgIndpbmdldCI6ICJHSU1QLkdJTVAuMyIsCiAgICAiZm9zcyI6IHRydWUKICB9LAogICJXUEZJbnN0YWxsZ2l0IjogewogICAgImNhdGVnb3J5IjogIuW8gOWPkeW3peWFtyIsCiAgICAiY2hvY28iOiAiZ2l0IiwKICAgICJjb250ZW50IjogIkdpdCDniYjmnKzmjqfliLYiLAogICAgImRlc2NyaXB0aW9uIjogIkdpdCDmmK/kuIDmrL7liIbluIPlvI/niYjmnKzmjqfliLbns7vnu5/vvIzlub/ms5vnlKjkuo7ova/ku7blvIDlj5HkuK3ot5/ouKrmupDku6PnoIHnmoTmm7TmlLnjgIIiLAogICAgImxpbmsiOiAiaHR0cHM6Ly9naXQtc2NtLmNvbS8iLAogICAgIndpbmdldCI6ICJHaXQuR2l0IiwKICAgICJmb3NzIjogdHJ1ZQogIH0sCiAgIldQRkluc3RhbGxnaXRodWJkZXNrdG9wIjogewogICAgImNhdGVnb3J5IjogIuW8gOWPkeW3peWFtyIsCiAgICAiY2hvY28iOiAiZ2l0O2dpdGh1Yi1kZXNrdG9wIiwKICAgICJjb250ZW50IjogIkdpdEh1YiBEZXNrdG9wIOahjOmdouerryIsCiAgICAiZGVzY3JpcHRpb24iOiAiR2l0SHViIERlc2t0b3Ag5piv5LiA5qy+5Y+v6KeG5YyWIEdpdCDlrqLmiLfnq6/vvIzpgJrov4fmmJPnlKjnmoTnlYzpnaLnroDljJYgR2l0SHViIOS7k+W6k+eahOWNj+S9nOOAgiIsCiAgICAibGluayI6ICJodHRwczovL2Rlc2t0b3AuZ2l0aHViLmNvbS8iLAogICAgIndpbmdldCI6ICJHaXRIdWIuR2l0SHViRGVza3RvcCIsCiAgICAiZm9zcyI6IHRydWUKICB9LAogICJXUEZJbnN0YWxsZ29nIjogewogICAgImNhdGVnb3J5IjogIua4uOaIjyIsCiAgICAiY2hvY28iOiAiZ29nZ2FsYXh5IiwKICAgICJjb250ZW50IjogIkdPRyBHYWxheHkg5ri45oiP5bmz5Y+wIiwKICAgICJkZXNjcmlwdGlvbiI6ICJHT0cgR2FsYXh5IOaYr+S4gOasvua4uOaIj+WuouaIt+err++8jOaPkOS+m+aXoCBEUk0g5ri45oiP44CB6ZmE5Yqg5YaF5a65562J44CCIiwKICAgICJsaW5rIjogImh0dHBzOi8vd3d3LmdvZy5jb20vZ2FsYXh5IiwKICAgICJ3aW5nZXQiOiAiR09HLkdhbGF4eSIsCiAgICAiZm9zcyI6IGZhbHNlCiAgfSwKICAiV1BGSW5zdGFsbGdvbGFuZyI6IHsKICAgICJjYXRlZ29yeSI6ICLlvIDlj5Hlt6XlhbciLAogICAgImNob2NvIjogImdvbGFuZyIsCiAgICAiY29udGVudCI6ICJHbyDnvJbnqIvor63oqIAiLAogICAgImRlc2NyaXB0aW9uIjogIkdv77yI5Y+I56ewIEdvbGFuZ++8ieaYr+S4gOenjemdmeaAgeexu+Wei+OAgee8luivkeWei+e8lueoi+ivreiogOOAgiIsCiAgICAibGluayI6ICJodHRwczovL2dvLmRldi8iLAogICAgIndpbmdldCI6ICJHb0xhbmcuR28iLAogICAgImZvc3MiOiB0cnVlCiAgfSwKICAiV1BGSW5zdGFsbGdvb2dsZWRyaXZlIjogewogICAgImNhdGVnb3J5IjogIuW3peWFt+exuyIsCiAgICAiY2hvY28iOiAiZ29vZ2xlZHJpdmUiLAogICAgImNvbnRlbnQiOiAiR29vZ2xlIERyaXZlIOS6keebmCIsCiAgICAiZGVzY3JpcHRpb24iOiAi6Leo6K6+5aSH5paH5Lu25ZCM5q2l77yM5YWo6YOo5YWz6IGU5Yiw5oKo55qEIEdvb2dsZSDluJDmiLfjgIIiLAogICAgImxpbmsiOiAiaHR0cHM6Ly93d3cuZ29vZ2xlLmNvbS9kcml2ZS8iLAogICAgIndpbmdldCI6ICJHb29nbGUuR29vZ2xlRHJpdmUiLAogICAgImZvc3MiOiBmYWxzZQogIH0sCiAgIldQRkluc3RhbGxncHV6IjogewogICAgImNhdGVnb3J5IjogIuS4k+S4muW3peWFtyIsCiAgICAiY2hvY28iOiAiZ3B1LXoiLAogICAgImNvbnRlbnQiOiAiR1BVLVog5pi+5Y2h5qOA5rWLIiwKICAgICJkZXNjcmlwdGlvbiI6ICJHUFUtWiDmj5DkvpvlhbPkuo7mgqjnmoTmmL7ljaHlkowgR1BVIOeahOivpue7huS/oeaBr+OAgiIsCiAgICAibGluayI6ICJodHRwczovL3d3dy50ZWNocG93ZXJ1cC5jb20vZ3B1ei8iLAogICAgIndpbmdldCI6ICJUZWNoUG93ZXJVcC5HUFUtWiIsCiAgICAiZm9zcyI6IGZhbHNlCiAgfSwKICAiV1BGSW5zdGFsbGdzdWRvIjogewogICAgImNhdGVnb3J5IjogIuS4k+S4muW3peWFtyIsCiAgICAiY2hvY28iOiAiZ3N1ZG8iLAogICAgImNvbnRlbnQiOiAiZ3N1ZG8g5o+Q5p2D5bel5YW3IiwKICAgICJkZXNjcmlwdGlvbiI6ICJnc3VkbyDmmK8gV2luZG93cyDkuIvnmoQgc3VkbyDmm7/ku6Plk4HvvIzlhYHorrjlnKjlvZPliY3mjqfliLblj7Dnqpflj6PkuK3mj5DljYfmnYPpmZDov5DooYzlkb3ku6TjgIIiLAogICAgImxpbmsiOiAiaHR0cHM6Ly9naXRodWIuY29tL2dlcmFyZG9nL2dzdWRvIiwKICAgICJ3aW5nZXQiOiAiZ2VyYXJkb2cuZ3N1ZG8iLAogICAgImZvc3MiOiB0cnVlCiAgfSwKICAiV1BGSW5zdGFsbGhlbGl1bSI6IHsKICAgICJjYXRlZ29yeSI6ICLmtY/op4jlmagiLAogICAgImNob2NvIjogImhlbGl1bSIsCiAgICAiY29udGVudCI6ICJIZWxpdW0g5rWP6KeI5ZmoIiwKICAgICJkZXNjcmlwdGlvbiI6ICLnp4Hlr4bjgIHlv6vpgJ/jgIHor5rlrp7nmoTnvZHpobXmtY/op4jlmajjgIIiLAogICAgImxpbmsiOiAiaHR0cHM6Ly9naXRodWIuY29tL2ltcHV0bmV0L2hlbGl1bS8iLAogICAgIndpbmdldCI6ICJJbXB1dE5ldC5IZWxpdW0iLAogICAgImZvc3MiOiB0cnVlCiAgfSwKICAiV1BGSW5zdGFsbGh1Z28iOiB7CiAgICAiY2F0ZWdvcnkiOiAi5bel5YW357G7IiwKICAgICJjaG9jbyI6ICJodWdvLWV4dGVuZGVkIiwKICAgICJjb250ZW50IjogIkh1Z28g572R56uZ5p6E5bu6IiwKICAgICJkZXNjcmlwdGlvbiI6ICLkuJbnlYzkuIrmnIDlv6vpgJ/nmoTnvZHnq5nmnoTlu7rmoYbmnrbjgIIiLAogICAgImxpbmsiOiAiaHR0cHM6Ly9naXRodWIuY29tL2dvaHVnb2lvL2h1Z28vIiwKICAgICJ3aW5nZXQiOiAiSHVnby5IdWdvLkV4dGVuZGVkIiwKICAgICJmb3NzIjogdHJ1ZQogIH0sCiAgIldQRkluc3RhbGxoYW5kYnJha2UiOiB7CiAgICAiY2F0ZWdvcnkiOiAi5aSa5aqS5L2T5bel5YW3IiwKICAgICJjaG9jbyI6ICJoYW5kYnJha2UiLAogICAgImNvbnRlbnQiOiAiSGFuZEJyYWtlIOinhumikei9rOaNoiIsCiAgICAiZGVzY3JpcHRpb24iOiAiSGFuZEJyYWtlIOaYr+S4gOasvuW8gOa6kOinhumikei9rOeggeWZqO+8jOWPr+WwhuWHoOS5juaJgOacieagvOW8j+eahOinhumikei9rOaNouS4uuW5v+azm+aUr+aMgeeahOe8luino+eggeWZqOOAgiIsCiAgICAibGluayI6ICJodHRwczovL2hhbmRicmFrZS5mci8iLAogICAgIndpbmdldCI6ICJIYW5kQnJha2UuSGFuZEJyYWtlIiwKICAgICJmb3NzIjogdHJ1ZQogIH0sCiAgIldQRkluc3RhbGxoZXJvaWNsYXVuY2hlciI6IHsKICAgICJjYXRlZ29yeSI6ICLmuLjmiI8iLAogICAgImNob2NvIjogImhlcm9pYy1nYW1lcy1sYXVuY2hlciIsCiAgICAiY29udGVudCI6ICJIZXJvaWMgR2FtZXMgTGF1bmNoZXIg5ri45oiP5ZCv5Yqo5ZmoIiwKICAgICJkZXNjcmlwdGlvbiI6ICJIZXJvaWMgR2FtZXMgTGF1bmNoZXIg5pivIEVwaWMgR2FtZXMgU3RvcmUg55qE5byA5rqQ5pu/5Luj5ri45oiP5ZCv5Yqo5Zmo44CCIiwKICAgICJsaW5rIjogImh0dHBzOi8vaGVyb2ljZ2FtZXNsYXVuY2hlci5jb20vIiwKICAgICJ3aW5nZXQiOiAiSGVyb2ljR2FtZXNMYXVuY2hlci5IZXJvaWNHYW1lc0xhdW5jaGVyIiwKICAgICJmb3NzIjogdHJ1ZQogIH0sCiAgIldQRkluc3RhbGxod2luZm8iOiB7CiAgICAiY2F0ZWdvcnkiOiAi5LiT5Lia5bel5YW3IiwKICAgICJjaG9jbyI6ICJod2luZm8iLAogICAgImNvbnRlbnQiOiAiSFdpTkZPIOehrOS7tuajgOa1iyIsCiAgICAiZGVzY3JpcHRpb24iOiAiSFdpTkZPIOaPkOS+m+WFqOmdoueahCBXaW5kb3dzIOehrOS7tuS/oeaBr+WSjOiviuaWreWKn+iDveOAgiIsCiAgICAibGluayI6ICJodHRwczovL3d3dy5od2luZm8uY29tLyIsCiAgICAid2luZ2V0IjogIlJFQUxpWC5IV2lORk8iLAogICAgImZvc3MiOiBmYWxzZQogIH0sCiAgIldQRkluc3RhbGxod21vbml0b3IiOiB7CiAgICAiY2F0ZWdvcnkiOiAi5LiT5Lia5bel5YW3IiwKICAgICJjaG9jbyI6ICJod21vbml0b3IiLAogICAgImNvbnRlbnQiOiAiSFdNb25pdG9yIOehrOS7tuebkeaOpyIsCiAgICAiZGVzY3JpcHRpb24iOiAiSFdNb25pdG9yIOaYr+S4gOasvuehrOS7tuebkeaOp+eoi+W6j++8jOivu+WPliBQQyDns7vnu5/nmoTkuLvopoHlgaXlurfkvKDmhJ/lmajjgIIiLAogICAgImxpbmsiOiAiaHR0cHM6Ly93d3cuY3B1aWQuY29tL3NvZnR3YXJlcy9od21vbml0b3IuaHRtbCIsCiAgICAid2luZ2V0IjogIkNQVUlELkhXTW9uaXRvciIsCiAgICAiZm9zcyI6IGZhbHNlCiAgfSwKICAiV1BGSW5zdGFsbGltYWdlZ2xhc3MiOiB7CiAgICAiY2F0ZWdvcnkiOiAi5aSa5aqS5L2T5bel5YW3IiwKICAgICJjaG9jbyI6ICJpbWFnZWdsYXNzIiwKICAgICJjb250ZW50IjogIkltYWdlR2xhc3Mg5Zu+54mH5p+l55yL5ZmoIiwKICAgICJkZXNjcmlwdGlvbiI6ICJJbWFnZUdsYXNzIOaYr+S4gOasvuWkmuWKn+iDveWbvueJh+afpeeci+WZqO+8jOaUr+aMgeWkmuenjeWbvueJh+agvOW8j+OAgiIsCiAgICAibGluayI6ICJodHRwczovL2ltYWdlZ2xhc3Mub3JnLyIsCiAgICAid2luZ2V0IjogIkR1b25nRGlldVBoYXAuSW1hZ2VHbGFzcyIsCiAgICAiZm9zcyI6IHRydWUKICB9LAogICJXUEZJbnN0YWxsaW50ZXJuZXRkb3dubG9hZG1hbmFnZXIiOiB7CiAgICAiY2F0ZWdvcnkiOiAi5bel5YW357G7IiwKICAgICJjaG9jbyI6ICJpbnRlcm5ldC1kb3dubG9hZC1tYW5hZ2VyIiwKICAgICJjb250ZW50IjogIklETSDkuIvovb3nrqHnkIblmagiLAogICAgImRlc2NyaXB0aW9uIjogIkludGVybmV0IERvd25sb2FkIE1hbmFnZXIg5piv5LiA5qy+55So5LqO5Yqg6YCf44CB57ut5Lyg5ZKM6K6h5YiS5paH5Lu25LiL6L2955qE5LiL6L29566h55CG5Zmo44CCIiwKICAgICJsaW5rIjogImh0dHBzOi8vd3d3LmludGVybmV0ZG93bmxvYWRtYW5hZ2VyLmNvbS8iLAogICAgIndpbmdldCI6ICJUb25lYy5JbnRlcm5ldERvd25sb2FkTWFuYWdlciIsCiAgICAiZm9zcyI6IGZhbHNlCiAgfSwKICAiV1BGSW5zdGFsbGlyZmFudmlldyI6IHsKICAgICJjYXRlZ29yeSI6ICLlpJrlqpLkvZPlt6XlhbciLAogICAgImNob2NvIjogImlyZmFudmlldyIsCiAgICAiY29udGVudCI6ICJJcmZhblZpZXcg5Zu+54mH5p+l55yLIiwKICAgICJkZXNjcmlwdGlvbiI6ICJJcmZhblZpZXcg5piv5LiA5qy+6L276YeP44CB5b+r6YCf44CB5YWN6LS555qE5Zu+54mH5p+l55yL5Zmo5ZKM57yW6L6R5Zmo44CCIiwKICAgICJsaW5rIjogImh0dHBzOi8vaXJmYW52aWV3LmNvbS8iLAogICAgIndpbmdldCI6ICJJcmZhblNraWxqYW4uSXJmYW5WaWV3IiwKICAgICJmb3NzIjogZmFsc2UKICB9LAogICJXUEZJbnN0YWxsaXRjaCI6IHsKICAgICJjYXRlZ29yeSI6ICLmuLjmiI8iLAogICAgImNob2NvIjogIml0Y2giLAogICAgImNvbnRlbnQiOiAiSXRjaC5pbyDmuLjmiI/lubPlj7AiLAogICAgImRlc2NyaXB0aW9uIjogIkl0Y2guaW8g5piv54us56uL5ri45oiP5ZKM5Yib5oSP6aG555uu55qE5pWw5a2X5YiG5Y+R5bmz5Y+w44CCIiwKICAgICJsaW5rIjogImh0dHBzOi8vaXRjaC5pby8iLAogICAgIndpbmdldCI6ICJJdGNoSW8uSXRjaCIsCiAgICAiZm9zcyI6IHRydWUKICB9LAogICJXUEZJbnN0YWxsaXR1bmVzIjogewogICAgImNhdGVnb3J5IjogIuWkmuWqkuS9k+W3peWFtyIsCiAgICAiY2hvY28iOiAiaXR1bmVzIiwKICAgICJjb250ZW50IjogImlUdW5lcyDlqpLkvZPnrqHnkIYiLAogICAgImRlc2NyaXB0aW9uIjogImlUdW5lcyDmmK8gQXBwbGUg5YWs5Y+45byA5Y+R55qE5aqS5L2T5pKt5pS+5Zmo44CB5aqS5L2T5bqT5ZKM5Zyo57q/5bm/5pKt5bqU55So44CCIiwKICAgICJsaW5rIjogImh0dHBzOi8vd3d3LmFwcGxlLmNvbS9pdHVuZXMvIiwKICAgICJ3aW5nZXQiOiAiQXBwbGUuaVR1bmVzIiwKICAgICJmb3NzIjogZmFsc2UKICB9LAogICJXUEZJbnN0YWxsamF2YTgiOiB7CiAgICAiY2F0ZWdvcnkiOiAi5byA5Y+R5bel5YW3IiwKICAgICJjaG9jbyI6ICJjb3JyZXR0bzhqZGsiLAogICAgImNvbnRlbnQiOiAiQW1hem9uIENvcnJldHRvIDggKExUUykgSkRLIiwKICAgICJkZXNjcmlwdGlvbiI6ICJBbWF6b24gQ29ycmV0dG8g5piv5LiA5qy+5YWN6LS544CB5aSa5bmz5Y+w44CB55Sf5Lqn5bCx57uq55qEIE9wZW5KREsg5Y+R6KGM54mI44CCIiwKICAgICJsaW5rIjogImh0dHBzOi8vYXdzLmFtYXpvbi5jb20vY29ycmV0dG8iLAogICAgIndpbmdldCI6ICJBbWF6b24uQ29ycmV0dG8uOC5KREsiLAogICAgImZvc3MiOiB0cnVlCiAgfSwKICAiV1BGSW5zdGFsbGphdmEyMSI6IHsKICAgICJjYXRlZ29yeSI6ICLlvIDlj5Hlt6XlhbciLAogICAgImNob2NvIjogImNvcnJldHRvMjFqZGsiLAogICAgImNvbnRlbnQiOiAiQW1hem9uIENvcnJldHRvIDIxIChMVFMpIEpESyIsCiAgICAiZGVzY3JpcHRpb24iOiAiQW1hem9uIENvcnJldHRvIOaYr+S4gOasvuWFjei0ueOAgeWkmuW5s+WPsOOAgeeUn+S6p+Wwsee7queahCBPcGVuSkRLIOWPkeihjOeJiOOAgiIsCiAgICAibGluayI6ICJodHRwczovL2F3cy5hbWF6b24uY29tL2NvcnJldHRvIiwKICAgICJ3aW5nZXQiOiAiQW1hem9uLkNvcnJldHRvLjIxLkpESyIsCiAgICAiZm9zcyI6IHRydWUKICB9LAogICJXUEZJbnN0YWxsamF2YTI1IjogewogICAgImNhdGVnb3J5IjogIuW8gOWPkeW3peWFtyIsCiAgICAiY2hvY28iOiAiY29ycmV0dG8yNWpkayIsCiAgICAiY29udGVudCI6ICJBbWF6b24gQ29ycmV0dG8gMjUgKExUUykgSkRLIiwKICAgICJkZXNjcmlwdGlvbiI6ICJBbWF6b24gQ29ycmV0dG8g5piv5LiA5qy+5YWN6LS544CB5aSa5bmz5Y+w44CB55Sf5Lqn5bCx57uq55qEIE9wZW5KREsg5Y+R6KGM54mI44CCIiwKICAgICJsaW5rIjogImh0dHBzOi8vYXdzLmFtYXpvbi5jb20vY29ycmV0dG8iLAogICAgIndpbmdldCI6ICJBbWF6b24uQ29ycmV0dG8uMjUuSkRLIiwKICAgICJmb3NzIjogdHJ1ZQogIH0sCiAgIldQRkluc3RhbGxqZWxseWZpbm1lZGlhcGxheWVyIjogewogICAgImNhdGVnb3J5IjogIuiHquaJmOeuoeW3peWFtyIsCiAgICAiY2hvY28iOiAiamVsbHlmaW4tbWVkaWEtcGxheWVyIiwKICAgICJjb250ZW50IjogIkplbGx5ZmluIOWqkuS9k+aSreaUvuWZqCIsCiAgICAiZGVzY3JpcHRpb24iOiAiSmVsbHlmaW4gTWVkaWEgUGxheWVyIOaYryBKZWxseWZpbiDlqpLkvZPmnI3liqHlmajnmoTlrqLmiLfnq6/lupTnlKjjgIIiLAogICAgImxpbmsiOiAiaHR0cHM6Ly9naXRodWIuY29tL2plbGx5ZmluL2plbGx5ZmluLW1lZGlhLXBsYXllciIsCiAgICAid2luZ2V0IjogIkplbGx5ZmluLkplbGx5ZmluTWVkaWFQbGF5ZXIiLAogICAgImZvc3MiOiB0cnVlCiAgfSwKICAiV1BGSW5zdGFsbGplbGx5Zmluc2VydmVyIjogewogICAgImNhdGVnb3J5IjogIuiHquaJmOeuoeW3peWFtyIsCiAgICAiY2hvY28iOiAiamVsbHlmaW4iLAogICAgImNvbnRlbnQiOiAiSmVsbHlmaW4g5pyN5Yqh5ZmoIiwKICAgICJkZXNjcmlwdGlvbiI6ICJKZWxseWZpbiBTZXJ2ZXIg5piv5LiA5qy+5byA5rqQ5aqS5L2T5pyN5Yqh5Zmo6L2v5Lu277yM6K6p5oKo5pW055CG5ZKM5rWB5byP5Lyg6L6T5oKo55qE5aqS5L2T5bqT44CCIiwKICAgICJsaW5rIjogImh0dHBzOi8vamVsbHlmaW4ub3JnLyIsCiAgICAid2luZ2V0IjogIkplbGx5ZmluLlNlcnZlciIsCiAgICAiZm9zcyI6IHRydWUKICB9LAogICJXUEZJbnN0YWxsamV0YnJhaW5zIjogewogICAgImNhdGVnb3J5IjogIuW8gOWPkeW3peWFtyIsCiAgICAiY2hvY28iOiAiamV0YnJhaW5zdG9vbGJveCIsCiAgICAiY29udGVudCI6ICJKZXRCcmFpbnMgVG9vbGJveCDlt6Xlhbfpm4YiLAogICAgImRlc2NyaXB0aW9uIjogIkpldEJyYWlucyBUb29sYm94IOaYr+eUqOS6jui9u+advuWuieijheWSjOeuoeeQhiBKZXRCcmFpbnMg5byA5Y+R6ICF5bel5YW355qE5bmz5Y+w44CCIiwKICAgICJsaW5rIjogImh0dHBzOi8vd3d3LmpldGJyYWlucy5jb20vdG9vbGJveC8iLAogICAgIndpbmdldCI6ICJKZXRCcmFpbnMuVG9vbGJveCIsCiAgICAiZm9zcyI6IGZhbHNlCiAgfSwKICAiV1BGSW5zdGFsbGpwZWd2aWV3IjogewogICAgImNhdGVnb3J5IjogIuW3peWFt+exuyIsCiAgICAiY2hvY28iOiAianBlZ3ZpZXciLAogICAgImNvbnRlbnQiOiAiSlBFR1ZpZXcg5Zu+54mH5p+l55yLIiwKICAgICJkZXNjcmlwdGlvbiI6ICJKUEVHVmlldyDmmK/kuIDmrL7nsr7nroDjgIHlv6vpgJ/kuJTpq5jluqblj6/phY3nva7nmoTlm77niYfmn6XnnIsv57yW6L6R5Zmo77yM5pSv5oyB5aSa56eN5Zu+54mH5qC85byP44CCIiwKICAgICJsaW5rIjogImh0dHBzOi8vZ2l0aHViLmNvbS9zeWxpa2MvanBlZ3ZpZXciLAogICAgIndpbmdldCI6ICJzeWxpa2MuSlBFR1ZpZXciLAogICAgImZvc3MiOiB0cnVlCiAgfSwKICAiV1BGSW5zdGFsbGtlZXBhc3N4YyI6IHsKICAgICJjYXRlZ29yeSI6ICLlt6XlhbfnsbsiLAogICAgImNob2NvIjogImtlZXBhc3N4YyIsCiAgICAiY29udGVudCI6ICJLZWVQYXNzWEMg5a+G56CB566h55CGIiwKICAgICJkZXNjcmlwdGlvbiI6ICJLZWVQYXNzWEMg5piv5LiA5qy+546w5Luj44CB5a6J5YWo44CB5byA5rqQ55qE5a+G56CB566h55CG5ZmoIiwKICAgICJsaW5rIjogImh0dHBzOi8va2VlcGFzc3hjLm9yZy8iLAogICAgIndpbmdldCI6ICJLZWVQYXNzWENUZWFtLktlZVBhc3NYQyIsCiAgICAiZm9zcyI6IHRydWUKICB9LAogICJXUEZJbnN0YWxsa2xpdGUiOiB7CiAgICAiY2F0ZWdvcnkiOiAi5aSa5aqS5L2T5bel5YW3IiwKICAgICJjaG9jbyI6ICJrLWxpdGVjb2RlY3BhY2stc3RhbmRhcmQiLAogICAgImNvbnRlbnQiOiAiSy1MaXRlIOino+eggeWMheagh+WHhueJiCIsCiAgICAiZGVzY3JpcHRpb24iOiAiSy1MaXRlIENvZGVjIFBhY2sg5qCH5YeG54mI5piv6Z+z6aKR5ZKM6KeG6aKR57yW6Kej56CB5Zmo5Y+K55u45YWz5bel5YW355qE6ZuG5ZCI44CCIiwKICAgICJsaW5rIjogImh0dHBzOi8vd3d3LmNvZGVjZ3VpZGUuY29tLyIsCiAgICAid2luZ2V0IjogIkNvZGVjR3VpZGUuSy1MaXRlQ29kZWNQYWNrLlN0YW5kYXJkIiwKICAgICJmb3NzIjogZmFsc2UKICB9LAogICJXUEZJbnN0YWxsa29kaSI6IHsKICAgICJjYXRlZ29yeSI6ICLoh6rmiZjnrqHlt6XlhbciLAogICAgImNob2NvIjogImtvZGkiLAogICAgImNvbnRlbnQiOiAiS29kaSDlqpLkvZPkuK3lv4MiLAogICAgImRlc2NyaXB0aW9uIjogIktvZGkg5piv5LiA5qy+5byA5rqQ5aqS5L2T5Lit5b+D5bqU55So77yM5Y+v5pKt5pS+5ZKM5p+l55yL5aSn5aSa5pWw6KeG6aKR44CB6Z+z5LmQ44CB5pKt5a6i5ZKM5YW25LuW5pWw5a2X5aqS5L2T5paH5Lu244CCIiwKICAgICJsaW5rIjogImh0dHBzOi8va29kaS50di8iLAogICAgIndpbmdldCI6ICJYQk1DRm91bmRhdGlvbi5Lb2RpIiwKICAgICJmb3NzIjogdHJ1ZQogIH0sCiAgIldQRkluc3RhbGxsYXp5Z2l0IjogewogICAgImNhdGVnb3J5IjogIuW8gOWPkeW3peWFtyIsCiAgICAiY2hvY28iOiAibGF6eWdpdCIsCiAgICAiY29udGVudCI6ICJMYXp5Z2l0IEdpdOe7iOerr1VJIiwKICAgICJkZXNjcmlwdGlvbiI6ICLpgILnlKjkuo4gR2l0IOWRveS7pOeahOeugOa0gee7iOerr+eVjOmdouOAgiIsCiAgICAibGluayI6ICJodHRwczovL2dpdGh1Yi5jb20vamVzc2VkdWZmaWVsZC9sYXp5Z2l0LyIsCiAgICAid2luZ2V0IjogIkplc3NlRHVmZmllbGQubGF6eWdpdCIsCiAgICAiZm9zcyI6IHRydWUKICB9LAogICJXUEZJbnN0YWxsbGlicmVvZmZpY2UiOiB7CiAgICAiY2F0ZWdvcnkiOiAi5aSa5aqS5L2T5bel5YW3IiwKICAgICJjaG9jbyI6ICJsaWJyZW9mZmljZS1mcmVzaCIsCiAgICAiY29udGVudCI6ICJMaWJyZU9mZmljZSDlip7lhazlpZfku7YiLAogICAgImRlc2NyaXB0aW9uIjogIkxpYnJlT2ZmaWNlIOaYr+S4gOasvuWKn+iDveW8uuWkp+S4lOWFjei0ueeahOWKnuWFrOWll+S7tu+8jOS4juWFtuS7luS4u+imgeWKnuWFrOWll+S7tuWFvOWuueOAgiIsCiAgICAibGluayI6ICJodHRwczovL3d3dy5saWJyZW9mZmljZS5vcmcvIiwKICAgICJ3aW5nZXQiOiAiVGhlRG9jdW1lbnRGb3VuZGF0aW9uLkxpYnJlT2ZmaWNlIiwKICAgICJmb3NzIjogdHJ1ZQogIH0sCiAgIldQRkluc3RhbGxsaWJyZXdvbGYiOiB7CiAgICAiY2F0ZWdvcnkiOiAi5rWP6KeI5ZmoIiwKICAgICJjaG9jbyI6ICJsaWJyZXdvbGYiLAogICAgImNvbnRlbnQiOiAiTGlicmVXb2xmIOmakOengea1j+iniOWZqCIsCiAgICAiZGVzY3JpcHRpb24iOiAiTGlicmVXb2xmIOaYr+S4gOasvuWfuuS6jiBGaXJlZm94IOazqOmHjemakOengeeahOe9kemhtea1j+iniOWZqO+8jOWFt+aciemineWklueahOmakOengeWSjOWuieWFqOWinuW8uuWKn+iDveOAgiIsCiAgICAibGluayI6ICJodHRwczovL2xpYnJld29sZi1jb21tdW5pdHkuZ2l0bGFiLmlvLyIsCiAgICAid2luZ2V0IjogIkxpYnJlV29sZi5MaWJyZVdvbGYiLAogICAgImZvc3MiOiB0cnVlCiAgfSwKICAiV1BGSW5zdGFsbGxvY2Fsc2VuZCI6IHsKICAgICJjYXRlZ29yeSI6ICLoh6rmiZjnrqHlt6XlhbciLAogICAgImNob2NvIjogImxvY2Fsc2VuZC5pbnN0YWxsIiwKICAgICJjb250ZW50IjogIkxvY2FsU2VuZCDmlofku7bkvKDovpMiLAogICAgImRlc2NyaXB0aW9uIjogIuS4gOasvuW8gOa6kOeahOi3qOW5s+WPsCBBaXJEcm9wIOabv+S7o+WTgeOAgiIsCiAgICAibGluayI6ICJodHRwczovL2xvY2Fsc2VuZC5vcmcvIiwKICAgICJ3aW5nZXQiOiAiTG9jYWxTZW5kLkxvY2FsU2VuZCIsCiAgICAiZm9zcyI6IHRydWUKICB9LAogICJXUEZJbnN0YWxsbXBjLXF0IjogewogICAgImNhdGVnb3J5IjogIuWkmuWqkuS9k+W3peWFtyIsCiAgICAiY2hvY28iOiAibWVkaWFpbmZvIiwKICAgICJjb250ZW50IjogIm1wYy1xdCDlqpLkvZPmkq3mlL7lmagiLAogICAgImRlc2NyaXB0aW9uIjogIk1lZGlhIFBsYXllciBDbGFzc2ljIFF1dGUgVGhlYXRlciDlqpLkvZPmkq3mlL7lmagiLAogICAgImxpbmsiOiAiaHR0cHM6Ly9naXRodWIuY29tL21wYy1xdC9tcGMtcXQiLAogICAgIndpbmdldCI6ICJtcGMtcXQubXBjLXF0IiwKICAgICJmb3NzIjogdHJ1ZQogIH0sCiAgIldQRkluc3RhbGxtYXRyaXgiOiB7CiAgICAiY2F0ZWdvcnkiOiAi6YCa6K6v5bel5YW3IiwKICAgICJjaG9jbyI6ICJlbGVtZW50LWRlc2t0b3AiLAogICAgImNvbnRlbnQiOiAiRWxlbWVudCDljbPml7bpgJrorq8iLAogICAgImRlc2NyaXB0aW9uIjogIkVsZW1lbnQg5pivIE1hdHJpeCDnmoTlrqLmiLfnq6/vvIxNYXRyaXgg5piv5LiA5Liq5a6J5YWo44CB5Y675Lit5b+D5YyW6YCa6K6v55qE5byA5pS+572R57uc44CCIiwKICAgICJsaW5rIjogImh0dHBzOi8vZWxlbWVudC5pby8iLAogICAgIndpbmdldCI6ICJFbGVtZW50LkVsZW1lbnQiLAogICAgImZvc3MiOiB0cnVlCiAgfSwKICAiV1BGSW5zdGFsbG1pbml0b29scGFydGl0aW9ud2l6YXJkIjogewogICAgImNhdGVnb3J5IjogIuW3peWFt+exuyIsCiAgICAiY2hvY28iOiAibWluaXRvb2xwYXJ0aXRpb253aXphcmQiLAogICAgImNvbnRlbnQiOiAiTWluaVRvb2wg5YiG5Yy65bel5YW3IiwKICAgICJkZXNjcmlwdGlvbiI6ICLlhajpnaLnmoTlhY3otLnliIbljLrnrqHnkIblmajvvIzlj6/miafooYwgV2luZG93cyDmnKzouqvml6Dms5XlrozmiJDnmoTpq5jnuqfmk43kvZzjgIIiLAogICAgImxpbmsiOiAiaHR0cHM6Ly93d3cucGFydGl0aW9ud2l6YXJkLmNvbS8iLAogICAgIndpbmdldCI6ICJNaW5pVG9vbC5QYXJ0aXRpb25XaXphcmQuRnJlZSIsCiAgICAiZm9zcyI6IGZhbHNlCiAgfSwKICAiV1BGSW5zdGFsbG1vZHJpbnRoIjogewogICAgImNhdGVnb3J5IjogIua4uOaIjyIsCiAgICAiY2hvY28iOiAibW9kcmludGgtYXBwIiwKICAgICJjb250ZW50IjogIk1vZHJpbnRoIE1pbmVjcmFmdCDmqKHnu4TnrqHnkIYiLAogICAgImRlc2NyaXB0aW9uIjogIk1vZHJpbnRoIEFwcCDmmK/nlKjkuo7nrqHnkIYgTWluZWNyYWZ0IOaooee7hOWSjOaVtOWQiOWMheeahOahjOmdouW6lOeUqOOAgiIsCiAgICAibGluayI6ICJodHRwczovL21vZHJpbnRoLmNvbS9hcHAiLAogICAgIndpbmdldCI6ICJNb2RyaW50aC5Nb2RyaW50aEFwcCIsCiAgICAiZm9zcyI6IHRydWUKICB9LAogICJXUEZJbnN0YWxsbW9vbmxpZ2h0IjogewogICAgImNhdGVnb3J5IjogIuiHquaJmOeuoeW3peWFtyIsCiAgICAiY2hvY28iOiAibW9vbmxpZ2h0LXF0IiwKICAgICJjb250ZW50IjogIk1vb25saWdodCDmuLjmiI/kuLLmtYEiLAogICAgImRlc2NyaXB0aW9uIjogIk1vb25saWdodC9HYW1lU3RyZWFtIOWuouaIt+err+WFgeiuuOaCqOmAmui/h+acrOWcsOe9kee7nOWwhiBQQyDmuLjmiI/kuLLmtYHliLDlhbbku5borr7lpIfjgIIiLAogICAgImxpbmsiOiAiaHR0cHM6Ly9tb29ubGlnaHQtc3RyZWFtLm9yZy8iLAogICAgIndpbmdldCI6ICJNb29ubGlnaHRHYW1lU3RyZWFtaW5nUHJvamVjdC5Nb29ubGlnaHQiLAogICAgImZvc3MiOiB0cnVlCiAgfSwKICAiV1BGSW5zdGFsbG1wY2hjIjogewogICAgImNhdGVnb3J5IjogIuWkmuWqkuS9k+W3peWFtyIsCiAgICAiY2hvY28iOiAibXBjLWhjLWNsc2lkMiIsCiAgICAiY29udGVudCI6ICJNUEMtSEMg5aqS5L2T5pKt5pS+5ZmoIiwKICAgICJkZXNjcmlwdGlvbiI6ICJNZWRpYSBQbGF5ZXIgQ2xhc3NpYyAtIEhvbWUgQ2luZW1hIChNUEMtSEMpIOaYr+S4gOasvuWFjei0ueW8gOa6kOeahOinhumikeaSreaUvuWZqCIsCiAgICAibGluayI6ICJodHRwczovL2dpdGh1Yi5jb20vY2xzaWQyL21wYy1oYy8iLAogICAgIndpbmdldCI6ICJjbHNpZDIubXBjLWhjIiwKICAgICJmb3NzIjogdHJ1ZQogIH0sCiAgIldQRkluc3RhbGxtc2VkZ2VyZWRpcmVjdCI6IHsKICAgICJjYXRlZ29yeSI6ICLlt6XlhbfnsbsiLAogICAgImNob2NvIjogIm1zZWRnZXJlZGlyZWN0IiwKICAgICJjb250ZW50IjogIk1TRWRnZVJlZGlyZWN0IOmHjeWumuWQkeW3peWFtyIsCiAgICAiZGVzY3JpcHRpb24iOiAi5bCG5paw6Ze744CB5pCc57Si44CB5bCP5bel5YW344CB5aSp5rCU562J6YeN5a6a5ZCR5Yiw6buY6K6k5rWP6KeI5Zmo55qE5bel5YW344CCIiwKICAgICJsaW5rIjogImh0dHBzOi8vZ2l0aHViLmNvbS9yY21hZWhsL01TRWRnZVJlZGlyZWN0IiwKICAgICJ3aW5nZXQiOiAicmNtYWVobC5NU0VkZ2VSZWRpcmVjdCIsCiAgICAiZm9zcyI6IHRydWUKICB9LAogICJXUEZJbnN0YWxsbXNpYWZ0ZXJidXJuZXIiOiB7CiAgICAiY2F0ZWdvcnkiOiAi5bel5YW357G7IiwKICAgICJjaG9jbyI6ICJtc2lhZnRlcmJ1cm5lciIsCiAgICAiY29udGVudCI6ICJNU0kgQWZ0ZXJidXJuZXIg6LaF6aKR5bel5YW3IiwKICAgICJkZXNjcmlwdGlvbiI6ICJNU0kgQWZ0ZXJidXJuZXIg5piv5LiA5qy+5pi+5Y2h6LaF6aKR5bel5YW377yM5YW35pyJ6auY57qn5Yqf6IO944CCIiwKICAgICJsaW5rIjogImh0dHBzOi8vd3d3Lm1zaS5jb20vTGFuZGluZy9hZnRlcmJ1cm5lciIsCiAgICAid2luZ2V0IjogIkd1cnUzRC5BZnRlcmJ1cm5lciIsCiAgICAiZm9zcyI6IGZhbHNlCiAgfSwKICAiV1BGSW5zdGFsbG11bGx2YWR2cG4iOiB7CiAgICAiY2F0ZWdvcnkiOiAi5LiT5Lia5bel5YW3IiwKICAgICJjaG9jbyI6ICJtdWxsdmFkLWFwcCIsCiAgICAiY29udGVudCI6ICJNdWxsdmFkIFZQTiIsCiAgICAiZGVzY3JpcHRpb24iOiAi6L+Z5pivIE11bGx2YWQgVlBOIOacjeWKoeeahCBWUE4g5a6i5oi356uv6L2v5Lu244CCIiwKICAgICJsaW5rIjogImh0dHBzOi8vZ2l0aHViLmNvbS9tdWxsdmFkL211bGx2YWR2cG4tYXBwIiwKICAgICJ3aW5nZXQiOiAiTXVsbHZhZFZQTi5NdWxsdmFkVlBOIiwKICAgICJmb3NzIjogdHJ1ZQogIH0sCiAgIldQRkluc3RhbGxtdWxsdmFkYnJvd3NlciI6IHsKICAgICJjYXRlZ29yeSI6ICLmtY/op4jlmagiLAogICAgImNob2NvIjogIm5hIiwKICAgICJjb250ZW50IjogIk11bGx2YWQg6ZqQ56eB5rWP6KeI5ZmoIiwKICAgICJkZXNjcmlwdGlvbiI6ICJNdWxsdmFkIEJyb3dzZXIg5piv5LiA5qy+5rOo6YeN6ZqQ56eB55qE572R6aG15rWP6KeI5Zmo77yM5LiOIFRvciDpobnnm67lkIjkvZzlvIDlj5HjgIIiLAogICAgImxpbmsiOiAiaHR0cHM6Ly9tdWxsdmFkLm5ldC9icm93c2VyIiwKICAgICJ3aW5nZXQiOiAiTXVsbHZhZFZQTi5NdWxsdmFkQnJvd3NlciIsCiAgICAiZm9zcyI6IHRydWUKICB9LAogICJXUEZJbnN0YWxsbm9tYWNzIjogewogICAgImNhdGVnb3J5IjogIuWkmuWqkuS9k+W3peWFtyIsCiAgICAiY2hvY28iOiAibm9tYWNzIiwKICAgICJjb250ZW50IjogIm5vbWFjcyDlm77niYfmn6XnnIvlmagiLAogICAgImRlc2NyaXB0aW9uIjogIm5vbWFjcyDmmK/kuIDmrL7lhY3otLnlvIDmupDlpJrlubPlj7Dlm77niYfmn6XnnIvlmajvvIzmlK/mjIHmiYDmnInluLjop4Hlm77niYfmoLzlvI/jgIIiLAogICAgImxpbmsiOiAiaHR0cHM6Ly9ub21hY3Mub3JnLyIsCiAgICAid2luZ2V0IjogIm5vbWFjcy5ub21hY3MiLAogICAgImZvc3MiOiB0cnVlCiAgfSwKICAiV1BGSW5zdGFsbG5hbmF6aXAiOiB7CiAgICAiY2F0ZWdvcnkiOiAi5bel5YW357G7IiwKICAgICJjaG9jbyI6ICJuYW5hemlwIiwKICAgICJjb250ZW50IjogIk5hbmFaaXAg5Y6L57yp5bel5YW3IiwKICAgICJkZXNjcmlwdGlvbiI6ICJOYW5hWmlwIOaYr+S4gOasvuW/q+mAn+mrmOaViOeahOaWh+S7tuWOi+e8qeWSjOino+WOi+e8qeW3peWFt+OAgiIsCiAgICAibGluayI6ICJodHRwczovL2dpdGh1Yi5jb20vTTJUZWFtL05hbmFaaXAiLAogICAgIndpbmdldCI6ICJNMlRlYW0uTmFuYVppcCIsCiAgICAiZm9zcyI6IHRydWUKICB9LAogICJXUEZJbnN0YWxsbmV0YmlyZCI6IHsKICAgICJjYXRlZ29yeSI6ICLoh6rmiZjnrqHlt6XlhbciLAogICAgImNob2NvIjogIm5ldGJpcmQiLAogICAgImNvbnRlbnQiOiAiTmV0QmlyZCDnvZHnu5zlt6XlhbciLAogICAgImRlc2NyaXB0aW9uIjogIk5ldEJpcmQg5piv5LiOIFRhaWxTY2FsZSDnm7jlvZPnmoTlvIDmupDmm7/ku6Plk4HvvIzlj6/ov57mjqXliLDoh6rmiZjnrqHmnI3liqHlmajjgIIiLAogICAgImxpbmsiOiAiaHR0cHM6Ly9uZXRiaXJkLmlvLyIsCiAgICAid2luZ2V0IjogIk5ldGJpcmQuTmV0YmlyZCIsCiAgICAiZm9zcyI6IHRydWUKICB9LAogICJXUEZJbnN0YWxsbmFwczIiOiB7CiAgICAiY2F0ZWdvcnkiOiAi5aSa5aqS5L2T5bel5YW3IiwKICAgICJjaG9jbyI6ICJuYXBzMiIsCiAgICAiY29udGVudCI6ICJOQVBTMiDmlofmoaPmiavmj48iLAogICAgImRlc2NyaXB0aW9uIjogIk5BUFMyIOaYr+S4gOasvueugOWMluWIm+W7uueUteWtkOaWh+aho+a1geeoi+eahOaWh+aho+aJq+aPj+W6lOeUqOOAgiIsCiAgICAibGluayI6ICJodHRwczovL3d3dy5uYXBzMi5jb20vIiwKICAgICJ3aW5nZXQiOiAiQ3lhbmZpc2guTkFQUzIiLAogICAgImZvc3MiOiB0cnVlCiAgfSwKICAiV1BGSW5zdGFsbG5lb3ZpbSI6IHsKICAgICJjYXRlZ29yeSI6ICLlvIDlj5Hlt6XlhbciLAogICAgImNob2NvIjogIm5lb3ZpbSIsCiAgICAiY29udGVudCI6ICJOZW92aW0g5paH5pys57yW6L6R5ZmoIiwKICAgICJkZXNjcmlwdGlvbiI6ICJOZW92aW0g5piv5LiA5qy+6auY5bqm5Y+v5omp5bGV55qE5paH5pys57yW6L6R5Zmo77yM5piv5a+55Y6f5aeLIFZpbSDnvJbovpHlmajnmoTmlLnov5vjgIIiLAogICAgImxpbmsiOiAiaHR0cHM6Ly9uZW92aW0uaW8vIiwKICAgICJ3aW5nZXQiOiAiTmVvdmltLk5lb3ZpbSIsCiAgICAiZm9zcyI6IHRydWUKICB9LAogICJXUEZJbnN0YWxsbmV4dGNsb3VkZGVza3RvcCI6IHsKICAgICJjYXRlZ29yeSI6ICLoh6rmiZjnrqHlt6XlhbciLAogICAgImNob2NvIjogIm5leHRjbG91ZC1jbGllbnQiLAogICAgImNvbnRlbnQiOiAiTmV4dGNsb3VkIOahjOmdouWuouaIt+erryIsCiAgICAiZGVzY3JpcHRpb24iOiAiTmV4dGNsb3VkIERlc2t0b3Ag5pivIE5leHRjbG91ZCDmlofku7blkIzmraXlkozlhbHkuqvlubPlj7DnmoTlrpjmlrnmoYzpnaLlrqLmiLfnq6/jgIIiLAogICAgImxpbmsiOiAiaHR0cHM6Ly9uZXh0Y2xvdWQuY29tL2luc3RhbGwvI2luc3RhbGwtY2xpZW50cyIsCiAgICAid2luZ2V0IjogIk5leHRjbG91ZC5OZXh0Y2xvdWREZXNrdG9wIiwKICAgICJmb3NzIjogdHJ1ZQogIH0sCiAgIldQRkluc3RhbGxubWFwIjogewogICAgImNhdGVnb3J5IjogIuS4k+S4muW3peWFtyIsCiAgICAiY2hvY28iOiAibm1hcCIsCiAgICAiY29udGVudCI6ICJObWFwIOe9kee7nOaJq+aPjyIsCiAgICAiZGVzY3JpcHRpb24iOiAiTm1hcCAoTmV0d29yayBNYXBwZXIpIGlzIGFuIG9wZW4tc291cmNlIHRvb2wgZm9yIG5ldHdvcmsgZXhwbG9yYXRpb24gYW5kIHNlY3VyaXR5IGF1ZGl0aW5nLiBJdCBkaXNjb3ZlcnMgZGV2aWNlcyBvbiBhIG5ldHdvcmsgYW5kIHByb3ZpZGVzIGluZm9ybWF0aW9uIGFib3V0IHRoZWlyIHBvcnRzIGFuZCBzZXJ2aWNlcy4iLAogICAgImxpbmsiOiAiaHR0cHM6Ly9ubWFwLm9yZy8iLAogICAgIndpbmdldCI6ICJJbnNlY3VyZS5ObWFwIiwKICAgICJmb3NzIjogdHJ1ZQogIH0sCiAgIldQRkluc3RhbGxub2RlanMiOiB7CiAgICAiY2F0ZWdvcnkiOiAi5byA5Y+R5bel5YW3IiwKICAgICJjaG9jbyI6ICJub2RlanMiLAogICAgImNvbnRlbnQiOiAiTm9kZS5qcyIsCiAgICAiZGVzY3JpcHRpb24iOiAiTm9kZS5qcyDmmK/ln7rkuo4gQ2hyb21lIFY4IOW8leaTjueahCBKYXZhU2NyaXB0IOi/kOihjOaXtuOAgiIsCiAgICAibGluayI6ICJodHRwczovL25vZGVqcy5vcmcvIiwKICAgICJ3aW5nZXQiOiAiT3BlbkpTLk5vZGVKUyIsCiAgICAiZm9zcyI6IHRydWUKICB9LAogICJXUEZJbnN0YWxsbm9kZWpzbHRzIjogewogICAgImNhdGVnb3J5IjogIuW8gOWPkeW3peWFtyIsCiAgICAiY2hvY28iOiAibm9kZWpzLWx0cyIsCiAgICAiY29udGVudCI6ICJOb2RlLmpzIExUUyDplb/mnJ/mlK/mjIHniYgiLAogICAgImRlc2NyaXB0aW9uIjogIk5vZGUuanMgTFRTIOaPkOS+m+mVv+acn+aUr+aMgeeJiOacrO+8jOeUqOS6jueos+WumuWPr+mdoOeahOacjeWKoeWZqOerryBKYXZhU2NyaXB0IOW8gOWPkeOAgiIsCiAgICAibGluayI6ICJodHRwczovL25vZGVqcy5vcmcvIiwKICAgICJ3aW5nZXQiOiAiT3BlbkpTLk5vZGVKUy5MVFMiLAogICAgImZvc3MiOiB0cnVlCiAgfSwKICAiV1BGSW5zdGFsbHBucG0iOiB7CiAgICAiY2F0ZWdvcnkiOiAi5byA5Y+R5bel5YW3IiwKICAgICJjb250ZW50IjogInBucG0g5YyF566h55CG5ZmoIiwKICAgICJkZXNjcmlwdGlvbiI6ICJwbnBtIOaYr+S4gOasvuW/q+mAn+S4lOiKguecgeejgeebmOepuumXtOeahCBKYXZhU2NyaXB0IOWSjCBOb2RlLmpzIOWMheeuoeeQhuWZqOOAgiIsCiAgICAibGluayI6ICJodHRwczovL3BucG0uaW8vIiwKICAgICJ3aW5nZXQiOiAicG5wbS5wbnBtIiwKICAgICJmb3NzIjogdHJ1ZQogIH0sCiAgIldQRkluc3RhbGxub3RlcGFkcGx1cyI6IHsKICAgICJjYXRlZ29yeSI6ICLlpJrlqpLkvZPlt6XlhbciLAogICAgImNob2NvIjogIm5vdGVwYWRwbHVzcGx1cyIsCiAgICAiY29udGVudCI6ICJOb3RlcGFkKysg5paH5pys57yW6L6R5ZmoIiwKICAgICJkZXNjcmlwdGlvbiI6ICJOb3RlcGFkKysg5piv5LiA5qy+5YWN6LS55byA5rqQ5Luj56CB57yW6L6R5Zmo77yM5piv6K6w5LqL5pys55qE5pu/5Luj5ZOB77yM5pSv5oyB5aSa56eN6K+t6KiA44CCIiwKICAgICJsaW5rIjogImh0dHBzOi8vbm90ZXBhZC1wbHVzLXBsdXMub3JnLyIsCiAgICAid2luZ2V0IjogIk5vdGVwYWQrKy5Ob3RlcGFkKysiLAogICAgImZvc3MiOiB0cnVlCiAgfSwKICAiV1BGSW5zdGFsbG51Z2V0IjogewogICAgImNhdGVnb3J5IjogIuW+rui9r+W3peWFtyIsCiAgICAiY2hvY28iOiAibnVnZXQuY29tbWFuZGxpbmUiLAogICAgImNvbnRlbnQiOiAiTnVHZXQg5YyF566h55CG5ZmoIiwKICAgICJkZXNjcmlwdGlvbiI6ICJOdUdldCDmmK8gLk5FVCDmoYbmnrbnmoTljIXnrqHnkIblmajvvIzkvb/lvIDlj5HkurrlkZjog73lpJ/nrqHnkIblkozlhbHkuqsgLk5FVCDlupTnlKjkuK3nmoTlupPjgIIiLAogICAgImxpbmsiOiAiaHR0cHM6Ly93d3cubnVnZXQub3JnLyIsCiAgICAid2luZ2V0IjogIk1pY3Jvc29mdC5OdUdldCIsCiAgICAiZm9zcyI6IHRydWUKICB9LAogICJXUEZJbnN0YWxsbnZjbGVhbiI6IHsKICAgICJjYXRlZ29yeSI6ICLlt6XlhbfnsbsiLAogICAgImNob2NvIjogIm5hIiwKICAgICJjb250ZW50IjogIk5WQ2xlYW5zdGFsbCDmmL7ljaHpqbHliqjlrprliLYiLAogICAgImRlc2NyaXB0aW9uIjogIk5WQ2xlYW5zdGFsbCDmmK/kuIDmrL7lrprliLYgTlZJRElBIOmpseWKqOWuieijheeahOW3peWFt+OAgiIsCiAgICAibGluayI6ICJodHRwczovL3d3dy50ZWNocG93ZXJ1cC5jb20vbnZjbGVhbnN0YWxsLyIsCiAgICAid2luZ2V0IjogIlRlY2hQb3dlclVwLk5WQ2xlYW5zdGFsbCIsCiAgICAiZm9zcyI6IGZhbHNlCiAgfSwKICAiV1BGSW5zdGFsbG9icyI6IHsKICAgICJjYXRlZ29yeSI6ICLlpJrlqpLkvZPlt6XlhbciLAogICAgImNob2NvIjogIm9icy1zdHVkaW8iLAogICAgImNvbnRlbnQiOiAiT0JTIFN0dWRpbyDnm7Tmkq3lvZXlsY8iLAogICAgImRlc2NyaXB0aW9uIjogIk9CUyBTdHVkaW8g5piv5LiA5qy+5YWN6LS55byA5rqQ55qE6KeG6aKR5b2V5Yi25ZKM55u05pKt5o6o5rWB6L2v5Lu2IiwKICAgICJsaW5rIjogImh0dHBzOi8vb2JzcHJvamVjdC5jb20vIiwKICAgICJ3aW5nZXQiOiAiT0JTUHJvamVjdC5PQlNTdHVkaW8iLAogICAgImZvc3MiOiB0cnVlCiAgfSwKICAiV1BGSW5zdGFsbG9ic2lkaWFuIjogewogICAgImNhdGVnb3J5IjogIuWkmuWqkuS9k+W3peWFtyIsCiAgICAiY2hvY28iOiAib2JzaWRpYW4iLAogICAgImNvbnRlbnQiOiAiT2JzaWRpYW4g55+l6K+G566h55CGIiwKICAgICJkZXNjcmlwdGlvbiI6ICJPYnNpZGlhbiDmmK/kuIDmrL7lip/og73lvLrlpKfnmoTnrJTorrDlkoznn6Xor4bnrqHnkIblupTnlKjjgIIiLAogICAgImxpbmsiOiAiaHR0cHM6Ly9vYnNpZGlhbi5tZC8iLAogICAgIndpbmdldCI6ICJPYnNpZGlhbi5PYnNpZGlhbiIsCiAgICAiZm9zcyI6IGZhbHNlCiAgfSwKICAiV1BGSW5zdGFsbG9uZWRyaXZlIjogewogICAgImNhdGVnb3J5IjogIuW+rui9r+W3peWFtyIsCiAgICAiY2hvY28iOiAib25lZHJpdmUiLAogICAgImNvbnRlbnQiOiAiT25lRHJpdmUg5LqR5a2Y5YKoIiwKICAgICJkZXNjcmlwdGlvbiI6ICJPbmVEcml2ZSDmmK8gTWljcm9zb2Z0IOaPkOS+m+eahOS6keWtmOWCqOacjeWKoe+8jOWFgeiuuOeUqOaIt+WuieWFqOWcsOi3qOiuvuWkh+WtmOWCqOWSjOWFseS6q+aWh+S7tuOAgiIsCiAgICAibGluayI6ICJodHRwczovL29uZWRyaXZlLmxpdmUuY29tLyIsCiAgICAid2luZ2V0IjogIk1pY3Jvc29mdC5PbmVEcml2ZSIsCiAgICAiZm9zcyI6IGZhbHNlCiAgfSwKICAiV1BGSW5zdGFsbG9ubHlvZmZpY2UiOiB7CiAgICAiY2F0ZWdvcnkiOiAi5aSa5aqS5L2T5bel5YW3IiwKICAgICJjaG9jbyI6ICJvbmx5b2ZmaWNlIiwKICAgICJjb250ZW50IjogIk9OTFlPRkZJQ0Ug5qGM6Z2i5Yqe5YWsIiwKICAgICJkZXNjcmlwdGlvbiI6ICJPTkxZT0ZGSUNFIERlc2t0b3Ag5piv5LiA5qy+5YWo6Z2i55qE5Yqe5YWs5aWX5Lu277yM55So5LqO5paH5qGj57yW6L6R5ZKM5Y2P5L2c44CCIiwKICAgICJsaW5rIjogImh0dHBzOi8vd3d3Lm9ubHlvZmZpY2UuY29tL2Rlc2t0b3AuYXNweCIsCiAgICAid2luZ2V0IjogIk9OTFlPRkZJQ0UuRGVza3RvcEVkaXRvcnMiLAogICAgImZvc3MiOiB0cnVlCiAgfSwKICAiV1BGSW5zdGFsbE9QQXV0b0NsaWNrZXIiOiB7CiAgICAiY2F0ZWdvcnkiOiAi5bel5YW357G7IiwKICAgICJjaG9jbyI6ICJhdXRvY2xpY2tlciIsCiAgICAiY29udGVudCI6ICJPUEF1dG9DbGlja2VyIOiHquWKqOeCueWHuyIsCiAgICAiZGVzY3JpcHRpb24iOiAi5Yqf6IO96b2Q5YWo55qE6Ieq5Yqo54K55Ye75Zmo77yM5pSv5oyB5Yqo5oCB5YWJ5qCH5L2N572u5oiW6aKE6K6+5L2N572u5Lik56eN6Ieq5Yqo54K55Ye75qih5byP44CCIiwKICAgICJsaW5rIjogImh0dHBzOi8vd3d3Lm9wYXV0b2NsaWNrZXIuY29tIiwKICAgICJ3aW5nZXQiOiAiT1BBdXRvQ2xpY2tlci5PUEF1dG9DbGlja2VyIiwKICAgICJmb3NzIjogZmFsc2UKICB9LAogICJXUEZJbnN0YWxsb3BlbnJnYiI6IHsKICAgICJjYXRlZ29yeSI6ICLlt6XlhbfnsbsiLAogICAgImNob2NvIjogIm9wZW5yZ2IiLAogICAgImNvbnRlbnQiOiAiT3BlblJHQiBSR0Lnga/lhYnmjqfliLYiLAogICAgImRlc2NyaXB0aW9uIjogIk9wZW5SR0Ig5piv5LiA5qy+5byA5rqQIFJHQiDnga/lhYnmjqfliLbova/ku7bjgIIiLAogICAgImxpbmsiOiAiaHR0cHM6Ly9vcGVucmdiLm9yZy8iLAogICAgIndpbmdldCI6ICJPcGVuUkdCLk9wZW5SR0IiLAogICAgImZvc3MiOiB0cnVlCiAgfSwKICAiV1BGSW5zdGFsbE9wZW5WUE4iOiB7CiAgICAiY2F0ZWdvcnkiOiAi5LiT5Lia5bel5YW3IiwKICAgICJjaG9jbyI6ICJvcGVudnBuLWNvbm5lY3QiLAogICAgImNvbnRlbnQiOiAiT3BlblZQTiBDb25uZWN0IOWuouaIt+erryIsCiAgICAiZGVzY3JpcHRpb24iOiAiT3BlblZQTiBDb25uZWN0IOaYr+S4gOasviBWUE4g5a6i5oi356uv77yM5Y+v6K6p5L2g5a6J5YWo6L+e5o6l5YiwIFZQTiDmnI3liqHlmagiLAogICAgImxpbmsiOiAiaHR0cHM6Ly9vcGVudnBuLm5ldC8iLAogICAgIndpbmdldCI6ICJPcGVuVlBOVGVjaG5vbG9naWVzLk9wZW5WUE5Db25uZWN0IiwKICAgICJmb3NzIjogZmFsc2UKICB9LAogICJXUEZJbnN0YWxsT1ZpcnR1YWxCb3giOiB7CiAgICAiY2F0ZWdvcnkiOiAi5bel5YW357G7IiwKICAgICJjaG9jbyI6ICJ2aXJ0dWFsYm94IiwKICAgICJjb250ZW50IjogIk9yYWNsZSBWaXJ0dWFsQm94IOiZmuaLn+acuiIsCiAgICAiZGVzY3JpcHRpb24iOiAiT3JhY2xlIFZpcnR1YWxCb3gg5piv5LiA5qy+5Yqf6IO95by65aSn5LiU5YWN6LS55byA5rqQ55qE6Jma5ouf5YyW5bel5YW344CCIiwKICAgICJsaW5rIjogImh0dHBzOi8vd3d3LnZpcnR1YWxib3gub3JnLyIsCiAgICAid2luZ2V0IjogIk9yYWNsZS5WaXJ0dWFsQm94IiwKICAgICJmb3NzIjogdHJ1ZQogIH0sCiAgIldQRkluc3RhbGxwb2xpY3lwbHVzIjogewogICAgImNhdGVnb3J5IjogIuW3peWFt+exuyIsCiAgICAiY2hvY28iOiAibmEiLAogICAgImNvbnRlbnQiOiAiUG9saWN5IFBsdXMg57uE562W55Wl57yW6L6RIiwKICAgICJkZXNjcmlwdGlvbiI6ICLmnKzlnLDnu4TnrZbnlaXnvJbovpHlmajlop7lvLrniYjvvIzpgILnlKjkuo7miYDmnIkgV2luZG93cyDniYjmnKzjgIIiLAogICAgImxpbmsiOiAiaHR0cHM6Ly9naXRodWIuY29tL0ZsZWV4MjU1L1BvbGljeVBsdXMiLAogICAgIndpbmdldCI6ICJGbGVleDI1NS5Qb2xpY3lQbHVzIiwKICAgICJmb3NzIjogdHJ1ZQogIH0sCiAgIldQRkluc3RhbGxwcm9jZXNzZXhwbG9yZXIiOiB7CiAgICAiY2F0ZWdvcnkiOiAi5b6u6L2v5bel5YW3IiwKICAgICJjaG9jbyI6ICJwcm9jZXhwIiwKICAgICJjb250ZW50IjogIlByb2Nlc3MgRXhwbG9yZXIg6L+b56iL566h55CGIiwKICAgICJkZXNjcmlwdGlvbiI6ICJQcm9jZXNzIEV4cGxvcmVyIOaYr+S7u+WKoeeuoeeQhuWZqOWSjOezu+e7n+ebkeinhuWZqOOAgiIsCiAgICAibGluayI6ICJodHRwczovL2xlYXJuLm1pY3Jvc29mdC5jb20vc3lzaW50ZXJuYWxzL2Rvd25sb2Fkcy9wcm9jZXNzLWV4cGxvcmVyIiwKICAgICJ3aW5nZXQiOiAiTWljcm9zb2Z0LlN5c2ludGVybmFscy5Qcm9jZXNzRXhwbG9yZXIiLAogICAgImZvc3MiOiBmYWxzZQogIH0sCiAgIldQRkluc3RhbGxQYWludGRvdG5ldCI6IHsKICAgICJjYXRlZ29yeSI6ICLlpJrlqpLkvZPlt6XlhbciLAogICAgImNob2NvIjogInBhaW50Lm5ldCIsCiAgICAiY29udGVudCI6ICJQYWludC5ORVQg5Zu+5YOP57yW6L6RIiwKICAgICJkZXNjcmlwdGlvbiI6ICJQYWludC5ORVQg5piv5LiA5qy+5YWN6LS555qEIFdpbmRvd3Mg5Zu+5YOP54Wn54mH57yW6L6R6L2v5Lu2IiwKICAgICJsaW5rIjogImh0dHBzOi8vd3d3LmdldHBhaW50Lm5ldC8iLAogICAgIndpbmdldCI6ICJkb3RQRE4uUGFpbnREb3ROZXQiLAogICAgImZvc3MiOiBmYWxzZQogIH0sCiAgIldQRkluc3RhbGxwYXJzZWMiOiB7CiAgICAiY2F0ZWdvcnkiOiAi5bel5YW357G7IiwKICAgICJjaG9jbyI6ICJwYXJzZWMiLAogICAgImNvbnRlbnQiOiAiUGFyc2VjIOi/nOeoi+ahjOmdoiIsCiAgICAiZGVzY3JpcHRpb24iOiAiUGFyc2VjIOaYr+S4gOasvuS9juW7tui/n+OAgemrmOi0qOmHj+eahOi/nOeoi+ahjOmdouWFseS6q+W6lOeUqOOAgiIsCiAgICAibGluayI6ICJodHRwczovL3BhcnNlYy5hcHAvIiwKICAgICJ3aW5nZXQiOiAiUGFyc2VjLlBhcnNlYyIsCiAgICAiZm9zcyI6IGZhbHNlCiAgfSwKICAiV1BGSW5zdGFsbHBlYXppcCI6IHsKICAgICJjYXRlZ29yeSI6ICLlt6XlhbfnsbsiLAogICAgImNob2NvIjogInBlYXppcCIsCiAgICAiY29udGVudCI6ICJQZWFaaXAg5Y6L57yp5bel5YW3IiwKICAgICJkZXNjcmlwdGlvbiI6ICJQZWFaaXAg5piv5LiA5qy+5YWN6LS55byA5rqQ5paH5Lu25Y6L57yp5bel5YW377yM5pSv5oyB5aSa56eN5Y6L57yp5qC85byP5bm25o+Q5L6b5Yqg5a+G5Yqf6IO944CCIiwKICAgICJsaW5rIjogImh0dHBzOi8vcGVhemlwLmdpdGh1Yi5pby8iLAogICAgIndpbmdldCI6ICJHaW9yZ2lvdGFuaS5QZWF6aXAiLAogICAgImZvc3MiOiB0cnVlCiAgfSwKICAiV1BGSW5zdGFsbHBsYXluaXRlIjogewogICAgImNhdGVnb3J5IjogIua4uOaIjyIsCiAgICAiY2hvY28iOiAicGxheW5pdGUiLAogICAgImNvbnRlbnQiOiAiUGxheW5pdGUg5ri45oiP5bqT566h55CGIiwKICAgICJkZXNjcmlwdGlvbiI6ICJQbGF5bml0ZSDmmK/kuIDmrL7lvIDmupDmuLjmiI/lupPnrqHnkIblmajvvIznm67moIfmmK/kuLrmgqjnmoTmiYDmnInmuLjmiI/mj5Dkvpvnu5/kuIDnlYzpnaLjgIIiLAogICAgImxpbmsiOiAiaHR0cHM6Ly9wbGF5bml0ZS5saW5rLyIsCiAgICAid2luZ2V0IjogIlBsYXluaXRlLlBsYXluaXRlIiwKICAgICJmb3NzIjogdHJ1ZQogIH0sCiAgIldQRkluc3RhbGxwbGV4IjogewogICAgImNhdGVnb3J5IjogIuiHquaJmOeuoeW3peWFtyIsCiAgICAiY2hvY28iOiAicGxleG1lZGlhc2VydmVyIiwKICAgICJjb250ZW50IjogIlBsZXgg5aqS5L2T5pyN5Yqh5ZmoIiwKICAgICJkZXNjcmlwdGlvbiI6ICJQbGV4IE1lZGlhIFNlcnZlciDmmK/kuIDmrL7lqpLkvZPmnI3liqHlmajova/ku7bvvIzlj6/orqnkvaDnrqHnkIblkozmtYHlvI/kvKDovpPlqpLkvZPmlofku7YiLAogICAgImxpbmsiOiAiaHR0cHM6Ly93d3cucGxleC50di95b3VyLW1lZGlhLyIsCiAgICAid2luZ2V0IjogIlBsZXguUGxleE1lZGlhU2VydmVyIiwKICAgICJmb3NzIjogZmFsc2UKICB9LAogICJXUEZJbnN0YWxscGxleGRlc2t0b3AiOiB7CiAgICAiY2F0ZWdvcnkiOiAi6Ieq5omY566h5bel5YW3IiwKICAgICJjaG9jbyI6ICJwbGV4IiwKICAgICJjb250ZW50IjogIlBsZXgg5qGM6Z2i5a6i5oi356uvIiwKICAgICJkZXNjcmlwdGlvbiI6ICJQbGV4IE1lZGlhIFNlcnZlciDmmK/kuIDmrL7lqpLkvZPmnI3liqHlmajova/ku7bvvIzlj6/orqnkvaDnrqHnkIblkozmtYHlvI/kvKDovpPlqpLkvZPmlofku7YiLAogICAgImxpbmsiOiAiaHR0cHM6Ly93d3cucGxleC50diIsCiAgICAid2luZ2V0IjogIlBsZXguUGxleCIsCiAgICAiZm9zcyI6IGZhbHNlCiAgfSwKICAiV1BGSW5zdGFsbHBvc2giOiB7CiAgICAiY2F0ZWdvcnkiOiAi5byA5Y+R5bel5YW3IiwKICAgICJjaG9jbyI6ICJvaC1teS1wb3NoIiwKICAgICJjb250ZW50IjogIk9oIE15IFBvc2gg57uI56uv576O5YyWIiwKICAgICJkZXNjcmlwdGlvbiI6ICJPaCBNeSBQb3NoIOaYr+S4gOasvui3qOW5s+WPsOeahCBTaGVsbCDmj5DnpLrnrKbkuLvpopjlvJXmk47jgIIiLAogICAgImxpbmsiOiAiaHR0cHM6Ly9vaG15cG9zaC5kZXYvIiwKICAgICJ3aW5nZXQiOiAiSmFuRGVEb2JiZWxlZXIuT2hNeVBvc2giLAogICAgImZvc3MiOiB0cnVlCiAgfSwKICAiV1BGSW5zdGFsbHBvd2Vyc2hlbGwiOiB7CiAgICAiY2F0ZWdvcnkiOiAi5b6u6L2v5bel5YW3IiwKICAgICJjaG9jbyI6ICJwb3dlcnNoZWxsLWNvcmUiLAogICAgImNvbnRlbnQiOiAiUG93ZXJTaGVsbCIsCiAgICAiZGVzY3JpcHRpb24iOiAiUG93ZXJTaGVsbCDmmK/lvq7ova/nmoToh6rliqjljJbku7vliqHmoYbmnrblkozohJrmnKzor63oqIAiLAogICAgImxpbmsiOiAiaHR0cHM6Ly9naXRodWIuY29tL1Bvd2VyU2hlbGwvUG93ZXJTaGVsbCIsCiAgICAid2luZ2V0IjogIk1pY3Jvc29mdC5Qb3dlclNoZWxsIiwKICAgICJmb3NzIjogdHJ1ZQogIH0sCiAgIldQRkluc3RhbGxwb3dlcnRveXMiOiB7CiAgICAiY2F0ZWdvcnkiOiAi5b6u6L2v5bel5YW3IiwKICAgICJjaG9jbyI6ICJwb3dlcnRveXMiLAogICAgImNvbnRlbnQiOiAiUG93ZXJUb3lzIOaViOeOh+W3peWFtyIsCiAgICAiZGVzY3JpcHRpb24iOiAiUG93ZXJUb3lzIOaYr+S4gOWll+mdouWQkemrmOe6p+eUqOaIt+eahOaViOeOh+W3peWFt++8jOWMheaLrCBGYW5jeVpvbmVz44CBUG93ZXJSZW5hbWUg562J5Yqf6IO944CCIiwKICAgICJsaW5rIjogImh0dHBzOi8vZ2l0aHViLmNvbS9taWNyb3NvZnQvUG93ZXJUb3lzIiwKICAgICJ3aW5nZXQiOiAiTWljcm9zb2Z0LlBvd2VyVG95cyIsCiAgICAiZm9zcyI6IHRydWUKICB9LAogICJXUEZJbnN0YWxscHJpc21sYXVuY2hlciI6IHsKICAgICJjYXRlZ29yeSI6ICLmuLjmiI8iLAogICAgImNob2NvIjogInByaXNtbGF1bmNoZXIiLAogICAgImNvbnRlbnQiOiAiUHJpc20gTGF1bmNoZXIgTWluZWNyYWZ05ZCv5Yqo5ZmoIiwKICAgICJkZXNjcmlwdGlvbiI6ICJQcmlzbSBMYXVuY2hlciDmmK/kuIDmrL7lvIDmupAgTWluZWNyYWZ0IOWQr+WKqOWZqO+8jOaUr+aMgeeuoeeQhuWkmuS4quWunuS+i+OAgeW4kOaIt+WSjOaooee7hOOAgiIsCiAgICAibGluayI6ICJodHRwczovL3ByaXNtbGF1bmNoZXIub3JnLyIsCiAgICAid2luZ2V0IjogIlByaXNtTGF1bmNoZXIuUHJpc21MYXVuY2hlciIsCiAgICAiZm9zcyI6IHRydWUKICB9LAogICJXUEZJbnN0YWxscHJvY2Vzc2xhc3NvIjogewogICAgImNhdGVnb3J5IjogIuW3peWFt+exuyIsCiAgICAiY2hvY28iOiAicGxhc3NvIiwKICAgICJjb250ZW50IjogIlByb2Nlc3MgTGFzc28g6L+b56iL5LyY5YyWIiwKICAgICJkZXNjcmlwdGlvbiI6ICJQcm9jZXNzIExhc3NvIOaYr+S4gOasvuezu+e7n+S8mOWMluWSjOiHquWKqOWMluW3peWFt++8jOWPr+S8mOWMliBDUFUg5L2/55So546HIiwKICAgICJsaW5rIjogImh0dHBzOi8vYml0c3VtLmNvbS8iLAogICAgIndpbmdldCI6ICJCaXRTdW0uUHJvY2Vzc0xhc3NvIiwKICAgICJmb3NzIjogZmFsc2UKICB9LAogICJXUEZJbnN0YWxscHJvdG9uYXV0aCI6IHsKICAgICJjYXRlZ29yeSI6ICLlt6XlhbfnsbsiLAogICAgImNob2NvIjogInByb3RvbmF1dGgiLAogICAgImNvbnRlbnQiOiAiUHJvdG9uIOmqjOivgeWZqCIsCiAgICAiZGVzY3JpcHRpb24iOiAiUHJvdG9uIOeahOWPjOWboOe0oOiupOivgeW6lOeUqO+8jOeUqOS6juWuieWFqOWQjOatpeWSjOWkh+S7vSAyRkEg6aqM6K+B56CB44CCIiwKICAgICJsaW5rIjogImh0dHBzOi8vcHJvdG9uLm1lL2F1dGhlbnRpY2F0b3IiLAogICAgIndpbmdldCI6ICJQcm90b24uUHJvdG9uQXV0aGVudGljYXRvciIsCiAgICAiZm9zcyI6IHRydWUKICB9LAogICJXUEZJbnN0YWxscHJvdG9ubWFpbCI6IHsKICAgICJjYXRlZ29yeSI6ICLpgJrorq/lt6XlhbciLAogICAgImNob2NvIjogInByb3Rvbm1haWwiLAogICAgImNvbnRlbnQiOiAiUHJvdG9uIE1haWwg5Yqg5a+G6YKu566xIiwKICAgICJkZXNjcmlwdGlvbiI6ICJQcm90b24gTWFpbCDmmK8gUHJvdG9uIOeahOerr+WIsOerr+WKoOWvhueUteWtkOmCruS7tuacjeWKoeOAgiIsCiAgICAibGluayI6ICJodHRwczovL3Byb3Rvbi5tZS9tYWlsIiwKICAgICJ3aW5nZXQiOiAiUHJvdG9uLlByb3Rvbk1haWwiLAogICAgImZvc3MiOiB0cnVlCiAgfSwKICAiV1BGSW5zdGFsbHByb3RvbmRyaXZlIjogewogICAgImNhdGVnb3J5IjogIuW3peWFt+exuyIsCiAgICAiY2hvY28iOiAicHJvdG9uZHJpdmUiLAogICAgImNvbnRlbnQiOiAiUHJvdG9uIERyaXZlIOWKoOWvhuS6keebmCIsCiAgICAiZGVzY3JpcHRpb24iOiAiUHJvdG9uIERyaXZlIOaYr+err+WIsOerr+WKoOWvhueahOeRnuWjq+aWh+S7tuS/nemZqeW6k+OAgiIsCiAgICAibGluayI6ICJodHRwczovL3Byb3Rvbi5tZS9kcml2ZSIsCiAgICAid2luZ2V0IjogIlByb3Rvbi5Qcm90b25Ecml2ZSIsCiAgICAiZm9zcyI6IHRydWUKICB9LAogICJXUEZJbnN0YWxscHJvdG9ucGFzcyI6IHsKICAgICJjYXRlZ29yeSI6ICLlt6XlhbfnsbsiLAogICAgImNob2NvIjogInByb3RvbnBhc3MiLAogICAgImNvbnRlbnQiOiAiUHJvdG9uIFBhc3Mg5a+G56CB566h55CGIiwKICAgICJkZXNjcmlwdGlvbiI6ICJQcm90b24gUGFzcyDmmK/kuIDmrL7ln7rkuo7kupHnmoTlr4bnoIHnrqHnkIblmajvvIzlhbfmnInnq6/liLDnq6/liqDlr4blip/og73jgIIiLAogICAgImxpbmsiOiAiaHR0cHM6Ly9wcm90b24ubWUvcGFzcyIsCiAgICAid2luZ2V0IjogIlByb3Rvbi5Qcm90b25QYXNzIiwKICAgICJmb3NzIjogdHJ1ZQogIH0sCiAgIldQRkluc3RhbGxwcm90b252cG4iOiB7CiAgICAiY2F0ZWdvcnkiOiAi5LiT5Lia5bel5YW3IiwKICAgICJjaG9jbyI6ICJwcm90b252cG4iLAogICAgImNvbnRlbnQiOiAiUHJvdG9uIFZQTiIsCiAgICAiZGVzY3JpcHRpb24iOiAiUHJvdG9uIFZQTiDmmK/ml6Dml6Xlv5cgVlBOIOacjeWKoe+8jOS/neaKpOaCqOeahOWcqOe6v+makOengeOAgiIsCiAgICAibGluayI6ICJodHRwczovL3Byb3RvbnZwbi5jb20vIiwKICAgICJ3aW5nZXQiOiAiUHJvdG9uLlByb3RvblZQTiIsCiAgICAiZm9zcyI6IHRydWUKICB9LAogICJXUEZJbnN0YWxscHJvY2Vzc21vbml0b3IiOiB7CiAgICAiY2F0ZWdvcnkiOiAi5b6u6L2v5bel5YW3IiwKICAgICJjaG9jbyI6ICJwcm9jZXhwIiwKICAgICJjb250ZW50IjogIlByb2Nlc3MgTW9uaXRvciDov5vnqIvnm5HmjqciLAogICAgImRlc2NyaXB0aW9uIjogIlN5c0ludGVybmFscyBQcm9jZXNzIE1vbml0b3Ig5piv5LiA5qy+6auY57qn55uR5o6n5bel5YW377yM5a6e5pe25pi+56S657O757uf5ZKM6L+b56iL5rS75Yqo44CCIiwKICAgICJsaW5rIjogImh0dHBzOi8vZG9jcy5taWNyb3NvZnQuY29tL2VuLXVzL3N5c2ludGVybmFscy9kb3dubG9hZHMvcHJvY21vbiIsCiAgICAid2luZ2V0IjogIk1pY3Jvc29mdC5TeXNpbnRlcm5hbHMuUHJvY2Vzc01vbml0b3IiLAogICAgImZvc3MiOiBmYWxzZQogIH0sCiAgIldQRkluc3RhbGxwdXR0eSI6IHsKICAgICJjYXRlZ29yeSI6ICLkuJPkuJrlt6XlhbciLAogICAgImNob2NvIjogInB1dHR5IiwKICAgICJjb250ZW50IjogIlB1VFRZIOi/nOeoi+i/nuaOpSIsCiAgICAiZGVzY3JpcHRpb24iOiAiUHVUVFkg5piv5LiA5qy+5YWN6LS55byA5rqQ55qE57uI56uv5Lu/55yf5Zmo44CB5Liy6KGM5o6n5Yi25Y+w5ZKM572R57uc5paH5Lu25Lyg6L6T5bel5YW3IiwKICAgICJsaW5rIjogImh0dHBzOi8vd3d3LmNoaWFyay5ncmVlbmVuZC5vcmcudWsvfnNndGF0aGFtL3B1dHR5LyIsCiAgICAid2luZ2V0IjogIlB1VFRZLlB1VFRZIiwKICAgICJmb3NzIjogdHJ1ZQogIH0sCiAgIldQRkluc3RhbGxweXRob24zIjogewogICAgImNhdGVnb3J5IjogIuW8gOWPkeW3peWFtyIsCiAgICAiY2hvY28iOiAicHl0aG9uIiwKICAgICJjb250ZW50IjogIlB5dGhvbiAzIiwKICAgICJkZXNjcmlwdGlvbiI6ICJQeXRob24g5piv5LiA56eN6YCa55So57yW56iL6K+t6KiA77yM55So5LqOIFdlYiDlvIDlj5HjgIHmlbDmja7liIbmnpDjgIHkurrlt6Xmmbrog73nrYnpoobln5/jgIIiLAogICAgImxpbmsiOiAiaHR0cHM6Ly93d3cucHl0aG9uLm9yZy8iLAogICAgIndpbmdldCI6ICJQeXRob24uUHl0aG9uLjMuMTQiLAogICAgImZvc3MiOiB0cnVlCiAgfSwKICAiV1BGSW5zdGFsbHFiaXR0b3JyZW50IjogewogICAgImNhdGVnb3J5IjogIuW3peWFt+exuyIsCiAgICAiY2hvY28iOiAicWJpdHRvcnJlbnQiLAogICAgImNvbnRlbnQiOiAicUJpdHRvcnJlbnQg5LiL6L295bel5YW3IiwKICAgICJkZXNjcmlwdGlvbiI6ICJxQml0dG9ycmVudCDmmK/kuIDmrL7lhY3otLnlvIDmupDnmoQgQml0VG9ycmVudCDlrqLmiLfnq68iLAogICAgImxpbmsiOiAiaHR0cHM6Ly93d3cucWJpdHRvcnJlbnQub3JnLyIsCiAgICAid2luZ2V0IjogInFCaXR0b3JyZW50LnFCaXR0b3JyZW50IiwKICAgICJmb3NzIjogdHJ1ZQogIH0sCiAgIldQRkluc3RhbGxxdG94IjogewogICAgImNhdGVnb3J5IjogIumAmuiur+W3peWFtyIsCiAgICAiY2hvY28iOiAicXRveCIsCiAgICAiY29udGVudCI6ICJRVG94IOWuieWFqOmAmuiuryIsCiAgICAiZGVzY3JpcHRpb24iOiAiUVRveCDmmK/kuIDmrL7lhY3otLnlvIDmupDpgJrorq/lupTnlKjvvIzorr7orqHkuIrkvJjlhYjogIPomZHnlKjmiLfpmpDnp4HlkozlronlhajjgIIiLAogICAgImxpbmsiOiAiaHR0cHM6Ly9xdG94LmdpdGh1Yi5pby8iLAogICAgIndpbmdldCI6ICJUb3gucVRveCIsCiAgICAiZm9zcyI6IHRydWUKICB9LAogICJXUEZJbnN0YWxscmV2byI6IHsKICAgICJjYXRlZ29yeSI6ICLlt6XlhbfnsbsiLAogICAgImNob2NvIjogInJldm8tdW5pbnN0YWxsZXIiLAogICAgImNvbnRlbnQiOiAiUmV2byBVbmluc3RhbGxlciDljbjovb3lt6XlhbciLAogICAgImRlc2NyaXB0aW9uIjogIlJldm8gVW5pbnN0YWxsZXIg5piv5LiA5qy+6auY57qn5Y246L295bel5YW377yM5biu5Yqp5oKo5Yig6Zmk5LiN6ZyA6KaB55qE6L2v5Lu25bm25riF55CG57O757uf44CCIiwKICAgICJsaW5rIjogImh0dHBzOi8vd3d3LnJldm91bmluc3RhbGxlci5jb20vIiwKICAgICJ3aW5nZXQiOiAiUmV2b1VuaW5zdGFsbGVyLlJldm9Vbmluc3RhbGxlciIsCiAgICAiZm9zcyI6IGZhbHNlCiAgfSwKICAiV1BGSW5zdGFsbFdpc2VQcm9ncmFtVW5pbnN0YWxsZXIiOiB7CiAgICAiY2F0ZWdvcnkiOiAi5bel5YW357G7IiwKICAgICJjaG9jbyI6ICJuYSIsCiAgICAiY29udGVudCI6ICJXaXNlIFByb2dyYW0gVW5pbnN0YWxsZXIg5Y246L295bel5YW3IiwKICAgICJkZXNjcmlwdGlvbiI6ICJXaXNlIFByb2dyYW0gVW5pbnN0YWxsZXIg5piv5Y246L29IFdpbmRvd3Mg56iL5bqP55qE5a6M576O6Kej5Yaz5pa55qGI44CCIiwKICAgICJsaW5rIjogImh0dHBzOi8vd3d3Lndpc2VjbGVhbmVyLmNvbS93aXNlLXByb2dyYW0tdW5pbnN0YWxsZXIuaHRtbCIsCiAgICAid2luZ2V0IjogIldpc2VDbGVhbmVyLldpc2VQcm9ncmFtVW5pbnN0YWxsZXIiLAogICAgImZvc3MiOiBmYWxzZQogIH0sCiAgIldQRkluc3RhbGxydWZ1cyI6IHsKICAgICJjYXRlZ29yeSI6ICLlt6XlhbfnsbsiLAogICAgImNob2NvIjogInJ1ZnVzIiwKICAgICJjb250ZW50IjogIlJ1ZnVzIOWQr+WKqOebmOWItuS9nCIsCiAgICAiZGVzY3JpcHRpb24iOiAiUnVmdXMg5piv5LiA5qy+5biu5Yqp5qC85byP5YyW5ZKM5Yib5bu65Y+v5ZCv5YqoIFVTQiDpqbHliqjlmajnmoTlt6XlhbfjgIIiLAogICAgImxpbmsiOiAiaHR0cHM6Ly9ydWZ1cy5pZS8iLAogICAgIndpbmdldCI6ICJSdWZ1cy5SdWZ1cyIsCiAgICAiZm9zcyI6IHRydWUKICB9LAogICJXUEZJbnN0YWxscnVzdGxhbmciOiB7CiAgICAiY2F0ZWdvcnkiOiAi5byA5Y+R5bel5YW3IiwKICAgICJjaG9jbyI6ICJydXN0IiwKICAgICJjb250ZW50IjogIlJ1c3Qg57yW56iL6K+t6KiAIiwKICAgICJkZXNjcmlwdGlvbiI6ICJSdXN0IOaYr+S4gOenjeS4k+S4uuWuieWFqOWSjOaAp+iDveiuvuiuoeeahOe8lueoi+ivreiogO+8jOWwpOWFtuazqOmHjeezu+e7n+e8lueoi+OAgiIsCiAgICAibGluayI6ICJodHRwczovL3d3dy5ydXN0LWxhbmcub3JnLyIsCiAgICAid2luZ2V0IjogIlJ1c3RsYW5nLlJ1c3QuTVNWQyIsCiAgICAiZm9zcyI6IHRydWUKICB9LAogICJXUEZJbnN0YWxsc2RpbyI6IHsKICAgICJjYXRlZ29yeSI6ICLlt6XlhbfnsbsiLAogICAgImNob2NvIjogInNkaW8iLAogICAgImNvbnRlbnQiOiAiU25hcHB5IERyaXZlciBJbnN0YWxsZXIg6amx5Yqo5pu05pawIiwKICAgICJkZXNjcmlwdGlvbiI6ICJTbmFwcHkgRHJpdmVyIEluc3RhbGxlciBPcmlnaW4g5piv5LiA5qy+5YWN6LS55byA5rqQ6amx5Yqo5pu05paw5bel5YW344CCIiwKICAgICJsaW5rIjogImh0dHBzOi8vd3d3LmdsZW5uLmRlbGFob3kuY29tL3NuYXBweS1kcml2ZXItaW5zdGFsbGVyLW9yaWdpbi8iLAogICAgIndpbmdldCI6ICJHbGVubkRlbGFob3kuU25hcHB5RHJpdmVySW5zdGFsbGVyT3JpZ2luIiwKICAgICJmb3NzIjogdHJ1ZQogIH0sCiAgIldQRkluc3RhbGxzaGFyZXgiOiB7CiAgICAiY2F0ZWdvcnkiOiAi5aSa5aqS5L2T5bel5YW3IiwKICAgICJjaG9jbyI6ICJzaGFyZXgiLAogICAgImNvbnRlbnQiOiAiU2hhcmVYIOaIquWbvuW3peWFtyIsCiAgICAiZGVzY3JpcHRpb24iOiAiU2hhcmVYIOaYr+S4gOasvuWFjei0ueW8gOa6kOeahOWxj+W5leaIquWbvuWSjOaWh+S7tuWFseS6q+W3peWFtyIsCiAgICAibGluayI6ICJodHRwczovL2dldHNoYXJleC5jb20vIiwKICAgICJ3aW5nZXQiOiAiU2hhcmVYLlNoYXJlWCIsCiAgICAiZm9zcyI6IHRydWUKICB9LAogICJXUEZJbnN0YWxsbmlsZXNvZnRTaGVsbCI6IHsKICAgICJjYXRlZ29yeSI6ICLlt6XlhbfnsbsiLAogICAgImNob2NvIjogIm5pbGVzb2Z0LXNoZWxsIiwKICAgICJjb250ZW50IjogIk5pbGVzb2Z0IFNoZWxsIOWPs+mUruiPnOWNlSIsCiAgICAiZGVzY3JpcHRpb24iOiAiU2hlbGwg5piv5LiA5qy+IFdpbmRvd3Mg5Y+z6ZSu6I+c5Y2V5omp5bGV5bel5YW377yM5re75Yqg6aKd5aSW5Yqf6IO95ZKM6Ieq5a6a5LmJ6YCJ6aG544CCIiwKICAgICJsaW5rIjogImh0dHBzOi8vbmlsZXNvZnQub3JnLyIsCiAgICAid2luZ2V0IjogIk5pbGVzb2Z0LlNoZWxsIiwKICAgICJmb3NzIjogZmFsc2UKICB9LAogICJXUEZJbnN0YWxsc3lzdGVtaW5mb3JtZXIiOiB7CiAgICAiY2F0ZWdvcnkiOiAi5byA5Y+R5bel5YW3IiwKICAgICJjaG9jbyI6ICJzeXN0ZW1pbmZvcm1lciIsCiAgICAiY29udGVudCI6ICJTeXN0ZW0gSW5mb3JtZXIg57O757uf55uR5o6nIiwKICAgICJkZXNjcmlwdGlvbiI6ICLkuIDmrL7lhY3otLnjgIHlvLrlpKfjgIHlpJrnlKjpgJTnmoTlt6XlhbfvvIzluK7liqnmgqjnm5Hmjqfns7vnu5/otYTmupDjgIHosIPor5Xova/ku7blkozmo4DmtYvmgbbmhI/ova/ku7bjgIIiLAogICAgImxpbmsiOiAiaHR0cHM6Ly9zeXN0ZW1pbmZvcm1lci5jb20vIiwKICAgICJ3aW5nZXQiOiAiV2luc2lkZXJTUy5TeXN0ZW1JbmZvcm1lciIsCiAgICAiZm9zcyI6IHRydWUKICB9LAogICJXUEZJbnN0YWxsc2lnbmFsIjogewogICAgImNhdGVnb3J5IjogIumAmuiur+W3peWFtyIsCiAgICAiY2hvY28iOiAic2lnbmFsIiwKICAgICJjb250ZW50IjogIlNpZ25hbCDliqDlr4bpgJrorq8iLAogICAgImRlc2NyaXB0aW9uIjogIlNpZ25hbCDmmK/kuIDmrL7ms6jph43pmpDnp4HnmoTpgJrorq/lupTnlKjvvIzmj5Dkvpvnq6/liLDnq6/liqDlr4bku6Xnoa7kv53lronlhajlkoznp4Hlr4bnmoTpgJrkv6HjgIIiLAogICAgImxpbmsiOiAiaHR0cHM6Ly9zaWduYWwub3JnLyIsCiAgICAid2luZ2V0IjogIk9wZW5XaGlzcGVyU3lzdGVtcy5TaWduYWwiLAogICAgImZvc3MiOiB0cnVlCiAgfSwKICAiV1BGSW5zdGFsbHNpZ25hbHJnYiI6IHsKICAgICJjYXRlZ29yeSI6ICLlt6XlhbfnsbsiLAogICAgImNob2NvIjogIm5hIiwKICAgICJjb250ZW50IjogIlNpZ25hbFJHQiBSR0LmjqfliLYiLAogICAgImRlc2NyaXB0aW9uIjogIlNpZ25hbFJHQiDorqnmgqjpgJrov4fkuIDkuKrlhY3otLnlupTnlKjnqIvluo/mjqfliLblkozlkIzmraXmgqjllpzniLHnmoQgUkdCIOiuvuWkh+OAgiIsCiAgICAibGluayI6ICJodHRwczovL3d3dy5zaWduYWxyZ2IuY29tLyIsCiAgICAid2luZ2V0IjogIldoaXJsd2luZEZYLlNpZ25hbFJnYiIsCiAgICAiZm9zcyI6IGZhbHNlCiAgfSwKICAiV1BGSW5zdGFsbHNpbXBsZXdhbGwiOiB7CiAgICAiY2F0ZWdvcnkiOiAi5LiT5Lia5bel5YW3IiwKICAgICJjaG9jbyI6ICJzaW1wbGV3YWxsIiwKICAgICJjb250ZW50IjogIlNpbXBsZXdhbGwg6Ziy54Gr5aKZIiwKICAgICJkZXNjcmlwdGlvbiI6ICJTaW1wbGV3YWxsIOaYr+S4gOasvuWFjei0ueW8gOa6kCBXaW5kb3dzIOmYsueBq+WimeW6lOeUqOOAgiIsCiAgICAibGluayI6ICJodHRwczovL2dpdGh1Yi5jb20vaGVucnlwcC9zaW1wbGV3YWxsIiwKICAgICJ3aW5nZXQiOiAiSGVucnkrKy5zaW1wbGV3YWxsIiwKICAgICJmb3NzIjogdHJ1ZQogIH0sCiAgIldQRkluc3RhbGxzbGFjayI6IHsKICAgICJjYXRlZ29yeSI6ICLpgJrorq/lt6XlhbciLAogICAgImNob2NvIjogInNsYWNrIiwKICAgICJjb250ZW50IjogIlNsYWNrIOWboumYn+WNj+S9nCIsCiAgICAiZGVzY3JpcHRpb24iOiAiU2xhY2sg5piv6L+e5o6l5Zui6Zif5bm26YCa6L+H6aKR6YGT44CB5raI5oGv5ZKM5paH5Lu25YWx5Lqr5L+D6L+b5rKf6YCa55qE5Y2P5L2c5Lit5b+D44CCIiwKICAgICJsaW5rIjogImh0dHBzOi8vc2xhY2suY29tLyIsCiAgICAid2luZ2V0IjogIlNsYWNrVGVjaG5vbG9naWVzLlNsYWNrIiwKICAgICJmb3NzIjogZmFsc2UKICB9LAogICJXUEZJbnN0YWxsc3RhcnRhbGxiYWNrIjogewogICAgImNhdGVnb3J5IjogIuW3peWFt+exuyIsCiAgICAiY2hvY28iOiAiU3RhcnRBbGxCYWNrIiwKICAgICJjb250ZW50IjogIlN0YXJ0QWxsQmFjayDlvIDlp4voj5zljZXmgaLlpI0iLAogICAgImRlc2NyaXB0aW9uIjogIlN0YXJ0QWxsQmFjayDmgaLlpI3lubbmlLnov5sgV2luZG93cyDku7vliqHmoI/jgIHlvIDlp4voj5zljZXjgIHmlofku7botYTmupDnrqHnkIblmajlkowgU2hlbGwgVUkg6KGM5Li644CCIiwKICAgICJsaW5rIjogImh0dHBzOi8vd3d3LnN0YXJ0YWxsYmFjay5jb20vIiwKICAgICJ3aW5nZXQiOiAiU3RhcnRJc0JhY2suU3RhcnRBbGxCYWNrIiwKICAgICJmb3NzIjogZmFsc2UKICB9LAogICJXUEZJbnN0YWxsc3RlYW0iOiB7CiAgICAiY2F0ZWdvcnkiOiAi5ri45oiPIiwKICAgICJjaG9jbyI6ICJzdGVhbS1jbGllbnQiLAogICAgImNvbnRlbnQiOiAiU3RlYW0g5ri45oiP5bmz5Y+wIiwKICAgICJkZXNjcmlwdGlvbiI6ICJTdGVhbSDmmK/otK3kubDlkozmuLjnjqnop4bpopHmuLjmiI/nmoTmlbDlrZfliIblj5HlubPlj7DjgIIiLAogICAgImxpbmsiOiAiaHR0cHM6Ly9zdG9yZS5zdGVhbXBvd2VyZWQuY29tL2Fib3V0LyIsCiAgICAid2luZ2V0IjogIlZhbHZlLlN0ZWFtIiwKICAgICJmb3NzIjogZmFsc2UKICB9LAogICJXUEZJbnN0YWxsc3VibGltZXRleHQiOiB7CiAgICAiY2F0ZWdvcnkiOiAi5byA5Y+R5bel5YW3IiwKICAgICJjaG9jbyI6ICJzdWJsaW1ldGV4dDQiLAogICAgImNvbnRlbnQiOiAiU3VibGltZSBUZXh0IOaWh+acrOe8lui+keWZqCIsCiAgICAiZGVzY3JpcHRpb24iOiAiU3VibGltZSBUZXh0IOaYr+S4gOasvueUqOS6juS7o+eggeOAgeagh+iusOWSjOaVo+aWh+eahOeyvuiJr+aWh+acrOe8lui+keWZqOOAgiIsCiAgICAibGluayI6ICJodHRwczovL3d3dy5zdWJsaW1ldGV4dC5jb20vIiwKICAgICJ3aW5nZXQiOiAiU3VibGltZUhRLlN1YmxpbWVUZXh0LjQiLAogICAgImZvc3MiOiBmYWxzZQogIH0sCiAgIldQRkluc3RhbGxzdW5zaGluZSI6IHsKICAgICJjYXRlZ29yeSI6ICLoh6rmiZjnrqHlt6XlhbciLAogICAgImNob2NvIjogInN1bnNoaW5lIiwKICAgICJjb250ZW50IjogIlN1bnNoaW5lIOa4uOaIj+S4sua1geacjeWKoeWZqCIsCiAgICAiZGVzY3JpcHRpb24iOiAiU3Vuc2hpbmUg5piv5LiA5qy+5ri45oiP5Liy5rWB5pyN5Yqh5Zmo77yM5YWB6K645ZyoIEFuZHJvaWQg6K6+5aSH5LiK6L+c56iL546pIFBDIOa4uOaIj+OAgiIsCiAgICAibGluayI6ICJodHRwczovL2dpdGh1Yi5jb20vTGl6YXJkQnl0ZS9TdW5zaGluZSIsCiAgICAid2luZ2V0IjogIkxpemFyZEJ5dGUuU3Vuc2hpbmUiLAogICAgImZvc3MiOiB0cnVlCiAgfSwKICAiV1BGSW5zdGFsbHRjcHZpZXciOiB7CiAgICAiY2F0ZWdvcnkiOiAi5b6u6L2v5bel5YW3IiwKICAgICJjaG9jbyI6ICJ0Y3B2aWV3IiwKICAgICJjb250ZW50IjogIlRDUFZpZXcg572R57uc55uR5o6nIiwKICAgICJkZXNjcmlwdGlvbiI6ICJTeXNJbnRlcm5hbHMgVENQVmlldyDmmK/kuIDmrL7nvZHnu5znm5Hmjqflt6XlhbfvvIzmmL7npLrmiYDmnIkgVENQIOWSjCBVRFAg56uv54K555qE6K+m57uG5YiX6KGo44CCIiwKICAgICJsaW5rIjogImh0dHBzOi8vZG9jcy5taWNyb3NvZnQuY29tL2VuLXVzL3N5c2ludGVybmFscy9kb3dubG9hZHMvdGNwdmlldyIsCiAgICAid2luZ2V0IjogIk1pY3Jvc29mdC5TeXNpbnRlcm5hbHMuVENQVmlldyIsCiAgICAiZm9zcyI6IGZhbHNlCiAgfSwKICAiV1BGSW5zdGFsbHRlYW1zIjogewogICAgImNhdGVnb3J5IjogIumAmuiur+W3peWFtyIsCiAgICAiY2hvY28iOiAibWljcm9zb2Z0LXRlYW1zIiwKICAgICJjb250ZW50IjogIlRlYW1zIOWboumYn+WNj+S9nCIsCiAgICAiZGVzY3JpcHRpb24iOiAiTWljcm9zb2Z0IFRlYW1zIOaYr+S4jiBPZmZpY2UgMzY1IOmbhuaIkOeahOWNj+S9nOW5s+WPsOOAgiIsCiAgICAibGluayI6ICJodHRwczovL3d3dy5taWNyb3NvZnQuY29tL2VuLXVzL21pY3Jvc29mdC10ZWFtcy9ncm91cC1jaGF0LXNvZnR3YXJlIiwKICAgICJ3aW5nZXQiOiAiTWljcm9zb2Z0LlRlYW1zIiwKICAgICJmb3NzIjogZmFsc2UKICB9LAogICJXUEZJbnN0YWxsdGVhbXZpZXdlciI6IHsKICAgICJjYXRlZ29yeSI6ICLlt6XlhbfnsbsiLAogICAgImNob2NvIjogInRlYW12aWV3ZXI5IiwKICAgICJjb250ZW50IjogIlRlYW1WaWV3ZXIg6L+c56iL5Y2P5YqpIiwKICAgICJkZXNjcmlwdGlvbiI6ICJUZWFtVmlld2VyIOaYr+S4gOasvua1geihjOeahOi/nOeoi+iuv+mXruWSjOaUr+aMgei9r+S7tuOAgiIsCiAgICAibGluayI6ICJodHRwczovL3d3dy50ZWFtdmlld2VyLmNvbS8iLAogICAgIndpbmdldCI6ICJUZWFtVmlld2VyLlRlYW1WaWV3ZXIiLAogICAgImZvc3MiOiBmYWxzZQogIH0sCiAgIldQRkluc3RhbGx0ZWFtc3BlYWszIjogewogICAgImNhdGVnb3J5IjogIumAmuiur+W3peWFtyIsCiAgICAiY2hvY28iOiAidGVhbXNwZWFrIiwKICAgICJjb250ZW50IjogIlRlYW1TcGVhayAzIOivremfs+mAmuiuryIsCiAgICAiZGVzY3JpcHRpb24iOiAiVEVBTVNQRUFLLiBZT1VSIFRFQU0uIFlPVVIgUlVMRVMuIFVzZSBjcnlzdGFsIGNsZWFyIHNvdW5kIHRvIGNvbW11bmljYXRlIHdpdGggeW91ciB0ZWFtbWF0ZXMgY3Jvc3MtcGxhdGZvcm0gd2l0aCBtaWxpdGFyeS1ncmFkZSBzZWN1cml0eSwgbGFnLWZyZWUgcGVyZm9ybWFuY2UgJiB1bnBhcmFsbGVsZWQgcmVsaWFiaWxpdHkgYW5kIHVwdGltZS4iLAogICAgImxpbmsiOiAiaHR0cHM6Ly93d3cudGVhbXNwZWFrLmNvbS8iLAogICAgIndpbmdldCI6ICJUZWFtU3BlYWtTeXN0ZW1zLlRlYW1TcGVha0NsaWVudCIsCiAgICAiZm9zcyI6IGZhbHNlCiAgfSwKICAiV1BGSW5zdGFsbHRlbGVncmFtIjogewogICAgImNhdGVnb3J5IjogIumAmuiur+W3peWFtyIsCiAgICAiY2hvY28iOiAidGVsZWdyYW0iLAogICAgImNvbnRlbnQiOiAiVGVsZWdyYW0g5Y2z5pe26YCa6K6vIiwKICAgICJkZXNjcmlwdGlvbiI6ICJUZWxlZ3JhbSDmmK/kuIDmrL7ln7rkuo7kupHnmoTljbPml7bpgJrorq/lupTnlKjvvIzku6XlhbblronlhajmgKfjgIHpgJ/luqblkoznroDmtIHmgKfogIzpl7vlkI3jgIIiLAogICAgImxpbmsiOiAiaHR0cHM6Ly90ZWxlZ3JhbS5vcmcvIiwKICAgICJ3aW5nZXQiOiAiVGVsZWdyYW0uVGVsZWdyYW1EZXNrdG9wIiwKICAgICJmb3NzIjogdHJ1ZQogIH0sCiAgIldQRkluc3RhbGx0ZXJtaW5hbCI6IHsKICAgICJjYXRlZ29yeSI6ICLlvq7ova/lt6XlhbciLAogICAgImNob2NvIjogIm1pY3Jvc29mdC13aW5kb3dzLXRlcm1pbmFsIiwKICAgICJjb250ZW50IjogIldpbmRvd3MgVGVybWluYWwg57uI56uvIiwKICAgICJkZXNjcmlwdGlvbiI6ICJXaW5kb3dzIFRlcm1pbmFsIOaYr+S4gOasvueOsOS7o+OAgeW/q+mAn+OAgemrmOaViOeahOe7iOerr+W6lOeUqOeoi+W6jyIsCiAgICAibGluayI6ICJodHRwczovL2FrYS5tcy90ZXJtaW5hbCIsCiAgICAid2luZ2V0IjogIk1pY3Jvc29mdC5XaW5kb3dzVGVybWluYWwiLAogICAgImZvc3MiOiB0cnVlCiAgfSwKICAiV1BGSW5zdGFsbHRodW5kZXJiaXJkIjogewogICAgImNhdGVnb3J5IjogIumAmuiur+W3peWFtyIsCiAgICAiY2hvY28iOiAidGh1bmRlcmJpcmQiLAogICAgImNvbnRlbnQiOiAiVGh1bmRlcmJpcmQg6YKu5Lu25a6i5oi356uvIiwKICAgICJkZXNjcmlwdGlvbiI6ICJNb3ppbGxhIFRodW5kZXJiaXJkIOaYr+S4gOasvuWFjei0ueW8gOa6kOeahOeUteWtkOmCruS7tuOAgeaWsOmXu+WSjOiBiuWkqeWuouaIt+err+OAgiIsCiAgICAibGluayI6ICJodHRwczovL3d3dy50aHVuZGVyYmlyZC5uZXQvIiwKICAgICJ3aW5nZXQiOiAiTW96aWxsYS5UaHVuZGVyYmlyZCIsCiAgICAiZm9zcyI6IHRydWUKICB9LAogICJXUEZJbnN0YWxsYmV0dGVyYmlyZCI6IHsKICAgICJjYXRlZ29yeSI6ICLpgJrorq/lt6XlhbciLAogICAgImNob2NvIjogImJldHRlcmJpcmQiLAogICAgImNvbnRlbnQiOiAiQmV0dGVyYmlyZCDpgq7ku7blrqLmiLfnq68o5LyY5YyW54mIKSIsCiAgICAiZGVzY3JpcHRpb24iOiAiQmV0dGVyYmlyZCDmmK8gTW96aWxsYSBUaHVuZGVyYmlyZCDnmoTliIbmlK/vvIzlhbfmnInpop3lpJblip/og73lkozplJnor6/kv67lpI3jgIIiLAogICAgImxpbmsiOiAiaHR0cHM6Ly93d3cuYmV0dGVyYmlyZC5ldS8iLAogICAgIndpbmdldCI6ICJCZXR0ZXJiaXJkLkJldHRlcmJpcmQiLAogICAgImZvc3MiOiB0cnVlCiAgfSwKICAiV1BGSW5zdGFsbHRvciI6IHsKICAgICJjYXRlZ29yeSI6ICLmtY/op4jlmagiLAogICAgImNob2NvIjogInRvci1icm93c2VyIiwKICAgICJjb250ZW50IjogIlRvciDljL/lkI3mtY/op4jlmagiLAogICAgImRlc2NyaXB0aW9uIjogIlRvciDmtY/op4jlmajkuJPkuLrljL/lkI3nvZHpobXmtY/op4jogIzorr7orqHvvIzliKnnlKggVG9yIOe9kee7nOS/neaKpOeUqOaIt+makOengeWSjOWuieWFqOOAgiIsCiAgICAibGluayI6ICJodHRwczovL3d3dy50b3Jwcm9qZWN0Lm9yZy8iLAogICAgIndpbmdldCI6ICJUb3JQcm9qZWN0LlRvckJyb3dzZXIiLAogICAgImZvc3MiOiB0cnVlCiAgfSwKICAiV1BGSW5zdGFsbHRvdGFsY29tbWFuZGVyIjogewogICAgImNhdGVnb3J5IjogIuW3peWFt+exuyIsCiAgICAiY2hvY28iOiAiVG90YWxDb21tYW5kZXIiLAogICAgImNvbnRlbnQiOiAiVG90YWwgQ29tbWFuZGVyIOaWh+S7tueuoeeQhiIsCiAgICAiZGVzY3JpcHRpb24iOiAiVG90YWwgQ29tbWFuZGVyIOaYr+S4gOasviBXaW5kb3dzIOaWh+S7tueuoeeQhuWZqO+8jOaPkOS+m+W8uuWkp+ebtOingueahOaWh+S7tueuoeeQhueVjOmdouOAgiIsCiAgICAibGluayI6ICJodHRwczovL3d3dy5naGlzbGVyLmNvbS8iLAogICAgIndpbmdldCI6ICJHaGlzbGVyLlRvdGFsQ29tbWFuZGVyIiwKICAgICJmb3NzIjogZmFsc2UKICB9LAogICJXUEZJbnN0YWxsdHJlZXNpemUiOiB7CiAgICAiY2F0ZWdvcnkiOiAi5bel5YW357G7IiwKICAgICJjaG9jbyI6ICJ0cmVlc2l6ZWZyZWUiLAogICAgImNvbnRlbnQiOiAiVHJlZVNpemUgRnJlZSDno4Hnm5jliIbmnpAiLAogICAgImRlc2NyaXB0aW9uIjogIlRyZWVTaXplIEZyZWUg5piv5LiA5qy+56OB55uY56m66Ze0566h55CG5Zmo77yM5biu5Yqp5oKo5YiG5p6Q5ZKM5Y+v6KeG5YyW6amx5Yqo5Zmo5LiK55qE56m66Ze05L2/55So5oOF5Ya144CCIiwKICAgICJsaW5rIjogImh0dHBzOi8vd3d3LmphbS1zb2Z0d2FyZS5jb20vdHJlZXNpemVfZnJlZS8iLAogICAgIndpbmdldCI6ICJKQU1Tb2Z0d2FyZS5UcmVlU2l6ZS5GcmVlIiwKICAgICJmb3NzIjogZmFsc2UKICB9LAogICJXUEZJbnN0YWxsdHRhc2tiYXIiOiB7CiAgICAiY2F0ZWdvcnkiOiAi5bel5YW357G7IiwKICAgICJjaG9jbyI6ICJ0cmFuc2x1Y2VudHRiIiwKICAgICJjb250ZW50IjogIlRyYW5zbHVjZW50VEIg5Lu75Yqh5qCP6YCP5piOIiwKICAgICJkZXNjcmlwdGlvbiI6ICJUcmFuc2x1Y2VudFRCIOaYr+S4gOasvuWFgeiuuOaCqOiHquWumuS5iSBXaW5kb3dzIOS7u+WKoeagj+mAj+aYjuW6pueahOW3peWFt+OAgiIsCiAgICAibGluayI6ICJodHRwczovL2dpdGh1Yi5jb20vVHJhbnNsdWNlbnRUQi9UcmFuc2x1Y2VudFRCIiwKICAgICJ3aW5nZXQiOiAiQ2hhcmxlc01pbGV0dGUuVHJhbnNsdWNlbnRUQiIsCiAgICAiZm9zcyI6IHRydWUKICB9LAogICJXUEZJbnN0YWxsdWJpc29mdCI6IHsKICAgICJjYXRlZ29yeSI6ICLmuLjmiI8iLAogICAgImNob2NvIjogInViaXNvZnQtY29ubmVjdCIsCiAgICAiY29udGVudCI6ICJVYmlzb2Z0IENvbm5lY3Qg5ri45oiP5bmz5Y+wIiwKICAgICJkZXNjcmlwdGlvbiI6ICJVYmlzb2Z0IENvbm5lY3Qg5piv6IKy56Kn55qE5pWw5a2X5Y+R6KGM5ZKM5Zyo57q/5aSa5Lq65ri45oiP5bmz5Y+wIiwKICAgICJsaW5rIjogImh0dHBzOi8vdWJpc29mdGNvbm5lY3QuY29tLyIsCiAgICAid2luZ2V0IjogIlViaXNvZnQuQ29ubmVjdCIsCiAgICAiZm9zcyI6IGZhbHNlCiAgfSwKICAiV1BGSW5zdGFsbHVuZ29vZ2xlZCI6IHsKICAgICJjYXRlZ29yeSI6ICLmtY/op4jlmagiLAogICAgImNob2NvIjogInVuZ29vZ2xlZC1jaHJvbWl1bSIsCiAgICAiY29udGVudCI6ICJVbmdvb2dsZWQgQ2hyb21pdW0g5peg6LC35q2M54mIIiwKICAgICJkZXNjcmlwdGlvbiI6ICJVbmdvb2dsZWQgQ2hyb21pdW0g5piv5LiN5ZCrIEdvb2dsZSDpm4bmiJDnmoQgQ2hyb21pdW0g54mI5pys44CCIiwKICAgICJsaW5rIjogImh0dHBzOi8vZ2l0aHViLmNvbS9FbG9zdG9uL3VuZ29vZ2xlZC1jaHJvbWl1bSIsCiAgICAid2luZ2V0IjogImVsb3N0b24udW5nb29nbGVkLWNocm9taXVtIiwKICAgICJmb3NzIjogdHJ1ZQogIH0sCiAgIldQRkluc3RhbGx1bml0eSI6IHsKICAgICJjYXRlZ29yeSI6ICLlvIDlj5Hlt6XlhbciLAogICAgImNob2NvIjogInVuaXR5aHViIiwKICAgICJjb250ZW50IjogIlVuaXR5IOa4uOaIj+W8leaTjiIsCiAgICAiZGVzY3JpcHRpb24iOiAiVW5pdHkg5piv5LiA5qy+5by65aSn55qE5ri45oiP5byA5Y+R5bmz5Y+w77yM55So5LqO5Yib5bu6IDJE44CBM0TjgIHlop7lvLrnjrDlrp7lkozomZrmi5/njrDlrp7muLjmiI/jgIIiLAogICAgImxpbmsiOiAiaHR0cHM6Ly91bml0eS5jb20vIiwKICAgICJ3aW5nZXQiOiAiVW5pdHkuVW5pdHlIdWIiLAogICAgImZvc3MiOiBmYWxzZQogIH0sCiAgIldQRkluc3RhbGxldmVyeXRoaW5nIjogewogICAgImNhdGVnb3J5IjogIuW3peWFt+exuyIsCiAgICAiY2hvY28iOiAiZXZlcnl0aGluZyIsCiAgICAiY29udGVudCI6ICJFdmVyeXRoaW5nIOaWh+S7tuaQnOe0oiIsCiAgICAiZGVzY3JpcHRpb24iOiAiRXZlcnl0aGluZyDmmK/kuIDmrL7mnoHpgJ/mlofku7bmkJzntKLlt6XlhbfvvIzlj6/nnqzpl7TlrprkvY3mlofku7blkozmlofku7blpLkiLAogICAgImxpbmsiOiAiaHR0cHM6Ly93d3cudm9pZHRvb2xzLmNvbS8iLAogICAgIndpbmdldCI6ICJ2b2lkdG9vbHMuRXZlcnl0aGluZyIsCiAgICAiZm9zcyI6IGZhbHNlCiAgfSwKICAiV1BGSW5zdGFsbHZjMjAxNV8zMiI6IHsKICAgICJjYXRlZ29yeSI6ICLlvq7ova/lt6XlhbciLAogICAgImNob2NvIjogInZjcmVkaXN0MjAxNSIsCiAgICAiY29udGVudCI6ICJWaXN1YWwgQysrIDIwMTUtMjAyMiAzMuS9jei/kOihjOW6kyIsCiAgICAiZGVzY3JpcHRpb24iOiAiVmlzdWFsIEMrKyAyMDE1LTIwMjIgMzLkvY3lj6/lho3lj5HooYzljIXvvIzlronoo4Xov5DooYwgMzIg5L2N5bqU55So5omA6ZyA55qE6L+Q6KGM5pe257uE5Lu244CCIiwKICAgICJsaW5rIjogImh0dHBzOi8vc3VwcG9ydC5taWNyb3NvZnQuY29tL2VuLXVzL2hlbHAvMjk3NzAwMy90aGUtbGF0ZXN0LXN1cHBvcnRlZC12aXN1YWwtYy1kb3dubG9hZHMiLAogICAgIndpbmdldCI6ICJNaWNyb3NvZnQuVkNSZWRpc3QuMjAxNSsueDg2IiwKICAgICJmb3NzIjogZmFsc2UKICB9LAogICJXUEZJbnN0YWxsdmMyMDE1XzY0IjogewogICAgImNhdGVnb3J5IjogIuW+rui9r+W3peWFtyIsCiAgICAiY2hvY28iOiAidmNyZWRpc3QyMDE1IiwKICAgICJjb250ZW50IjogIlZpc3VhbCBDKysgMjAxNS0yMDIyIDY05L2N6L+Q6KGM5bqTIiwKICAgICJkZXNjcmlwdGlvbiI6ICJWaXN1YWwgQysrIDIwMTUtMjAyMiA2NOS9jeWPr+WGjeWPkeihjOWMhe+8jOWuieijhei/kOihjCA2NCDkvY3lupTnlKjmiYDpnIDnmoTov5DooYzml7bnu4Tku7bjgIIiLAogICAgImxpbmsiOiAiaHR0cHM6Ly9zdXBwb3J0Lm1pY3Jvc29mdC5jb20vZW4tdXMvaGVscC8yOTc3MDAzL3RoZS1sYXRlc3Qtc3VwcG9ydGVkLXZpc3VhbC1jLWRvd25sb2FkcyIsCiAgICAid2luZ2V0IjogIk1pY3Jvc29mdC5WQ1JlZGlzdC4yMDE1Ky54NjQiLAogICAgImZvc3MiOiBmYWxzZQogIH0sCiAgIldQRkluc3RhbGx2ZW50b3kiOiB7CiAgICAiY2F0ZWdvcnkiOiAi5LiT5Lia5bel5YW3IiwKICAgICJjaG9jbyI6ICJ2ZW50b3kiLAogICAgImNvbnRlbnQiOiAiVmVudG95IOWQr+WKqOebmOWItuS9nCIsCiAgICAiZGVzY3JpcHRpb24iOiAiVmVudG95IOaYr+S4gOasvuW8gOa6kOeahOWQr+WKqCBVIOebmOWItuS9nOW3peWFtyIsCiAgICAibGluayI6ICJodHRwczovL3d3dy52ZW50b3kubmV0LyIsCiAgICAid2luZ2V0IjogIlZlbnRveS5WZW50b3kiLAogICAgImZvc3MiOiB0cnVlCiAgfSwKICAiV1BGSW5zdGFsbHZlc2t0b3AiOiB7CiAgICAiY2F0ZWdvcnkiOiAi6YCa6K6v5bel5YW3IiwKICAgICJjaG9jbyI6ICJuYSIsCiAgICAiY29udGVudCI6ICJWZXNrdG9wIERpc2NvcmTlrqLmiLfnq68iLAogICAgImRlc2NyaXB0aW9uIjogIuWfuuS6jiBFbGVjdHJvbiDnmoTot6jlubPlj7DmoYzpnaLlupTnlKjvvIzpooToo4UgVmVuY29yZO+8jOaPkOS+m+abtOa1geeVheeahCBEaXNjb3JkIOS9k+mqjOOAgiIsCiAgICAibGluayI6ICJodHRwczovL2dpdGh1Yi5jb20vVmVuY29yZC9WZXNrdG9wIiwKICAgICJ3aW5nZXQiOiAiVmVuY29yZC5WZXNrdG9wIiwKICAgICJmb3NzIjogdHJ1ZQogIH0sCiAgIldQRkluc3RhbGx2aWJlciI6IHsKICAgICJjYXRlZ29yeSI6ICLpgJrorq/lt6XlhbciLAogICAgImNob2NvIjogInZpYmVyIiwKICAgICJjb250ZW50IjogIlZpYmVyIOWNs+aXtumAmuiuryIsCiAgICAiZGVzY3JpcHRpb24iOiAiVmliZXIg5piv5LiA5qy+5YWN6LS55raI5oGv5ZKM6YCa6K+d5bqU55So77yM5YW35pyJ576k6IGK44CB6KeG6aKR6YCa6K+d562J5Yqf6IO944CCIiwKICAgICJsaW5rIjogImh0dHBzOi8vd3d3LnZpYmVyLmNvbS8iLAogICAgIndpbmdldCI6ICJSYWt1dGVuLlZpYmVyIiwKICAgICJmb3NzIjogZmFsc2UKICB9LAogICJXUEZJbnN0YWxsdmlzdWFsc3R1ZGlvMjAyMiI6IHsKICAgICJjYXRlZ29yeSI6ICLlvIDlj5Hlt6XlhbciLAogICAgImNob2NvIjogInZpc3VhbHN0dWRpbzIwMjJjb21tdW5pdHkiLAogICAgImNvbnRlbnQiOiAiVmlzdWFsIFN0dWRpbyAyMDIyIiwKICAgICJkZXNjcmlwdGlvbiI6ICJWaXN1YWwgU3R1ZGlvIDIwMjIg5piv55So5LqO5p6E5bu644CB6LCD6K+V5ZKM6YOo572y5bqU55So56iL5bqP55qE6ZuG5oiQ5byA5Y+R546v5aKDIChJREUp44CCIiwKICAgICJsaW5rIjogImh0dHBzOi8vdmlzdWFsc3R1ZGlvLm1pY3Jvc29mdC5jb20vIiwKICAgICJ3aW5nZXQiOiAiTWljcm9zb2Z0LlZpc3VhbFN0dWRpby4yMDIyLkNvbW11bml0eSIsCiAgICAiZm9zcyI6IGZhbHNlCiAgfSwKICAiV1BGSW5zdGFsbHZpc3VhbHN0dWRpbzIwMjYiOiB7CiAgICAiY2F0ZWdvcnkiOiAi5byA5Y+R5bel5YW3IiwKICAgICJjaG9jbyI6ICJ2aXN1YWxzdHVkaW8yMDI2Y29tbXVuaXR5IiwKICAgICJjb250ZW50IjogIlZpc3VhbCBTdHVkaW8gMjAyNiIsCiAgICAiZGVzY3JpcHRpb24iOiAiVmlzdWFsIFN0dWRpbyAyMDI2IOaYr+eUqOS6juaehOW7uuOAgeiwg+ivleWSjOmDqOe9suW6lOeUqOeoi+W6j+eahOmbhuaIkOW8gOWPkeeOr+WigyAoSURFKeOAgiIsCiAgICAibGluayI6ICJodHRwczovL3Zpc3VhbHN0dWRpby5taWNyb3NvZnQuY29tLyIsCiAgICAid2luZ2V0IjogIk1pY3Jvc29mdC5WaXN1YWxTdHVkaW8uQ29tbXVuaXR5IiwKICAgICJmb3NzIjogZmFsc2UKICB9LAogICJXUEZJbnN0YWxsdml2YWxkaSI6IHsKICAgICJjYXRlZ29yeSI6ICLmtY/op4jlmagiLAogICAgImNob2NvIjogInZpdmFsZGkiLAogICAgImNvbnRlbnQiOiAiVml2YWxkaSDmtY/op4jlmagiLAogICAgImRlc2NyaXB0aW9uIjogIlZpdmFsZGkg5piv5LiA5qy+6auY5bqm5Y+v5a6a5Yi255qE572R6aG15rWP6KeI5Zmo44CCIiwKICAgICJsaW5rIjogImh0dHBzOi8vdml2YWxkaS5jb20vIiwKICAgICJ3aW5nZXQiOiAiVml2YWxkaS5WaXZhbGRpIiwKICAgICJmb3NzIjogZmFsc2UKICB9LAogICJXUEZJbnN0YWxsdmxjIjogewogICAgImNhdGVnb3J5IjogIuWkmuWqkuS9k+W3peWFtyIsCiAgICAiY2hvY28iOiAidmxjIiwKICAgICJjb250ZW50IjogIlZMQyDop4bpopHmkq3mlL7lmagiLAogICAgImRlc2NyaXB0aW9uIjogIlZMQyDlqpLkvZPmkq3mlL7lmajmmK/kuIDmrL7lhY3otLnlvIDmupDnmoTlpJrlqpLkvZPmkq3mlL7lmagiLAogICAgImxpbmsiOiAiaHR0cHM6Ly93d3cudmlkZW9sYW4ub3JnL3ZsYy8iLAogICAgIndpbmdldCI6ICJWaWRlb0xBTi5WTEMiLAogICAgImZvc3MiOiB0cnVlCiAgfSwKICAiV1BGSW5zdGFsbHZyZGVza3RvcHN0cmVhbWVyIjogewogICAgImNhdGVnb3J5IjogIua4uOaIjyIsCiAgICAiY2hvY28iOiAibmEiLAogICAgImNvbnRlbnQiOiAiVmlydHVhbCBEZXNrdG9wIFN0cmVhbWVyIFZS5Liy5rWBIiwKICAgICJkZXNjcmlwdGlvbiI6ICJWaXJ0dWFsIERlc2t0b3AgU3RyZWFtZXIg5piv5LiA5qy+5bCG5qGM6Z2i5bGP5bmV5Liy5rWB5YiwIFZSIOiuvuWkh+eahOW3peWFt+OAgiIsCiAgICAibGluayI6ICJodHRwczovL3d3dy52cmRlc2t0b3AubmV0LyIsCiAgICAid2luZ2V0IjogIlZpcnR1YWxEZXNrdG9wLlN0cmVhbWVyIiwKICAgICJmb3NzIjogZmFsc2UKICB9LAogICJXUEZJbnN0YWxsdnNjb2RlIjogewogICAgImNhdGVnb3J5IjogIuW8gOWPkeW3peWFtyIsCiAgICAiY2hvY28iOiAidnNjb2RlIiwKICAgICJjb250ZW50IjogIlZTIENvZGUg5Luj56CB57yW6L6R5ZmoIiwKICAgICJkZXNjcmlwdGlvbiI6ICJWaXN1YWwgU3R1ZGlvIENvZGUg5piv5LiA5qy+5YWN6LS55byA5rqQ55qE5Luj56CB57yW6L6R5Zmo77yM5pSv5oyB5aSa56eN57yW56iL6K+t6KiA44CCIiwKICAgICJsaW5rIjogImh0dHBzOi8vY29kZS52aXN1YWxzdHVkaW8uY29tLyIsCiAgICAid2luZ2V0IjogIk1pY3Jvc29mdC5WaXN1YWxTdHVkaW9Db2RlIiwKICAgICJmb3NzIjogdHJ1ZQogIH0sCiAgIldQRkluc3RhbGx2c2NvZGl1bSI6IHsKICAgICJjYXRlZ29yeSI6ICLlvIDlj5Hlt6XlhbciLAogICAgImNob2NvIjogInZzY29kaXVtIiwKICAgICJjb250ZW50IjogIlZTIENvZGl1bSDlvIDmupDniYgiLAogICAgImRlc2NyaXB0aW9uIjogIlZTQ29kaXVtIOaYr+ekvuWMuumpseWKqOeahOOAgeiHqueUseiuuOWPr+eahCBNaWNyb3NvZnQgVlMgQ29kZSDkuozov5vliLblj5HooYzniYjjgIIiLAogICAgImxpbmsiOiAiaHR0cHM6Ly92c2NvZGl1bS5jb20vIiwKICAgICJ3aW5nZXQiOiAiVlNDb2RpdW0uVlNDb2RpdW0iLAogICAgImZvc3MiOiB0cnVlCiAgfSwKICAiV1BGSW5zdGFsbHdhdGVyZm94IjogewogICAgImNhdGVnb3J5IjogIua1j+iniOWZqCIsCiAgICAiY2hvY28iOiAid2F0ZXJmb3giLAogICAgImNvbnRlbnQiOiAiV2F0ZXJmb3gg6ZqQ56eB5rWP6KeI5ZmoIiwKICAgICJkZXNjcmlwdGlvbiI6ICJXYXRlcmZveCDmmK/kuIDmrL7ln7rkuo4gRmlyZWZveCDnmoTlv6vpgJ/pmpDnp4HmtY/op4jlmajjgIIiLAogICAgImxpbmsiOiAiaHR0cHM6Ly93d3cud2F0ZXJmb3gubmV0LyIsCiAgICAid2luZ2V0IjogIldhdGVyZm94LldhdGVyZm94IiwKICAgICJmb3NzIjogdHJ1ZQogIH0sCiAgIldQRkluc3RhbGx3aGF0c2FwcCI6IHsKICAgICJjYXRlZ29yeSI6ICLpgJrorq/lt6XlhbciLAogICAgImNob2NvIjogIm5hIiwKICAgICJjb250ZW50IjogIldoYXRzQXBwIOahjOmdoueJiCIsCiAgICAiZGVzY3JpcHRpb24iOiAiV2hhdHNBcHAgRGVza3RvcCDmmK8gTWV0YSDnmoTlrpjmlrkgV2luZG93cyDmoYzpnaLmtojmga/lupTnlKjjgIIiLAogICAgImxpbmsiOiAiaHR0cHM6Ly9hcHBzLm1pY3Jvc29mdC5jb20vZGV0YWlsLzlua3NxZ3A3ZjJuaCIsCiAgICAid2luZ2V0IjogIm1zc3RvcmU6OU5LU1FHUDdGMk5IIiwKICAgICJmb3NzIjogZmFsc2UKICB9LAogICJXUEZJbnN0YWxsd2luZ2V0dWkiOiB7CiAgICAiY2F0ZWdvcnkiOiAi5bel5YW357G7IiwKICAgICJjaG9jbyI6ICJ3aW5nZXR1aSIsCiAgICAiY29udGVudCI6ICJVbmlHZXRVSSDljIXnrqHnkIZHVUkiLAogICAgImRlc2NyaXB0aW9uIjogIlVuaUdldFVJIOaYryBXaW5HZXTjgIFDaG9jb2xhdGV5IOWSjOWFtuS7liBXaW5kb3dzIENMSSDljIXnrqHnkIblmajnmoTlm77lvaLnlYzpnaLjgIIiLAogICAgImxpbmsiOiAiaHR0cHM6Ly9kZXZvbHV0aW9ucy5uZXQvdW5pZ2V0dWkvIiwKICAgICJ3aW5nZXQiOiAiRGV2b2x1dGlvbnMuVW5pR2V0VUkiLAogICAgImZvc3MiOiB0cnVlCiAgfSwKICAiV1BGSW5zdGFsbHdpbnJhciI6IHsKICAgICJjYXRlZ29yeSI6ICLlt6XlhbfnsbsiLAogICAgImNob2NvIjogIndpbnJhciIsCiAgICAiY29udGVudCI6ICJXaW5SQVIg5Y6L57yp5bel5YW3IiwKICAgICJkZXNjcmlwdGlvbiI6ICJXaW5SQVIg5piv5LiA5qy+5Yqf6IO95by65aSn55qE5Y6L57yp5paH5Lu2566h55CG5Zmo44CCIiwKICAgICJsaW5rIjogImh0dHBzOi8vd3d3Lndpbi1yYXIuY29tLyIsCiAgICAid2luZ2V0IjogIlJBUkxhYi5XaW5SQVIiLAogICAgImZvc3MiOiBmYWxzZQogIH0sCiAgIldQRkluc3RhbGx3aW5zY3AiOiB7CiAgICAiY2F0ZWdvcnkiOiAi5LiT5Lia5bel5YW3IiwKICAgICJjaG9jbyI6ICJ3aW5zY3AiLAogICAgImNvbnRlbnQiOiAiV2luU0NQIOaWh+S7tuS8oOi+kyIsCiAgICAiZGVzY3JpcHRpb24iOiAiV2luU0NQIOaYr+S4gOasvua1geihjOeahOW8gOa6kCBTRlRQL0ZUUC9TQ1Ag5a6i5oi356uvIiwKICAgICJsaW5rIjogImh0dHBzOi8vd2luc2NwLm5ldC8iLAogICAgIndpbmdldCI6ICJXaW5TQ1AuV2luU0NQIiwKICAgICJmb3NzIjogdHJ1ZQogIH0sCiAgIldQRkluc3RhbGx3aXJlZ3VhcmQiOiB7CiAgICAiY2F0ZWdvcnkiOiAi5LiT5Lia5bel5YW3IiwKICAgICJjaG9jbyI6ICJ3aXJlZ3VhcmQiLAogICAgImNvbnRlbnQiOiAiV2lyZUd1YXJkIFZQTiIsCiAgICAiZGVzY3JpcHRpb24iOiAiV2lyZUd1YXJkIOaYr+S4gOasvuW/q+mAn+OAgeeOsOS7o+eahCBWUE7vvIjomZrmi5/kuJPnlKjnvZHnu5zvvIkiLAogICAgImxpbmsiOiAiaHR0cHM6Ly93d3cud2lyZWd1YXJkLmNvbS8iLAogICAgIndpbmdldCI6ICJXaXJlR3VhcmQuV2lyZUd1YXJkIiwKICAgICJmb3NzIjogdHJ1ZQogIH0sCiAgIldQRkluc3RhbGx3aXJlc2hhcmsiOiB7CiAgICAiY2F0ZWdvcnkiOiAi5LiT5Lia5bel5YW3IiwKICAgICJjaG9jbyI6ICJ3aXJlc2hhcmsiLAogICAgImNvbnRlbnQiOiAiV2lyZXNoYXJrIOe9kee7nOWIhuaekCIsCiAgICAiZGVzY3JpcHRpb24iOiAiV2lyZXNoYXJrIOaYr+S4gOasvuW5v+azm+S9v+eUqOeahOW8gOa6kOe9kee7nOWNj+iuruWIhuaekOW3peWFtyIsCiAgICAibGluayI6ICJodHRwczovL3d3dy53aXJlc2hhcmsub3JnLyIsCiAgICAid2luZ2V0IjogIldpcmVzaGFya0ZvdW5kYXRpb24uV2lyZXNoYXJrIiwKICAgICJmb3NzIjogdHJ1ZQogIH0sCiAgIldQRkluc3RhbGx3aXp0cmVlIjogewogICAgImNhdGVnb3J5IjogIuW3peWFt+exuyIsCiAgICAiY2hvY28iOiAid2l6dHJlZSIsCiAgICAiY29udGVudCI6ICJXaXpUcmVlIOejgeebmOWIhuaekCIsCiAgICAiZGVzY3JpcHRpb24iOiAiV2l6VHJlZSDmmK/kuIDmrL7lv6vpgJ/nmoTno4Hnm5jnqbrpl7TliIbmnpDlt6XlhbciLAogICAgImxpbmsiOiAiaHR0cHM6Ly93aXp0cmVlZnJlZS5jb20vIiwKICAgICJ3aW5nZXQiOiAiQW50aWJvZHlTb2Z0d2FyZS5XaXpUcmVlIiwKICAgICJmb3NzIjogZmFsc2UKICB9LAogICJXUEZJbnN0YWxseGVoZWRpdG9yIjogewogICAgImNhdGVnb3J5IjogIuW3peWFt+exuyIsCiAgICAiY2hvY28iOiAiSHhEIiwKICAgICJjb250ZW50IjogIkh4RCDljYHlha3ov5vliLbnvJbovpHlmagiLAogICAgImRlc2NyaXB0aW9uIjogIkh4RCDmmK/kuIDmrL7lhY3otLnnmoTljYHlha3ov5vliLbnvJbovpHlmajjgIIiLAogICAgImxpbmsiOiAiaHR0cHM6Ly9taC1uZXh1cy5kZS9lbi9oeGQvIiwKICAgICJ3aW5nZXQiOiAiTUhOZXh1cy5IeEQiLAogICAgImZvc3MiOiBmYWxzZQogIH0sCiAgIldQRkluc3RhbGx5YXJuIjogewogICAgImNhdGVnb3J5IjogIuW8gOWPkeW3peWFtyIsCiAgICAiY2hvY28iOiAieWFybiIsCiAgICAiY29udGVudCI6ICJZYXJuIOWMheeuoeeQhuWZqCIsCiAgICAiZGVzY3JpcHRpb24iOiAiWWFybiDmmK/kuIDmrL7lv6vpgJ/jgIHlj6/pnaDjgIHlronlhajnmoQgSmF2YVNjcmlwdCDpobnnm67kvp3otZbnrqHnkIblt6XlhbfjgIIiLAogICAgImxpbmsiOiAiaHR0cHM6Ly95YXJucGtnLmNvbS8iLAogICAgIndpbmdldCI6ICJZYXJuLllhcm4iLAogICAgImZvc3MiOiB0cnVlCiAgfSwKICAiV1BGSW5zdGFsbHpvb20iOiB7CiAgICAiY2F0ZWdvcnkiOiAi6YCa6K6v5bel5YW3IiwKICAgICJjaG9jbyI6ICJ6b29tIiwKICAgICJjb250ZW50IjogIlpvb20g6KeG6aKR5Lya6K6uIiwKICAgICJkZXNjcmlwdGlvbiI6ICJab29tIOaYr+S4gOasvua1geihjOeahOinhumikeS8muiuruWSjOe9kee7nOS8muiuruacjeWKoeOAgiIsCiAgICAibGluayI6ICJodHRwczovL3pvb20udXMvIiwKICAgICJ3aW5nZXQiOiAiWm9vbS5ab29tIiwKICAgICJmb3NzIjogZmFsc2UKICB9LAogICJXUEZJbnN0YWxsdXYiOiB7CiAgICAiY2F0ZWdvcnkiOiAi5byA5Y+R5bel5YW3IiwKICAgICJjaG9jbyI6ICJ1diIsCiAgICAiY29udGVudCI6ICJ1diBQeXRob27ljIXnrqHnkIblmagiLAogICAgImRlc2NyaXB0aW9uIjogInV2IOaYr+S4gOasvueUqCBSdXN0IOe8luWGmeeahOW/q+mAnyBQeXRob24g5YyF5ZKM6aG555uu566h55CG5Zmo44CCIiwKICAgICJsaW5rIjogImh0dHBzOi8vZG9jcy5hc3RyYWwuc2gvdXYvZ2V0dGluZy1zdGFydGVkL2luc3RhbGxhdGlvbi8iLAogICAgIndpbmdldCI6ICJhc3RyYWwtc2gudXYiLAogICAgImZvc3MiOiB0cnVlCiAgfSwKICAiV1BGSW5zdGFsbHRpZ2h0dm5jIjogewogICAgImNhdGVnb3J5IjogIuW3peWFt+exuyIsCiAgICAiY2hvY28iOiAiVGlnaHRWTkMiLAogICAgImNvbnRlbnQiOiAiVGlnaHRWTkMg6L+c56iL5qGM6Z2iIiwKICAgICJkZXNjcmlwdGlvbiI6ICJUaWdodFZOQyDmmK/kuIDmrL7lhY3otLnlvIDmupDnmoTov5znqIvmoYzpnaLova/ku7YiLAogICAgImxpbmsiOiAiaHR0cHM6Ly93d3cudGlnaHR2bmMuY29tLyIsCiAgICAid2luZ2V0IjogIkdsYXZTb2Z0LlRpZ2h0Vk5DIiwKICAgICJmb3NzIjogdHJ1ZQogIH0sCiAgIldQRkluc3RhbGxnbGF6ZXdtIjogewogICAgImNhdGVnb3J5IjogIuW3peWFt+exuyIsCiAgICAiY2hvY28iOiAiZ2xhemV3bSIsCiAgICAiY29udGVudCI6ICJHbGF6ZVdNIOW5s+mTuueql+WPo+euoeeQhuWZqCIsCiAgICAiZGVzY3JpcHRpb24iOiAiR2xhemVXTSDmmK/kuIDmrL7lj5cgaTMg5ZKMIFBvbHliYXIg5ZCv5Y+R55qEIFdpbmRvd3Mg5bmz6ZO656qX5Y+j566h55CG5Zmo44CCIiwKICAgICJsaW5rIjogImh0dHBzOi8vZ2l0aHViLmNvbS9nbHpyLWlvL2dsYXpld20iLAogICAgIndpbmdldCI6ICJnbHpyLWlvLmdsYXpld20iLAogICAgImZvc3MiOiB0cnVlCiAgfSwKICAiV1BGSW5zdGFsbE92ZXJ3b2xmIjogewogICAgImNhdGVnb3J5IjogIua4uOaIjyIsCiAgICAiY2hvY28iOiAib3ZlcndvbGYiLAogICAgImNvbnRlbnQiOiAiT3ZlcndvbGYg5ri45oiP5o+S5Lu25bmz5Y+wIiwKICAgICJkZXNjcmlwdGlvbiI6ICLmtYHooYznmoTmuLjmiI/opobnm5blsYLlkozovoXliqnlupTnlKjlubPlj7DvvIzlub/ms5vooqvmuLjmiI/njqnlrrbkvb/nlKjjgIIiLAogICAgImxpbmsiOiAiaHR0cHM6Ly93d3cub3ZlcndvbGYuY29tL2FwcC9vdmVyd29sZi1jdXJzZWZvcmdlIiwKICAgICJ3aW5nZXQiOiAiT3ZlcndvbGYuQ3Vyc2VGb3JnZSIsCiAgICAiZm9zcyI6IGZhbHNlCiAgfSwKICAiV1BGSW5zdGFsbE9GR0IiOiB7CiAgICAiY2F0ZWdvcnkiOiAi5bel5YW357G7IiwKICAgICJjaG9jbyI6ICJvZmdiIiwKICAgICJjb250ZW50IjogIk9GR0IgV2luZG93c+W5v+WRiuenu+mZpCIsCiAgICAiZGVzY3JpcHRpb24iOiAi5LuOIFdpbmRvd3MgMTEg5ZCE5aSE56e76Zmk5bm/5ZGK55qEIEdVSSDlt6XlhbfjgIIiLAogICAgImxpbmsiOiAiaHR0cHM6Ly9naXRodWIuY29tL3hNNGRkeS9PRkdCIiwKICAgICJ3aW5nZXQiOiAieE00ZGR5Lk9GR0IiLAogICAgImZvc3MiOiB0cnVlCiAgfSwKICAiV1BGSW5zdGFsbFplbkJyb3dzZXIiOiB7CiAgICAiY2F0ZWdvcnkiOiAi5rWP6KeI5ZmoIiwKICAgICJjaG9jbyI6ICJ6ZW4tYnJvd3NlciIsCiAgICAiY29udGVudCI6ICJaZW4g5rWP6KeI5ZmoIiwKICAgICJkZXNjcmlwdGlvbiI6ICLln7rkuo4gRmlyZWZveCDmnoTlu7rnmoTnjrDku6PjgIHms6jph43pmpDnp4HjgIHmgKfog73pqbHliqjnmoTmtY/op4jlmajjgIIiLAogICAgImxpbmsiOiAiaHR0cHM6Ly96ZW4tYnJvd3Nlci5hcHAvIiwKICAgICJ3aW5nZXQiOiAiWmVuLVRlYW0uWmVuLUJyb3dzZXIiLAogICAgImZvc3MiOiB0cnVlCiAgfSwKICAiV1BGSW5zdGFsbFplZCI6IHsKICAgICJjYXRlZ29yeSI6ICLlvIDlj5Hlt6XlhbciLAogICAgImNob2NvIjogInplZCIsCiAgICAiY29udGVudCI6ICJaZWQg5Luj56CB57yW6L6R5ZmoIiwKICAgICJkZXNjcmlwdGlvbiI6ICJaZWQg5piv5LiA5qy+546w5Luj6auY5oCn6IO95Luj56CB57yW6L6R5Zmo77yM5LuO5aS06K6+6K6h5Lul6L+95rGC6YCf5bqm5ZKM5Y2P5L2c44CCIiwKICAgICJsaW5rIjogImh0dHBzOi8vemVkLmRldi8iLAogICAgIndpbmdldCI6ICJaZWRJbmR1c3RyaWVzLlplZCIsCiAgICAiZm9zcyI6IHRydWUKICB9LAogICJXUEZJbnN0YWxsZGVza2Zsb3ciOiB7CiAgICAiY2F0ZWdvcnkiOiAi5bel5YW357G7IiwKICAgICJjaG9jbyI6ICJkZXNrZmxvdyIsCiAgICAiY29udGVudCI6ICJEZXNrZmxvdyDplK7pvKDlhbHkuqsiLAogICAgImRlc2NyaXB0aW9uIjogIkRlc2tmbG93IOaYr+S4gOasvuWFjei0ueW8gOa6kOeahOi9r+S7tiBLVk3vvIzorqnmgqjlnKjlpJrlj7DorqHnrpfmnLrkuYvpl7TlhbHkuqvplK7nm5jlkozpvKDmoIfjgIIiLAogICAgImxpbmsiOiAiaHR0cHM6Ly9naXRodWIuY29tL2Rlc2tmbG93L2Rlc2tmbG93IiwKICAgICJ3aW5nZXQiOiAiRGVza2Zsb3cuRGVza2Zsb3ciLAogICAgImZvc3MiOiB0cnVlCiAgfSwKICAiV1BGSW5zdGFsbFJ1YnkiOiB7CiAgICAiY2F0ZWdvcnkiOiAi5byA5Y+R5bel5YW3IiwKICAgICJjaG9jbyI6ICJydWJ5IiwKICAgICJ3aW5nZXQiOiAiUnVieUluc3RhbGxlclRlYW0uUnVieS40LjAiLAogICAgImRlc2NyaXB0aW9uIjogIuWMheWQqyBNU1lTMiDlronoo4XnmoQgUnVieSDor63oqIDmiafooYznjq/looPjgIIiLAogICAgImNvbnRlbnQiOiAiUnVieSDnvJbnqIvor63oqIAiLAogICAgImxpbmsiOiAiaHR0cHM6Ly9ydWJ5aW5zdGFsbGVyLm9yZy8iLAogICAgImZvc3MiOiB0cnVlCiAgfSwKICAiV1BGSW5zdGFsbEx1YSI6IHsKICAgICJjYXRlZ29yeSI6ICLlvIDlj5Hlt6XlhbciLAogICAgImNob2NvIjogImx1YSIsCiAgICAid2luZ2V0IjogInJqcGNvbXB1dGluZy5sdWFmb3J3aW5kb3dzIiwKICAgICJkZXNjcmlwdGlvbiI6ICJMdWEg6ISa5pys6K+t6KiA55qE55S15rGg6b2Q5YWo546v5aKD77yI5ZCr5L6d6LWW5bqT77yJIiwKICAgICJjb250ZW50IjogIkx1YSDohJrmnKzor63oqIAiLAogICAgImxpbmsiOiAiaHR0cHM6Ly9naXRodWIuY29tL3JqcGNvbXB1dGluZy9sdWFmb3J3aW5kb3dzIiwKICAgICJmb3NzIjogdHJ1ZQogIH0KfQ==')) | ConvertFrom-Json
 
-$sync.configs.applications = @'
-{
-  "WPFInstall1password": {
-    "category": "工具类",
-    "choco": "1password",
-    "content": "1Password 密码管理器",
-    "description": "1Password 是一款密码管理器，可以安全地存储和管理您的密码。",
-    "link": "https://1password.com/",
-    "winget": "AgileBits.1Password",
-    "foss": false
-  },
-  "WPFInstall7zip": {
-    "category": "工具类",
-    "choco": "7zip",
-    "content": "7-Zip 压缩工具",
-    "description": "7-Zip 是一款免费开源的压缩工具，支持多种压缩格式，提供高压缩比，是文件压缩的热门选择。",
-    "link": "https://www.7-zip.org/",
-    "winget": "7zip.7zip",
-    "foss": true
-  },
-  "WPFInstalladobe": {
-    "category": "多媒体工具",
-    "choco": "adobereader",
-    "content": "Adobe Acrobat Reader PDF阅读器",
-    "description": "Adobe Acrobat Reader 是一款免费的 PDF 阅读器，提供查看、打印和注释 PDF 文档的基本功能。",
-    "link": "https://www.adobe.com/acrobat/pdf-reader.html",
-    "winget": "Adobe.Acrobat.Reader.64-bit",
-    "foss": false
-  },
-  "WPFInstalladvancedip": {
-    "category": "专业工具",
-    "choco": "advanced-ip-scanner",
-    "content": "Advanced IP Scanner 网络扫描",
-    "description": "Advanced IP Scanner 是一款快速易用的网络扫描工具，用于分析局域网并提供连接设备的信息。",
-    "link": "https://www.advanced-ip-scanner.com/",
-    "winget": "Famatech.AdvancedIPScanner",
-    "foss": false
-  },
-  "WPFInstallaimp": {
-    "category": "多媒体工具",
-    "choco": "aimp",
-    "content": "AIMP 音乐播放器",
-    "description": "AIMP 是一款功能丰富的音乐播放器，支持多种音频格式、播放列表和可定制的用户界面。",
-    "link": "https://www.aimp.ru/",
-    "winget": "AIMP.AIMP",
-    "foss": false
-  },
-  "WPFInstallangryipscanner": {
-    "category": "专业工具",
-    "choco": "angryip",
-    "content": "Angry IP Scanner IP扫描器",
-    "description": "Angry IP Scanner 是一款开源跨平台的网络扫描器，用于扫描 IP 地址和端口，提供网络连接信息。",
-    "link": "https://angryip.org/",
-    "winget": "angryziber.AngryIPScanner",
-    "foss": true
-  },
-  "WPFInstallanydesk": {
-    "category": "工具类",
-    "choco": "anydesk",
-    "content": "AnyDesk 远程桌面",
-    "description": "AnyDesk 是一款远程桌面软件，使用户能够远程访问和控制计算机，以快速连接和低延迟著称。",
-    "link": "https://anydesk.com/",
-    "winget": "AnyDesk.AnyDesk",
-    "foss": false
-  },
-  "WPFInstallaudacity": {
-    "category": "多媒体工具",
-    "choco": "audacity",
-    "content": "Audacity 音频编辑",
-    "description": "Audacity 是一款免费开源的音频编辑软件，以其强大的录音和编辑功能而闻名。",
-    "link": "https://www.audacityteam.org/",
-    "winget": "Audacity.Audacity",
-    "foss": true
-  },
-  "WPFInstallautoruns": {
-    "category": "微软工具",
-    "choco": "autoruns",
-    "content": "Autoruns 启动项管理",
-    "description": "此工具显示哪些程序配置为在系统启动或登录时运行。",
-    "link": "https://learn.microsoft.com/en-us/sysinternals/downloads/autoruns",
-    "winget": "Microsoft.Sysinternals.Autoruns",
-    "foss": false
-  },
-  "WPFInstallrdcman": {
-    "category": "微软工具",
-    "choco": "rdcman",
-    "content": "RDCMan 远程桌面管理",
-    "description": "RDCMan 管理多个远程桌面连接，适用于需要定期访问每台机器的服务器实验室。",
-    "link": "https://learn.microsoft.com/en-us/sysinternals/downloads/rdcman",
-    "winget": "Microsoft.Sysinternals.RDCMan",
-    "foss": false
-  },
-  "WPFInstallautohotkey": {
-    "category": "工具类",
-    "choco": "autohotkey",
-    "content": "AutoHotkey 自动脚本",
-    "description": "AutoHotkey 是一款 Windows 脚本语言，允许用户创建自定义自动化脚本和宏。",
-    "link": "https://www.autohotkey.com/",
-    "winget": "AutoHotkey.AutoHotkey",
-    "foss": true
-  },
-  "WPFInstallbitwarden": {
-    "category": "工具类",
-    "choco": "bitwarden",
-    "content": "Bitwarden 密码管理",
-    "description": "Bitwarden 是一款开源密码管理解决方案，在多设备间安全存储和管理密码。",
-    "link": "https://bitwarden.com/",
-    "winget": "Bitwarden.Bitwarden",
-    "foss": true
-  },
-  "WPFInstallblender": {
-    "category": "多媒体工具",
-    "choco": "blender",
-    "content": "Blender 3D 图形",
-    "description": "Blender 是一款功能强大的开源 3D 创作套件，提供建模、雕刻、动画和渲染工具。",
-    "link": "https://www.blender.org/",
-    "winget": "BlenderFoundation.Blender",
-    "foss": true
-  },
-  "WPFInstallbrave": {
-    "category": "浏览器",
-    "choco": "brave",
-    "content": "Brave 浏览器",
-    "description": "Brave 是一款注重隐私的网页浏览器，可拦截广告和跟踪器，提供更快更安全的浏览体验。",
-    "link": "https://www.brave.com",
-    "winget": "Brave.Brave",
-    "foss": true
-  },
-  "WPFInstallbulkcrapuninstaller": {
-    "category": "工具类",
-    "choco": "bulk-crap-uninstaller",
-    "content": "Bulk Crap Uninstaller 批量卸载",
-    "description": "Bulk Crap Uninstaller 是一款免费开源 Windows 卸载工具，帮助用户批量卸载程序。",
-    "link": "https://www.bcuninstaller.com/",
-    "winget": "Klocman.BulkCrapUninstaller",
-    "foss": true
-  },
-  "WPFInstallblurautoclicker": {
-    "category": "工具类",
-    "choco": "na",
-    "content": "BlurAutoClicker 自动点击器",
-    "description": "一款具有高级功能且性能优于同类产品的自动点击器。",
-    "link": "https://blur009.vercel.app/projects/blur-autoclicker/",
-    "winget": "Blur009.BlurAutoClicker",
-    "foss": true
-  },
-  "WPFInstallcalibre": {
-    "category": "多媒体工具",
-    "choco": "calibre",
-    "content": "Calibre 电子书管理",
-    "description": "Calibre 是一款功能强大且易于使用的电子书管理器、阅读器和转换器。",
-    "link": "https://calibre-ebook.com/",
-    "winget": "calibre.calibre",
-    "foss": true
-  },
-  "WPFInstallcemu": {
-    "category": "游戏",
-    "choco": "cemu",
-    "content": "Cemu Wii U 模拟器",
-    "description": "Cemu 是一款高度实验性的 Wii U 模拟器软件。",
-    "link": "https://cemu.info/",
-    "winget": "Cemu.Cemu",
-    "foss": true
-  },
-  "WPFInstallchatgpt": {
-    "category": "开发工具",
-    "choco": "na",
-    "content": "ChatGPT 桌面版",
-    "description": "ChatGPT 官方 Windows 桌面应用，通过 Microsoft Store 分发。",
-    "link": "https://apps.microsoft.com/detail/9nt1r1c2hh7j",
-    "winget": "msstore:9NT1R1C2HH7J",
-    "foss": false
-  },
-  "WPFInstallchatterino": {
-    "category": "通讯工具",
-    "choco": "chatterino",
-    "content": "Chatterino Twitch 聊天",
-    "description": "Chatterino 是一款 Twitch 聊天客户端，提供简洁可定制的界面。",
-    "link": "https://www.chatterino.com/",
-    "winget": "ChatterinoTeam.Chatterino",
-    "foss": true
-  },
-  "WPFInstallchrome": {
-    "category": "浏览器",
-    "choco": "googlechrome",
-    "content": "Chrome 浏览器",
-    "description": "Google Chrome 是一款广泛使用的网页浏览器，以速度、简洁和与 Google 服务集成而闻名。",
-    "link": "https://www.google.com/chrome/",
-    "winget": "Google.Chrome",
-    "foss": false
-  },
-  "WPFInstallchromium": {
-    "category": "浏览器",
-    "choco": "chromium",
-    "content": "Chromium 浏览器",
-    "description": "Chromium 是作为包括 Chrome 在内的多种浏览器基础的开源项目。",
-    "link": "https://github.com/Hibbiki/chromium-win64",
-    "winget": "Hibbiki.Chromium",
-    "foss": true
-  },
-  "WPFInstallcinebenchr23": {
-    "category": "专业工具",
-    "choco": "na",
-    "content": "Cinebench R23 性能测试",
-    "description": "Cinebench R23 是一款跨系统比较 CPU 渲染性能的基准测试工具。",
-    "link": "https://www.maxon.net/en/cinebench",
-    "winget": "Maxon.CinebenchR23",
-    "foss": false
-  },
-  "WPFInstallclaude": {
-    "category": "开发工具",
-    "choco": "claude",
-    "content": "Claude 桌面版",
-    "description": "Anthropic 的 Claude 桌面应用程序，用于专注的 AI 辅助工作和聊天。",
-    "link": "https://claude.ai/download",
-    "winget": "Anthropic.Claude",
-    "foss": false
-  },
-  "WPFInstallclaude-code": {
-    "category": "开发工具",
-    "choco": "claude-code",
-    "content": "Claude Code 编程助手",
-    "description": "Anthropic 的代理编程工具，适用于终端和 IDE 开发工作流。",
-    "link": "https://code.claude.com/",
-    "winget": "Anthropic.ClaudeCode",
-    "foss": false
-  },
-  "WPFInstallcmake": {
-    "category": "开发工具",
-    "choco": "cmake",
-    "content": "CMake 构建工具",
-    "description": "CMake 是一款开源跨平台的工具集，用于构建、测试和打包软件。",
-    "link": "https://cmake.org/",
-    "winget": "Kitware.CMake",
-    "foss": true
-  },
-  "WPFInstallcodex": {
-    "category": "开发工具",
-    "choco": "codex",
-    "content": "Codex CLI 编程代理",
-    "description": "Codex CLI 是 OpenAI 的编程代理，在您的终端中本地运行。",
-    "link": "https://developers.openai.com/codex/cli",
-    "winget": "OpenAI.Codex",
-    "foss": true
-  },
-  "WPFInstallcpuz": {
-    "category": "专业工具",
-    "choco": "cpu-z",
-    "content": "CPU-Z 硬件检测",
-    "description": "CPU-Z 是一款 Windows 系统监控和诊断工具，提供硬件组件的详细信息。",
-    "link": "https://www.cpuid.com/softwares/cpu-z.html",
-    "winget": "CPUID.CPU-Z",
-    "foss": false
-  },
-  "WPFInstallcrystaldiskinfo": {
-    "category": "工具类",
-    "choco": "crystaldiskinfo",
-    "content": "CrystalDiskInfo 磁盘检测",
-    "description": "CrystalDiskInfo 是一款磁盘健康监控工具，提供硬盘状态和性能信息。",
-    "link": "https://crystalmark.info/en/software/crystaldiskinfo/",
-    "winget": "CrystalDewWorld.CrystalDiskInfo",
-    "foss": true
-  },
-  "WPFInstallcrystaldiskmark": {
-    "category": "工具类",
-    "choco": "crystaldiskmark",
-    "content": "CrystalDiskMark 磁盘测试",
-    "description": "CrystalDiskMark 是一款磁盘基准测试工具，测量存储设备的读写速度。",
-    "link": "https://crystalmark.info/en/software/crystaldiskmark/",
-    "winget": "CrystalDewWorld.CrystalDiskMark",
-    "foss": true
-  },
-  "WPFInstallcursor": {
-    "category": "开发工具",
-    "choco": "cursoride",
-    "content": "Cursor AI编辑器",
-    "description": "AI 驱动的代码编辑器(基于 VS Code)，具有代理编程功能和集成 AI 辅助。",
-    "link": "https://cursor.com/",
-    "winget": "Anysphere.Cursor",
-    "foss": false
-  },
-  "WPFInstallddu": {
-    "category": "专业工具",
-    "choco": "ddu",
-    "content": "Display Driver Uninstaller 显卡驱动卸载",
-    "description": "Display Driver Uninstaller (DDU) 是一款完全卸载显卡驱动程序的工具。",
-    "link": "https://www.wagnardsoft.com/display-driver-uninstaller-DDU-",
-    "winget": "Wagnardsoft.DisplayDriverUninstaller",
-    "foss": true
-  },
-  "WPFInstalldiscord": {
-    "category": "通讯工具",
-    "choco": "discord",
-    "content": "Discord 通讯平台",
-    "description": "Discord 是一款流行的通讯平台，提供语音、视频和文字聊天。",
-    "link": "https://discord.com/",
-    "winget": "Discord.Discord",
-    "foss": false
-  },
-  "WPFInstalldismtools": {
-    "category": "微软工具",
-    "choco": "dismtools",
-    "content": "DISMTools 镜像工具",
-    "description": "DISMTools 是一款快速可定制的 DISM 工具 GUI，支持 Windows 7 及以上版本的映像处理。",
-    "link": "https://github.com/CodingWonders/DISMTools",
-    "winget": "CodingWondersSoftware.DISMTools.Stable",
-    "foss": true
-  },
-  "WPFInstallntlite": {
-    "category": "微软工具",
-    "choco": "ntlite-free",
-    "content": "NTLite 系统精简",
-    "description": "集成更新、驱动程序，自动化 Windows 和应用程序设置，加速 Windows 部署流程。",
-    "link": "https://ntlite.com",
-    "winget": "Nlitesoft.NTLite",
-    "foss": false
-  },
-  "WPFInstalldorion": {
-    "category": "通讯工具",
-    "choco": "dorion",
-    "content": "Dorion 轻量Discord",
-    "description": "轻量级 Discord 替代客户端，占用更小、启动更快，支持主题和插件！",
-    "link": "https://github.com/SpikeHD/Dorion",
-    "winget": "SpikeHD.Dorion",
-    "foss": true
-  },
-  "WPFInstalldotnet6": {
-    "category": "微软工具",
-    "choco": "dotnet-6.0-runtime",
-    "content": ".NET 桌面运行时 6",
-    "description": ".NET 桌面运行时 6 是运行使用 .NET 6 开发的应用程序所需的运行时环境。",
-    "link": "https://dotnet.microsoft.com/download/dotnet/6.0",
-    "winget": "Microsoft.DotNet.DesktopRuntime.6",
-    "foss": true
-  },
-  "WPFInstalldotnet8": {
-    "category": "微软工具",
-    "choco": "dotnet-8.0-runtime",
-    "content": ".NET 桌面运行时 8",
-    "description": ".NET 桌面运行时 8 是运行使用 .NET 8 开发的应用程序所需的运行时环境。",
-    "link": "https://dotnet.microsoft.com/download/dotnet/8.0",
-    "winget": "Microsoft.DotNet.DesktopRuntime.8",
-    "foss": true
-  },
-  "WPFInstalldotnet9": {
-    "category": "微软工具",
-    "choco": "dotnet-9.0-runtime",
-    "content": ".NET 桌面运行时 9",
-    "description": ".NET 桌面运行时 9 是运行使用 .NET 9 开发的应用程序所需的运行时环境。",
-    "link": "https://dotnet.microsoft.com/download/dotnet/9.0",
-    "winget": "Microsoft.DotNet.DesktopRuntime.9",
-    "foss": true
-  },
-  "WPFInstalldotnet10": {
-    "category": "微软工具",
-    "choco": "dotnet-10.0-runtime",
-    "content": ".NET 桌面运行时 10",
-    "description": ".NET 桌面运行时 10 是运行使用 .NET 10 开发的应用程序所需的运行时环境。",
-    "link": "https://dotnet.microsoft.com/download/dotnet/10.0",
-    "winget": "Microsoft.DotNet.DesktopRuntime.10",
-    "foss": true
-  },
-  "WPFInstalldropbox": {
-    "category": "工具类",
-    "choco": "dropbox",
-    "content": "Dropbox 云存储",
-    "description": "Dropbox 是一款云存储客户端，用于同步文件、共享内容并在多设备间保持文档可用。",
-    "link": "https://www.dropbox.com/desktop",
-    "winget": "Dropbox.Dropbox",
-    "foss": false
-  },
-  "WPFInstalleaapp": {
-    "category": "游戏",
-    "choco": "ea-app",
-    "content": "EA App 游戏平台",
-    "description": "EA App 是访问和游玩 Electronic Arts 游戏的平台。",
-    "link": "https://www.ea.com/ea-app",
-    "winget": "ElectronicArts.EADesktop",
-    "foss": false
-  },
-  "WPFInstalleartrumpet": {
-    "category": "多媒体工具",
-    "choco": "eartrumpet",
-    "content": "EarTrumpet 音频控制",
-    "description": "EarTrumpet 是一款 Windows 音频控制应用，提供简单直观的界面来管理声音设置。",
-    "link": "https://eartrumpet.app/",
-    "winget": "File-New-Project.EarTrumpet",
-    "foss": true
-  },
-  "WPFInstalledge": {
-    "category": "浏览器",
-    "choco": "microsoft-edge",
-    "content": "Edge 浏览器",
-    "description": "Microsoft Edge 是一款基于 Chromium 的现代网页浏览器。",
-    "link": "https://www.microsoft.com/edge",
-    "winget": "Microsoft.Edge",
-    "foss": false
-  },
-  "WPFInstallenteauth": {
-    "category": "工具类",
-    "choco": "ente-auth",
-    "content": "Ente Auth 验证器",
-    "description": "Ente Auth 是一款免费、跨平台、端到端加密的验证器应用。",
-    "link": "https://ente.io/auth/",
-    "winget": "ente-io.auth-desktop",
-    "foss": true
-  },
-  "WPFInstallepicgames": {
-    "category": "游戏",
-    "choco": "epicgameslauncher",
-    "content": "Epic Games 启动器",
-    "description": "Epic Games Launcher 是访问和游玩 Epic Games 商店游戏的客户端。",
-    "link": "https://www.epicgames.com/store/en-US/",
-    "winget": "EpicGames.EpicGamesLauncher",
-    "foss": false
-  },
-  "WPFInstallfiles": {
-    "category": "工具类",
-    "choco": "files",
-    "content": "Files 文件管理器",
-    "description": "替代性文件资源管理器。",
-    "link": "https://github.com/files-community/Files",
-    "winget": "FilesCommunity.Files",
-    "foss": true
-  },
-  "WPFInstallfirefox": {
-    "category": "浏览器",
-    "choco": "firefox",
-    "content": "Firefox 浏览器",
-    "description": "Mozilla Firefox 是一款开源网页浏览器，以其定制选项、隐私功能和扩展而闻名。",
-    "link": "https://www.mozilla.org/en-US/firefox/new/",
-    "winget": "Mozilla.Firefox",
-    "foss": true
-  },
-  "WPFInstallfirefoxesr": {
-    "category": "浏览器",
-    "choco": "FirefoxESR",
-    "content": "Firefox ESR 长期支持版",
-    "description": "Mozilla Firefox 是开源网页浏览器，ESR（扩展支持版）每 42 周收到一次主要更新。",
-    "link": "https://www.mozilla.org/en-US/firefox/enterprise/",
-    "winget": "Mozilla.Firefox.ESR",
-    "foss": true
-  },
-  "WPFInstallfloorp": {
-    "category": "浏览器",
-    "choco": "floorp",
-    "content": "Floorp 浏览器",
-    "description": "Floorp 是一款开源网页浏览器项目，旨在提供简单快速的浏览体验。",
-    "link": "https://floorp.app/",
-    "winget": "Ablaze.Floorp",
-    "foss": true
-  },
-  "WPFInstallflux": {
-    "category": "工具类",
-    "choco": "flux",
-    "content": "F.lux 护眼调色",
-    "description": "F.lux 调整屏幕色温，减少夜间使用时的眼睛疲劳。",
-    "link": "https://justgetflux.com/",
-    "winget": "flux.flux",
-    "foss": false
-  },
-  "WPFInstallgeforcenow": {
-    "category": "游戏",
-    "choco": "nvidia-geforce-now",
-    "content": "GeForce NOW 云游戏",
-    "description": "GeForce NOW 是一款云游戏服务，可让您在设备上玩高品质的 PC 游戏。",
-    "link": "https://www.nvidia.com/en-us/geforce-now/",
-    "winget": "Nvidia.GeForceNow",
-    "foss": false
-  },
-  "WPFInstallgimp": {
-    "category": "多媒体工具",
-    "choco": "gimp",
-    "content": "GIMP 图像编辑",
-    "description": "GIMP 是一款多功能开源光栅图形编辑器，用于照片修饰、图像编辑和图像合成。",
-    "link": "https://www.gimp.org/",
-    "winget": "GIMP.GIMP.3",
-    "foss": true
-  },
-  "WPFInstallgit": {
-    "category": "开发工具",
-    "choco": "git",
-    "content": "Git 版本控制",
-    "description": "Git 是一款分布式版本控制系统，广泛用于软件开发中跟踪源代码的更改。",
-    "link": "https://git-scm.com/",
-    "winget": "Git.Git",
-    "foss": true
-  },
-  "WPFInstallgithubdesktop": {
-    "category": "开发工具",
-    "choco": "git;github-desktop",
-    "content": "GitHub Desktop 桌面端",
-    "description": "GitHub Desktop 是一款可视化 Git 客户端，通过易用的界面简化 GitHub 仓库的协作。",
-    "link": "https://desktop.github.com/",
-    "winget": "GitHub.GitHubDesktop",
-    "foss": true
-  },
-  "WPFInstallgog": {
-    "category": "游戏",
-    "choco": "goggalaxy",
-    "content": "GOG Galaxy 游戏平台",
-    "description": "GOG Galaxy 是一款游戏客户端，提供无 DRM 游戏、附加内容等。",
-    "link": "https://www.gog.com/galaxy",
-    "winget": "GOG.Galaxy",
-    "foss": false
-  },
-  "WPFInstallgolang": {
-    "category": "开发工具",
-    "choco": "golang",
-    "content": "Go 编程语言",
-    "description": "Go（又称 Golang）是一种静态类型、编译型编程语言。",
-    "link": "https://go.dev/",
-    "winget": "GoLang.Go",
-    "foss": true
-  },
-  "WPFInstallgoogledrive": {
-    "category": "工具类",
-    "choco": "googledrive",
-    "content": "Google Drive 云盘",
-    "description": "跨设备文件同步，全部关联到您的 Google 帐户。",
-    "link": "https://www.google.com/drive/",
-    "winget": "Google.GoogleDrive",
-    "foss": false
-  },
-  "WPFInstallgpuz": {
-    "category": "专业工具",
-    "choco": "gpu-z",
-    "content": "GPU-Z 显卡检测",
-    "description": "GPU-Z 提供关于您的显卡和 GPU 的详细信息。",
-    "link": "https://www.techpowerup.com/gpuz/",
-    "winget": "TechPowerUp.GPU-Z",
-    "foss": false
-  },
-  "WPFInstallgsudo": {
-    "category": "专业工具",
-    "choco": "gsudo",
-    "content": "gsudo 提权工具",
-    "description": "gsudo 是 Windows 下的 sudo 替代品，允许在当前控制台窗口中提升权限运行命令。",
-    "link": "https://github.com/gerardog/gsudo",
-    "winget": "gerardog.gsudo",
-    "foss": true
-  },
-  "WPFInstallhelium": {
-    "category": "浏览器",
-    "choco": "helium",
-    "content": "Helium 浏览器",
-    "description": "私密、快速、诚实的网页浏览器。",
-    "link": "https://github.com/imputnet/helium/",
-    "winget": "ImputNet.Helium",
-    "foss": true
-  },
-  "WPFInstallhugo": {
-    "category": "工具类",
-    "choco": "hugo-extended",
-    "content": "Hugo 网站构建",
-    "description": "世界上最快速的网站构建框架。",
-    "link": "https://github.com/gohugoio/hugo/",
-    "winget": "Hugo.Hugo.Extended",
-    "foss": true
-  },
-  "WPFInstallhandbrake": {
-    "category": "多媒体工具",
-    "choco": "handbrake",
-    "content": "HandBrake 视频转换",
-    "description": "HandBrake 是一款开源视频转码器，可将几乎所有格式的视频转换为广泛支持的编解码器。",
-    "link": "https://handbrake.fr/",
-    "winget": "HandBrake.HandBrake",
-    "foss": true
-  },
-  "WPFInstallheroiclauncher": {
-    "category": "游戏",
-    "choco": "heroic-games-launcher",
-    "content": "Heroic Games Launcher 游戏启动器",
-    "description": "Heroic Games Launcher 是 Epic Games Store 的开源替代游戏启动器。",
-    "link": "https://heroicgameslauncher.com/",
-    "winget": "HeroicGamesLauncher.HeroicGamesLauncher",
-    "foss": true
-  },
-  "WPFInstallhwinfo": {
-    "category": "专业工具",
-    "choco": "hwinfo",
-    "content": "HWiNFO 硬件检测",
-    "description": "HWiNFO 提供全面的 Windows 硬件信息和诊断功能。",
-    "link": "https://www.hwinfo.com/",
-    "winget": "REALiX.HWiNFO",
-    "foss": false
-  },
-  "WPFInstallhwmonitor": {
-    "category": "专业工具",
-    "choco": "hwmonitor",
-    "content": "HWMonitor 硬件监控",
-    "description": "HWMonitor 是一款硬件监控程序，读取 PC 系统的主要健康传感器。",
-    "link": "https://www.cpuid.com/softwares/hwmonitor.html",
-    "winget": "CPUID.HWMonitor",
-    "foss": false
-  },
-  "WPFInstallimageglass": {
-    "category": "多媒体工具",
-    "choco": "imageglass",
-    "content": "ImageGlass 图片查看器",
-    "description": "ImageGlass 是一款多功能图片查看器，支持多种图片格式。",
-    "link": "https://imageglass.org/",
-    "winget": "DuongDieuPhap.ImageGlass",
-    "foss": true
-  },
-  "WPFInstallinternetdownloadmanager": {
-    "category": "工具类",
-    "choco": "internet-download-manager",
-    "content": "IDM 下载管理器",
-    "description": "Internet Download Manager 是一款用于加速、续传和计划文件下载的下载管理器。",
-    "link": "https://www.internetdownloadmanager.com/",
-    "winget": "Tonec.InternetDownloadManager",
-    "foss": false
-  },
-  "WPFInstallirfanview": {
-    "category": "多媒体工具",
-    "choco": "irfanview",
-    "content": "IrfanView 图片查看",
-    "description": "IrfanView 是一款轻量、快速、免费的图片查看器和编辑器。",
-    "link": "https://irfanview.com/",
-    "winget": "IrfanSkiljan.IrfanView",
-    "foss": false
-  },
-  "WPFInstallitch": {
-    "category": "游戏",
-    "choco": "itch",
-    "content": "Itch.io 游戏平台",
-    "description": "Itch.io 是独立游戏和创意项目的数字分发平台。",
-    "link": "https://itch.io/",
-    "winget": "ItchIo.Itch",
-    "foss": true
-  },
-  "WPFInstallitunes": {
-    "category": "多媒体工具",
-    "choco": "itunes",
-    "content": "iTunes 媒体管理",
-    "description": "iTunes 是 Apple 公司开发的媒体播放器、媒体库和在线广播应用。",
-    "link": "https://www.apple.com/itunes/",
-    "winget": "Apple.iTunes",
-    "foss": false
-  },
-  "WPFInstalljava8": {
-    "category": "开发工具",
-    "choco": "corretto8jdk",
-    "content": "Amazon Corretto 8 (LTS) JDK",
-    "description": "Amazon Corretto 是一款免费、多平台、生产就绪的 OpenJDK 发行版。",
-    "link": "https://aws.amazon.com/corretto",
-    "winget": "Amazon.Corretto.8.JDK",
-    "foss": true
-  },
-  "WPFInstalljava21": {
-    "category": "开发工具",
-    "choco": "corretto21jdk",
-    "content": "Amazon Corretto 21 (LTS) JDK",
-    "description": "Amazon Corretto 是一款免费、多平台、生产就绪的 OpenJDK 发行版。",
-    "link": "https://aws.amazon.com/corretto",
-    "winget": "Amazon.Corretto.21.JDK",
-    "foss": true
-  },
-  "WPFInstalljava25": {
-    "category": "开发工具",
-    "choco": "corretto25jdk",
-    "content": "Amazon Corretto 25 (LTS) JDK",
-    "description": "Amazon Corretto 是一款免费、多平台、生产就绪的 OpenJDK 发行版。",
-    "link": "https://aws.amazon.com/corretto",
-    "winget": "Amazon.Corretto.25.JDK",
-    "foss": true
-  },
-  "WPFInstalljellyfinmediaplayer": {
-    "category": "自托管工具",
-    "choco": "jellyfin-media-player",
-    "content": "Jellyfin 媒体播放器",
-    "description": "Jellyfin Media Player 是 Jellyfin 媒体服务器的客户端应用。",
-    "link": "https://github.com/jellyfin/jellyfin-media-player",
-    "winget": "Jellyfin.JellyfinMediaPlayer",
-    "foss": true
-  },
-  "WPFInstalljellyfinserver": {
-    "category": "自托管工具",
-    "choco": "jellyfin",
-    "content": "Jellyfin 服务器",
-    "description": "Jellyfin Server 是一款开源媒体服务器软件，让您整理和流式传输您的媒体库。",
-    "link": "https://jellyfin.org/",
-    "winget": "Jellyfin.Server",
-    "foss": true
-  },
-  "WPFInstalljetbrains": {
-    "category": "开发工具",
-    "choco": "jetbrainstoolbox",
-    "content": "JetBrains Toolbox 工具集",
-    "description": "JetBrains Toolbox 是用于轻松安装和管理 JetBrains 开发者工具的平台。",
-    "link": "https://www.jetbrains.com/toolbox/",
-    "winget": "JetBrains.Toolbox",
-    "foss": false
-  },
-  "WPFInstalljpegview": {
-    "category": "工具类",
-    "choco": "jpegview",
-    "content": "JPEGView 图片查看",
-    "description": "JPEGView 是一款精简、快速且高度可配置的图片查看/编辑器，支持多种图片格式。",
-    "link": "https://github.com/sylikc/jpegview",
-    "winget": "sylikc.JPEGView",
-    "foss": true
-  },
-  "WPFInstallkeepassxc": {
-    "category": "工具类",
-    "choco": "keepassxc",
-    "content": "KeePassXC 密码管理",
-    "description": "KeePassXC 是一款现代、安全、开源的密码管理器",
-    "link": "https://keepassxc.org/",
-    "winget": "KeePassXCTeam.KeePassXC",
-    "foss": true
-  },
-  "WPFInstallklite": {
-    "category": "多媒体工具",
-    "choco": "k-litecodecpack-standard",
-    "content": "K-Lite 解码包标准版",
-    "description": "K-Lite Codec Pack 标准版是音频和视频编解码器及相关工具的集合。",
-    "link": "https://www.codecguide.com/",
-    "winget": "CodecGuide.K-LiteCodecPack.Standard",
-    "foss": false
-  },
-  "WPFInstallkodi": {
-    "category": "自托管工具",
-    "choco": "kodi",
-    "content": "Kodi 媒体中心",
-    "description": "Kodi 是一款开源媒体中心应用，可播放和查看大多数视频、音乐、播客和其他数字媒体文件。",
-    "link": "https://kodi.tv/",
-    "winget": "XBMCFoundation.Kodi",
-    "foss": true
-  },
-  "WPFInstalllazygit": {
-    "category": "开发工具",
-    "choco": "lazygit",
-    "content": "Lazygit Git终端UI",
-    "description": "适用于 Git 命令的简洁终端界面。",
-    "link": "https://github.com/jesseduffield/lazygit/",
-    "winget": "JesseDuffield.lazygit",
-    "foss": true
-  },
-  "WPFInstalllibreoffice": {
-    "category": "多媒体工具",
-    "choco": "libreoffice-fresh",
-    "content": "LibreOffice 办公套件",
-    "description": "LibreOffice 是一款功能强大且免费的办公套件，与其他主要办公套件兼容。",
-    "link": "https://www.libreoffice.org/",
-    "winget": "TheDocumentFoundation.LibreOffice",
-    "foss": true
-  },
-  "WPFInstalllibrewolf": {
-    "category": "浏览器",
-    "choco": "librewolf",
-    "content": "LibreWolf 隐私浏览器",
-    "description": "LibreWolf 是一款基于 Firefox 注重隐私的网页浏览器，具有额外的隐私和安全增强功能。",
-    "link": "https://librewolf-community.gitlab.io/",
-    "winget": "LibreWolf.LibreWolf",
-    "foss": true
-  },
-  "WPFInstalllocalsend": {
-    "category": "自托管工具",
-    "choco": "localsend.install",
-    "content": "LocalSend 文件传输",
-    "description": "一款开源的跨平台 AirDrop 替代品。",
-    "link": "https://localsend.org/",
-    "winget": "LocalSend.LocalSend",
-    "foss": true
-  },
-  "WPFInstallmpc-qt": {
-    "category": "多媒体工具",
-    "choco": "mediainfo",
-    "content": "mpc-qt 媒体播放器",
-    "description": "Media Player Classic Qute Theater 媒体播放器",
-    "link": "https://github.com/mpc-qt/mpc-qt",
-    "winget": "mpc-qt.mpc-qt",
-    "foss": true
-  },
-  "WPFInstallmatrix": {
-    "category": "通讯工具",
-    "choco": "element-desktop",
-    "content": "Element 即时通讯",
-    "description": "Element 是 Matrix 的客户端，Matrix 是一个安全、去中心化通讯的开放网络。",
-    "link": "https://element.io/",
-    "winget": "Element.Element",
-    "foss": true
-  },
-  "WPFInstallminitoolpartitionwizard": {
-    "category": "工具类",
-    "choco": "minitoolpartitionwizard",
-    "content": "MiniTool 分区工具",
-    "description": "全面的免费分区管理器，可执行 Windows 本身无法完成的高级操作。",
-    "link": "https://www.partitionwizard.com/",
-    "winget": "MiniTool.PartitionWizard.Free",
-    "foss": false
-  },
-  "WPFInstallmodrinth": {
-    "category": "游戏",
-    "choco": "modrinth-app",
-    "content": "Modrinth Minecraft 模组管理",
-    "description": "Modrinth App 是用于管理 Minecraft 模组和整合包的桌面应用。",
-    "link": "https://modrinth.com/app",
-    "winget": "Modrinth.ModrinthApp",
-    "foss": true
-  },
-  "WPFInstallmoonlight": {
-    "category": "自托管工具",
-    "choco": "moonlight-qt",
-    "content": "Moonlight 游戏串流",
-    "description": "Moonlight/GameStream 客户端允许您通过本地网络将 PC 游戏串流到其他设备。",
-    "link": "https://moonlight-stream.org/",
-    "winget": "MoonlightGameStreamingProject.Moonlight",
-    "foss": true
-  },
-  "WPFInstallmpchc": {
-    "category": "多媒体工具",
-    "choco": "mpc-hc-clsid2",
-    "content": "MPC-HC 媒体播放器",
-    "description": "Media Player Classic - Home Cinema (MPC-HC) 是一款免费开源的视频播放器",
-    "link": "https://github.com/clsid2/mpc-hc/",
-    "winget": "clsid2.mpc-hc",
-    "foss": true
-  },
-  "WPFInstallmsedgeredirect": {
-    "category": "工具类",
-    "choco": "msedgeredirect",
-    "content": "MSEdgeRedirect 重定向工具",
-    "description": "将新闻、搜索、小工具、天气等重定向到默认浏览器的工具。",
-    "link": "https://github.com/rcmaehl/MSEdgeRedirect",
-    "winget": "rcmaehl.MSEdgeRedirect",
-    "foss": true
-  },
-  "WPFInstallmsiafterburner": {
-    "category": "工具类",
-    "choco": "msiafterburner",
-    "content": "MSI Afterburner 超频工具",
-    "description": "MSI Afterburner 是一款显卡超频工具，具有高级功能。",
-    "link": "https://www.msi.com/Landing/afterburner",
-    "winget": "Guru3D.Afterburner",
-    "foss": false
-  },
-  "WPFInstallmullvadvpn": {
-    "category": "专业工具",
-    "choco": "mullvad-app",
-    "content": "Mullvad VPN",
-    "description": "这是 Mullvad VPN 服务的 VPN 客户端软件。",
-    "link": "https://github.com/mullvad/mullvadvpn-app",
-    "winget": "MullvadVPN.MullvadVPN",
-    "foss": true
-  },
-  "WPFInstallmullvadbrowser": {
-    "category": "浏览器",
-    "choco": "na",
-    "content": "Mullvad 隐私浏览器",
-    "description": "Mullvad Browser 是一款注重隐私的网页浏览器，与 Tor 项目合作开发。",
-    "link": "https://mullvad.net/browser",
-    "winget": "MullvadVPN.MullvadBrowser",
-    "foss": true
-  },
-  "WPFInstallnomacs": {
-    "category": "多媒体工具",
-    "choco": "nomacs",
-    "content": "nomacs 图片查看器",
-    "description": "nomacs 是一款免费开源多平台图片查看器，支持所有常见图片格式。",
-    "link": "https://nomacs.org/",
-    "winget": "nomacs.nomacs",
-    "foss": true
-  },
-  "WPFInstallnanazip": {
-    "category": "工具类",
-    "choco": "nanazip",
-    "content": "NanaZip 压缩工具",
-    "description": "NanaZip 是一款快速高效的文件压缩和解压缩工具。",
-    "link": "https://github.com/M2Team/NanaZip",
-    "winget": "M2Team.NanaZip",
-    "foss": true
-  },
-  "WPFInstallnetbird": {
-    "category": "自托管工具",
-    "choco": "netbird",
-    "content": "NetBird 网络工具",
-    "description": "NetBird 是与 TailScale 相当的开源替代品，可连接到自托管服务器。",
-    "link": "https://netbird.io/",
-    "winget": "Netbird.Netbird",
-    "foss": true
-  },
-  "WPFInstallnaps2": {
-    "category": "多媒体工具",
-    "choco": "naps2",
-    "content": "NAPS2 文档扫描",
-    "description": "NAPS2 是一款简化创建电子文档流程的文档扫描应用。",
-    "link": "https://www.naps2.com/",
-    "winget": "Cyanfish.NAPS2",
-    "foss": true
-  },
-  "WPFInstallneovim": {
-    "category": "开发工具",
-    "choco": "neovim",
-    "content": "Neovim 文本编辑器",
-    "description": "Neovim 是一款高度可扩展的文本编辑器，是对原始 Vim 编辑器的改进。",
-    "link": "https://neovim.io/",
-    "winget": "Neovim.Neovim",
-    "foss": true
-  },
-  "WPFInstallnextclouddesktop": {
-    "category": "自托管工具",
-    "choco": "nextcloud-client",
-    "content": "Nextcloud 桌面客户端",
-    "description": "Nextcloud Desktop 是 Nextcloud 文件同步和共享平台的官方桌面客户端。",
-    "link": "https://nextcloud.com/install/#install-clients",
-    "winget": "Nextcloud.NextcloudDesktop",
-    "foss": true
-  },
-  "WPFInstallnmap": {
-    "category": "专业工具",
-    "choco": "nmap",
-    "content": "Nmap 网络扫描",
-    "description": "Nmap (Network Mapper) is an open-source tool for network exploration and security auditing. It discovers devices on a network and provides information about their ports and services.",
-    "link": "https://nmap.org/",
-    "winget": "Insecure.Nmap",
-    "foss": true
-  },
-  "WPFInstallnodejs": {
-    "category": "开发工具",
-    "choco": "nodejs",
-    "content": "Node.js",
-    "description": "Node.js 是基于 Chrome V8 引擎的 JavaScript 运行时。",
-    "link": "https://nodejs.org/",
-    "winget": "OpenJS.NodeJS",
-    "foss": true
-  },
-  "WPFInstallnodejslts": {
-    "category": "开发工具",
-    "choco": "nodejs-lts",
-    "content": "Node.js LTS 长期支持版",
-    "description": "Node.js LTS 提供长期支持版本，用于稳定可靠的服务器端 JavaScript 开发。",
-    "link": "https://nodejs.org/",
-    "winget": "OpenJS.NodeJS.LTS",
-    "foss": true
-  },
-  "WPFInstallpnpm": {
-    "category": "开发工具",
-    "content": "pnpm 包管理器",
-    "description": "pnpm 是一款快速且节省磁盘空间的 JavaScript 和 Node.js 包管理器。",
-    "link": "https://pnpm.io/",
-    "winget": "pnpm.pnpm",
-    "foss": true
-  },
-  "WPFInstallnotepadplus": {
-    "category": "多媒体工具",
-    "choco": "notepadplusplus",
-    "content": "Notepad++ 文本编辑器",
-    "description": "Notepad++ 是一款免费开源代码编辑器，是记事本的替代品，支持多种语言。",
-    "link": "https://notepad-plus-plus.org/",
-    "winget": "Notepad++.Notepad++",
-    "foss": true
-  },
-  "WPFInstallnuget": {
-    "category": "微软工具",
-    "choco": "nuget.commandline",
-    "content": "NuGet 包管理器",
-    "description": "NuGet 是 .NET 框架的包管理器，使开发人员能够管理和共享 .NET 应用中的库。",
-    "link": "https://www.nuget.org/",
-    "winget": "Microsoft.NuGet",
-    "foss": true
-  },
-  "WPFInstallnvclean": {
-    "category": "工具类",
-    "choco": "na",
-    "content": "NVCleanstall 显卡驱动定制",
-    "description": "NVCleanstall 是一款定制 NVIDIA 驱动安装的工具。",
-    "link": "https://www.techpowerup.com/nvcleanstall/",
-    "winget": "TechPowerUp.NVCleanstall",
-    "foss": false
-  },
-  "WPFInstallobs": {
-    "category": "多媒体工具",
-    "choco": "obs-studio",
-    "content": "OBS Studio 直播录屏",
-    "description": "OBS Studio 是一款免费开源的视频录制和直播推流软件",
-    "link": "https://obsproject.com/",
-    "winget": "OBSProject.OBSStudio",
-    "foss": true
-  },
-  "WPFInstallobsidian": {
-    "category": "多媒体工具",
-    "choco": "obsidian",
-    "content": "Obsidian 知识管理",
-    "description": "Obsidian 是一款功能强大的笔记和知识管理应用。",
-    "link": "https://obsidian.md/",
-    "winget": "Obsidian.Obsidian",
-    "foss": false
-  },
-  "WPFInstallonedrive": {
-    "category": "微软工具",
-    "choco": "onedrive",
-    "content": "OneDrive 云存储",
-    "description": "OneDrive 是 Microsoft 提供的云存储服务，允许用户安全地跨设备存储和共享文件。",
-    "link": "https://onedrive.live.com/",
-    "winget": "Microsoft.OneDrive",
-    "foss": false
-  },
-  "WPFInstallonlyoffice": {
-    "category": "多媒体工具",
-    "choco": "onlyoffice",
-    "content": "ONLYOFFICE 桌面办公",
-    "description": "ONLYOFFICE Desktop 是一款全面的办公套件，用于文档编辑和协作。",
-    "link": "https://www.onlyoffice.com/desktop.aspx",
-    "winget": "ONLYOFFICE.DesktopEditors",
-    "foss": true
-  },
-  "WPFInstallOPAutoClicker": {
-    "category": "工具类",
-    "choco": "autoclicker",
-    "content": "OPAutoClicker 自动点击",
-    "description": "功能齐全的自动点击器，支持动态光标位置或预设位置两种自动点击模式。",
-    "link": "https://www.opautoclicker.com",
-    "winget": "OPAutoClicker.OPAutoClicker",
-    "foss": false
-  },
-  "WPFInstallopenrgb": {
-    "category": "工具类",
-    "choco": "openrgb",
-    "content": "OpenRGB RGB灯光控制",
-    "description": "OpenRGB 是一款开源 RGB 灯光控制软件。",
-    "link": "https://openrgb.org/",
-    "winget": "OpenRGB.OpenRGB",
-    "foss": true
-  },
-  "WPFInstallOpenVPN": {
-    "category": "专业工具",
-    "choco": "openvpn-connect",
-    "content": "OpenVPN Connect 客户端",
-    "description": "OpenVPN Connect 是一款 VPN 客户端，可让你安全连接到 VPN 服务器",
-    "link": "https://openvpn.net/",
-    "winget": "OpenVPNTechnologies.OpenVPNConnect",
-    "foss": false
-  },
-  "WPFInstallOVirtualBox": {
-    "category": "工具类",
-    "choco": "virtualbox",
-    "content": "Oracle VirtualBox 虚拟机",
-    "description": "Oracle VirtualBox 是一款功能强大且免费开源的虚拟化工具。",
-    "link": "https://www.virtualbox.org/",
-    "winget": "Oracle.VirtualBox",
-    "foss": true
-  },
-  "WPFInstallpolicyplus": {
-    "category": "工具类",
-    "choco": "na",
-    "content": "Policy Plus 组策略编辑",
-    "description": "本地组策略编辑器增强版，适用于所有 Windows 版本。",
-    "link": "https://github.com/Fleex255/PolicyPlus",
-    "winget": "Fleex255.PolicyPlus",
-    "foss": true
-  },
-  "WPFInstallprocessexplorer": {
-    "category": "微软工具",
-    "choco": "procexp",
-    "content": "Process Explorer 进程管理",
-    "description": "Process Explorer 是任务管理器和系统监视器。",
-    "link": "https://learn.microsoft.com/sysinternals/downloads/process-explorer",
-    "winget": "Microsoft.Sysinternals.ProcessExplorer",
-    "foss": false
-  },
-  "WPFInstallPaintdotnet": {
-    "category": "多媒体工具",
-    "choco": "paint.net",
-    "content": "Paint.NET 图像编辑",
-    "description": "Paint.NET 是一款免费的 Windows 图像照片编辑软件",
-    "link": "https://www.getpaint.net/",
-    "winget": "dotPDN.PaintDotNet",
-    "foss": false
-  },
-  "WPFInstallparsec": {
-    "category": "工具类",
-    "choco": "parsec",
-    "content": "Parsec 远程桌面",
-    "description": "Parsec 是一款低延迟、高质量的远程桌面共享应用。",
-    "link": "https://parsec.app/",
-    "winget": "Parsec.Parsec",
-    "foss": false
-  },
-  "WPFInstallpeazip": {
-    "category": "工具类",
-    "choco": "peazip",
-    "content": "PeaZip 压缩工具",
-    "description": "PeaZip 是一款免费开源文件压缩工具，支持多种压缩格式并提供加密功能。",
-    "link": "https://peazip.github.io/",
-    "winget": "Giorgiotani.Peazip",
-    "foss": true
-  },
-  "WPFInstallplaynite": {
-    "category": "游戏",
-    "choco": "playnite",
-    "content": "Playnite 游戏库管理",
-    "description": "Playnite 是一款开源游戏库管理器，目标是为您的所有游戏提供统一界面。",
-    "link": "https://playnite.link/",
-    "winget": "Playnite.Playnite",
-    "foss": true
-  },
-  "WPFInstallplex": {
-    "category": "自托管工具",
-    "choco": "plexmediaserver",
-    "content": "Plex 媒体服务器",
-    "description": "Plex Media Server 是一款媒体服务器软件，可让你管理和流式传输媒体文件",
-    "link": "https://www.plex.tv/your-media/",
-    "winget": "Plex.PlexMediaServer",
-    "foss": false
-  },
-  "WPFInstallplexdesktop": {
-    "category": "自托管工具",
-    "choco": "plex",
-    "content": "Plex 桌面客户端",
-    "description": "Plex Media Server 是一款媒体服务器软件，可让你管理和流式传输媒体文件",
-    "link": "https://www.plex.tv",
-    "winget": "Plex.Plex",
-    "foss": false
-  },
-  "WPFInstallposh": {
-    "category": "开发工具",
-    "choco": "oh-my-posh",
-    "content": "Oh My Posh 终端美化",
-    "description": "Oh My Posh 是一款跨平台的 Shell 提示符主题引擎。",
-    "link": "https://ohmyposh.dev/",
-    "winget": "JanDeDobbeleer.OhMyPosh",
-    "foss": true
-  },
-  "WPFInstallpowershell": {
-    "category": "微软工具",
-    "choco": "powershell-core",
-    "content": "PowerShell",
-    "description": "PowerShell 是微软的自动化任务框架和脚本语言",
-    "link": "https://github.com/PowerShell/PowerShell",
-    "winget": "Microsoft.PowerShell",
-    "foss": true
-  },
-  "WPFInstallpowertoys": {
-    "category": "微软工具",
-    "choco": "powertoys",
-    "content": "PowerToys 效率工具",
-    "description": "PowerToys 是一套面向高级用户的效率工具，包括 FancyZones、PowerRename 等功能。",
-    "link": "https://github.com/microsoft/PowerToys",
-    "winget": "Microsoft.PowerToys",
-    "foss": true
-  },
-  "WPFInstallprismlauncher": {
-    "category": "游戏",
-    "choco": "prismlauncher",
-    "content": "Prism Launcher Minecraft启动器",
-    "description": "Prism Launcher 是一款开源 Minecraft 启动器，支持管理多个实例、帐户和模组。",
-    "link": "https://prismlauncher.org/",
-    "winget": "PrismLauncher.PrismLauncher",
-    "foss": true
-  },
-  "WPFInstallprocesslasso": {
-    "category": "工具类",
-    "choco": "plasso",
-    "content": "Process Lasso 进程优化",
-    "description": "Process Lasso 是一款系统优化和自动化工具，可优化 CPU 使用率",
-    "link": "https://bitsum.com/",
-    "winget": "BitSum.ProcessLasso",
-    "foss": false
-  },
-  "WPFInstallprotonauth": {
-    "category": "工具类",
-    "choco": "protonauth",
-    "content": "Proton 验证器",
-    "description": "Proton 的双因素认证应用，用于安全同步和备份 2FA 验证码。",
-    "link": "https://proton.me/authenticator",
-    "winget": "Proton.ProtonAuthenticator",
-    "foss": true
-  },
-  "WPFInstallprotonmail": {
-    "category": "通讯工具",
-    "choco": "protonmail",
-    "content": "Proton Mail 加密邮箱",
-    "description": "Proton Mail 是 Proton 的端到端加密电子邮件服务。",
-    "link": "https://proton.me/mail",
-    "winget": "Proton.ProtonMail",
-    "foss": true
-  },
-  "WPFInstallprotondrive": {
-    "category": "工具类",
-    "choco": "protondrive",
-    "content": "Proton Drive 加密云盘",
-    "description": "Proton Drive 是端到端加密的瑞士文件保险库。",
-    "link": "https://proton.me/drive",
-    "winget": "Proton.ProtonDrive",
-    "foss": true
-  },
-  "WPFInstallprotonpass": {
-    "category": "工具类",
-    "choco": "protonpass",
-    "content": "Proton Pass 密码管理",
-    "description": "Proton Pass 是一款基于云的密码管理器，具有端到端加密功能。",
-    "link": "https://proton.me/pass",
-    "winget": "Proton.ProtonPass",
-    "foss": true
-  },
-  "WPFInstallprotonvpn": {
-    "category": "专业工具",
-    "choco": "protonvpn",
-    "content": "Proton VPN",
-    "description": "Proton VPN 是无日志 VPN 服务，保护您的在线隐私。",
-    "link": "https://protonvpn.com/",
-    "winget": "Proton.ProtonVPN",
-    "foss": true
-  },
-  "WPFInstallprocessmonitor": {
-    "category": "微软工具",
-    "choco": "procexp",
-    "content": "Process Monitor 进程监控",
-    "description": "SysInternals Process Monitor 是一款高级监控工具，实时显示系统和进程活动。",
-    "link": "https://docs.microsoft.com/en-us/sysinternals/downloads/procmon",
-    "winget": "Microsoft.Sysinternals.ProcessMonitor",
-    "foss": false
-  },
-  "WPFInstallputty": {
-    "category": "专业工具",
-    "choco": "putty",
-    "content": "PuTTY 远程连接",
-    "description": "PuTTY 是一款免费开源的终端仿真器、串行控制台和网络文件传输工具",
-    "link": "https://www.chiark.greenend.org.uk/~sgtatham/putty/",
-    "winget": "PuTTY.PuTTY",
-    "foss": true
-  },
-  "WPFInstallpython3": {
-    "category": "开发工具",
-    "choco": "python",
-    "content": "Python 3",
-    "description": "Python 是一种通用编程语言，用于 Web 开发、数据分析、人工智能等领域。",
-    "link": "https://www.python.org/",
-    "winget": "Python.Python.3.14",
-    "foss": true
-  },
-  "WPFInstallqbittorrent": {
-    "category": "工具类",
-    "choco": "qbittorrent",
-    "content": "qBittorrent 下载工具",
-    "description": "qBittorrent 是一款免费开源的 BitTorrent 客户端",
-    "link": "https://www.qbittorrent.org/",
-    "winget": "qBittorrent.qBittorrent",
-    "foss": true
-  },
-  "WPFInstallqtox": {
-    "category": "通讯工具",
-    "choco": "qtox",
-    "content": "QTox 安全通讯",
-    "description": "QTox 是一款免费开源通讯应用，设计上优先考虑用户隐私和安全。",
-    "link": "https://qtox.github.io/",
-    "winget": "Tox.qTox",
-    "foss": true
-  },
-  "WPFInstallrevo": {
-    "category": "工具类",
-    "choco": "revo-uninstaller",
-    "content": "Revo Uninstaller 卸载工具",
-    "description": "Revo Uninstaller 是一款高级卸载工具，帮助您删除不需要的软件并清理系统。",
-    "link": "https://www.revouninstaller.com/",
-    "winget": "RevoUninstaller.RevoUninstaller",
-    "foss": false
-  },
-  "WPFInstallWiseProgramUninstaller": {
-    "category": "工具类",
-    "choco": "na",
-    "content": "Wise Program Uninstaller 卸载工具",
-    "description": "Wise Program Uninstaller 是卸载 Windows 程序的完美解决方案。",
-    "link": "https://www.wisecleaner.com/wise-program-uninstaller.html",
-    "winget": "WiseCleaner.WiseProgramUninstaller",
-    "foss": false
-  },
-  "WPFInstallrufus": {
-    "category": "工具类",
-    "choco": "rufus",
-    "content": "Rufus 启动盘制作",
-    "description": "Rufus 是一款帮助格式化和创建可启动 USB 驱动器的工具。",
-    "link": "https://rufus.ie/",
-    "winget": "Rufus.Rufus",
-    "foss": true
-  },
-  "WPFInstallrustlang": {
-    "category": "开发工具",
-    "choco": "rust",
-    "content": "Rust 编程语言",
-    "description": "Rust 是一种专为安全和性能设计的编程语言，尤其注重系统编程。",
-    "link": "https://www.rust-lang.org/",
-    "winget": "Rustlang.Rust.MSVC",
-    "foss": true
-  },
-  "WPFInstallsdio": {
-    "category": "工具类",
-    "choco": "sdio",
-    "content": "Snappy Driver Installer 驱动更新",
-    "description": "Snappy Driver Installer Origin 是一款免费开源驱动更新工具。",
-    "link": "https://www.glenn.delahoy.com/snappy-driver-installer-origin/",
-    "winget": "GlennDelahoy.SnappyDriverInstallerOrigin",
-    "foss": true
-  },
-  "WPFInstallsharex": {
-    "category": "多媒体工具",
-    "choco": "sharex",
-    "content": "ShareX 截图工具",
-    "description": "ShareX 是一款免费开源的屏幕截图和文件共享工具",
-    "link": "https://getsharex.com/",
-    "winget": "ShareX.ShareX",
-    "foss": true
-  },
-  "WPFInstallnilesoftShell": {
-    "category": "工具类",
-    "choco": "nilesoft-shell",
-    "content": "Nilesoft Shell 右键菜单",
-    "description": "Shell 是一款 Windows 右键菜单扩展工具，添加额外功能和自定义选项。",
-    "link": "https://nilesoft.org/",
-    "winget": "Nilesoft.Shell",
-    "foss": false
-  },
-  "WPFInstallsysteminformer": {
-    "category": "开发工具",
-    "choco": "systeminformer",
-    "content": "System Informer 系统监控",
-    "description": "一款免费、强大、多用途的工具，帮助您监控系统资源、调试软件和检测恶意软件。",
-    "link": "https://systeminformer.com/",
-    "winget": "WinsiderSS.SystemInformer",
-    "foss": true
-  },
-  "WPFInstallsignal": {
-    "category": "通讯工具",
-    "choco": "signal",
-    "content": "Signal 加密通讯",
-    "description": "Signal 是一款注重隐私的通讯应用，提供端到端加密以确保安全和私密的通信。",
-    "link": "https://signal.org/",
-    "winget": "OpenWhisperSystems.Signal",
-    "foss": true
-  },
-  "WPFInstallsignalrgb": {
-    "category": "工具类",
-    "choco": "na",
-    "content": "SignalRGB RGB控制",
-    "description": "SignalRGB 让您通过一个免费应用程序控制和同步您喜爱的 RGB 设备。",
-    "link": "https://www.signalrgb.com/",
-    "winget": "WhirlwindFX.SignalRgb",
-    "foss": false
-  },
-  "WPFInstallsimplewall": {
-    "category": "专业工具",
-    "choco": "simplewall",
-    "content": "Simplewall 防火墙",
-    "description": "Simplewall 是一款免费开源 Windows 防火墙应用。",
-    "link": "https://github.com/henrypp/simplewall",
-    "winget": "Henry++.simplewall",
-    "foss": true
-  },
-  "WPFInstallslack": {
-    "category": "通讯工具",
-    "choco": "slack",
-    "content": "Slack 团队协作",
-    "description": "Slack 是连接团队并通过频道、消息和文件共享促进沟通的协作中心。",
-    "link": "https://slack.com/",
-    "winget": "SlackTechnologies.Slack",
-    "foss": false
-  },
-  "WPFInstallstartallback": {
-    "category": "工具类",
-    "choco": "StartAllBack",
-    "content": "StartAllBack 开始菜单恢复",
-    "description": "StartAllBack 恢复并改进 Windows 任务栏、开始菜单、文件资源管理器和 Shell UI 行为。",
-    "link": "https://www.startallback.com/",
-    "winget": "StartIsBack.StartAllBack",
-    "foss": false
-  },
-  "WPFInstallsteam": {
-    "category": "游戏",
-    "choco": "steam-client",
-    "content": "Steam 游戏平台",
-    "description": "Steam 是购买和游玩视频游戏的数字分发平台。",
-    "link": "https://store.steampowered.com/about/",
-    "winget": "Valve.Steam",
-    "foss": false
-  },
-  "WPFInstallsublimetext": {
-    "category": "开发工具",
-    "choco": "sublimetext4",
-    "content": "Sublime Text 文本编辑器",
-    "description": "Sublime Text 是一款用于代码、标记和散文的精良文本编辑器。",
-    "link": "https://www.sublimetext.com/",
-    "winget": "SublimeHQ.SublimeText.4",
-    "foss": false
-  },
-  "WPFInstallsunshine": {
-    "category": "自托管工具",
-    "choco": "sunshine",
-    "content": "Sunshine 游戏串流服务器",
-    "description": "Sunshine 是一款游戏串流服务器，允许在 Android 设备上远程玩 PC 游戏。",
-    "link": "https://github.com/LizardByte/Sunshine",
-    "winget": "LizardByte.Sunshine",
-    "foss": true
-  },
-  "WPFInstalltcpview": {
-    "category": "微软工具",
-    "choco": "tcpview",
-    "content": "TCPView 网络监控",
-    "description": "SysInternals TCPView 是一款网络监控工具，显示所有 TCP 和 UDP 端点的详细列表。",
-    "link": "https://docs.microsoft.com/en-us/sysinternals/downloads/tcpview",
-    "winget": "Microsoft.Sysinternals.TCPView",
-    "foss": false
-  },
-  "WPFInstallteams": {
-    "category": "通讯工具",
-    "choco": "microsoft-teams",
-    "content": "Teams 团队协作",
-    "description": "Microsoft Teams 是与 Office 365 集成的协作平台。",
-    "link": "https://www.microsoft.com/en-us/microsoft-teams/group-chat-software",
-    "winget": "Microsoft.Teams",
-    "foss": false
-  },
-  "WPFInstallteamviewer": {
-    "category": "工具类",
-    "choco": "teamviewer9",
-    "content": "TeamViewer 远程协助",
-    "description": "TeamViewer 是一款流行的远程访问和支持软件。",
-    "link": "https://www.teamviewer.com/",
-    "winget": "TeamViewer.TeamViewer",
-    "foss": false
-  },
-  "WPFInstallteamspeak3": {
-    "category": "通讯工具",
-    "choco": "teamspeak",
-    "content": "TeamSpeak 3 语音通讯",
-    "description": "TEAMSPEAK. YOUR TEAM. YOUR RULES. Use crystal clear sound to communicate with your teammates cross-platform with military-grade security, lag-free performance & unparalleled reliability and uptime.",
-    "link": "https://www.teamspeak.com/",
-    "winget": "TeamSpeakSystems.TeamSpeakClient",
-    "foss": false
-  },
-  "WPFInstalltelegram": {
-    "category": "通讯工具",
-    "choco": "telegram",
-    "content": "Telegram 即时通讯",
-    "description": "Telegram 是一款基于云的即时通讯应用，以其安全性、速度和简洁性而闻名。",
-    "link": "https://telegram.org/",
-    "winget": "Telegram.TelegramDesktop",
-    "foss": true
-  },
-  "WPFInstallterminal": {
-    "category": "微软工具",
-    "choco": "microsoft-windows-terminal",
-    "content": "Windows Terminal 终端",
-    "description": "Windows Terminal 是一款现代、快速、高效的终端应用程序",
-    "link": "https://aka.ms/terminal",
-    "winget": "Microsoft.WindowsTerminal",
-    "foss": true
-  },
-  "WPFInstallthunderbird": {
-    "category": "通讯工具",
-    "choco": "thunderbird",
-    "content": "Thunderbird 邮件客户端",
-    "description": "Mozilla Thunderbird 是一款免费开源的电子邮件、新闻和聊天客户端。",
-    "link": "https://www.thunderbird.net/",
-    "winget": "Mozilla.Thunderbird",
-    "foss": true
-  },
-  "WPFInstallbetterbird": {
-    "category": "通讯工具",
-    "choco": "betterbird",
-    "content": "Betterbird 邮件客户端(优化版)",
-    "description": "Betterbird 是 Mozilla Thunderbird 的分支，具有额外功能和错误修复。",
-    "link": "https://www.betterbird.eu/",
-    "winget": "Betterbird.Betterbird",
-    "foss": true
-  },
-  "WPFInstalltor": {
-    "category": "浏览器",
-    "choco": "tor-browser",
-    "content": "Tor 匿名浏览器",
-    "description": "Tor 浏览器专为匿名网页浏览而设计，利用 Tor 网络保护用户隐私和安全。",
-    "link": "https://www.torproject.org/",
-    "winget": "TorProject.TorBrowser",
-    "foss": true
-  },
-  "WPFInstalltotalcommander": {
-    "category": "工具类",
-    "choco": "TotalCommander",
-    "content": "Total Commander 文件管理",
-    "description": "Total Commander 是一款 Windows 文件管理器，提供强大直观的文件管理界面。",
-    "link": "https://www.ghisler.com/",
-    "winget": "Ghisler.TotalCommander",
-    "foss": false
-  },
-  "WPFInstalltreesize": {
-    "category": "工具类",
-    "choco": "treesizefree",
-    "content": "TreeSize Free 磁盘分析",
-    "description": "TreeSize Free 是一款磁盘空间管理器，帮助您分析和可视化驱动器上的空间使用情况。",
-    "link": "https://www.jam-software.com/treesize_free/",
-    "winget": "JAMSoftware.TreeSize.Free",
-    "foss": false
-  },
-  "WPFInstallttaskbar": {
-    "category": "工具类",
-    "choco": "translucenttb",
-    "content": "TranslucentTB 任务栏透明",
-    "description": "TranslucentTB 是一款允许您自定义 Windows 任务栏透明度的工具。",
-    "link": "https://github.com/TranslucentTB/TranslucentTB",
-    "winget": "CharlesMilette.TranslucentTB",
-    "foss": true
-  },
-  "WPFInstallubisoft": {
-    "category": "游戏",
-    "choco": "ubisoft-connect",
-    "content": "Ubisoft Connect 游戏平台",
-    "description": "Ubisoft Connect 是育碧的数字发行和在线多人游戏平台",
-    "link": "https://ubisoftconnect.com/",
-    "winget": "Ubisoft.Connect",
-    "foss": false
-  },
-  "WPFInstallungoogled": {
-    "category": "浏览器",
-    "choco": "ungoogled-chromium",
-    "content": "Ungoogled Chromium 无谷歌版",
-    "description": "Ungoogled Chromium 是不含 Google 集成的 Chromium 版本。",
-    "link": "https://github.com/Eloston/ungoogled-chromium",
-    "winget": "eloston.ungoogled-chromium",
-    "foss": true
-  },
-  "WPFInstallunity": {
-    "category": "开发工具",
-    "choco": "unityhub",
-    "content": "Unity 游戏引擎",
-    "description": "Unity 是一款强大的游戏开发平台，用于创建 2D、3D、增强现实和虚拟现实游戏。",
-    "link": "https://unity.com/",
-    "winget": "Unity.UnityHub",
-    "foss": false
-  },
-  "WPFInstalleverything": {
-    "category": "工具类",
-    "choco": "everything",
-    "content": "Everything 文件搜索",
-    "description": "Everything 是一款极速文件搜索工具，可瞬间定位文件和文件夹",
-    "link": "https://www.voidtools.com/",
-    "winget": "voidtools.Everything",
-    "foss": false
-  },
-  "WPFInstallvc2015_32": {
-    "category": "微软工具",
-    "choco": "vcredist2015",
-    "content": "Visual C++ 2015-2022 32位运行库",
-    "description": "Visual C++ 2015-2022 32位可再发行包，安装运行 32 位应用所需的运行时组件。",
-    "link": "https://support.microsoft.com/en-us/help/2977003/the-latest-supported-visual-c-downloads",
-    "winget": "Microsoft.VCRedist.2015+.x86",
-    "foss": false
-  },
-  "WPFInstallvc2015_64": {
-    "category": "微软工具",
-    "choco": "vcredist2015",
-    "content": "Visual C++ 2015-2022 64位运行库",
-    "description": "Visual C++ 2015-2022 64位可再发行包，安装运行 64 位应用所需的运行时组件。",
-    "link": "https://support.microsoft.com/en-us/help/2977003/the-latest-supported-visual-c-downloads",
-    "winget": "Microsoft.VCRedist.2015+.x64",
-    "foss": false
-  },
-  "WPFInstallventoy": {
-    "category": "专业工具",
-    "choco": "ventoy",
-    "content": "Ventoy 启动盘制作",
-    "description": "Ventoy 是一款开源的启动 U 盘制作工具",
-    "link": "https://www.ventoy.net/",
-    "winget": "Ventoy.Ventoy",
-    "foss": true
-  },
-  "WPFInstallvesktop": {
-    "category": "通讯工具",
-    "choco": "na",
-    "content": "Vesktop Discord客户端",
-    "description": "基于 Electron 的跨平台桌面应用，预装 Vencord，提供更流畅的 Discord 体验。",
-    "link": "https://github.com/Vencord/Vesktop",
-    "winget": "Vencord.Vesktop",
-    "foss": true
-  },
-  "WPFInstallviber": {
-    "category": "通讯工具",
-    "choco": "viber",
-    "content": "Viber 即时通讯",
-    "description": "Viber 是一款免费消息和通话应用，具有群聊、视频通话等功能。",
-    "link": "https://www.viber.com/",
-    "winget": "Rakuten.Viber",
-    "foss": false
-  },
-  "WPFInstallvisualstudio2022": {
-    "category": "开发工具",
-    "choco": "visualstudio2022community",
-    "content": "Visual Studio 2022",
-    "description": "Visual Studio 2022 是用于构建、调试和部署应用程序的集成开发环境 (IDE)。",
-    "link": "https://visualstudio.microsoft.com/",
-    "winget": "Microsoft.VisualStudio.2022.Community",
-    "foss": false
-  },
-  "WPFInstallvisualstudio2026": {
-    "category": "开发工具",
-    "choco": "visualstudio2026community",
-    "content": "Visual Studio 2026",
-    "description": "Visual Studio 2026 是用于构建、调试和部署应用程序的集成开发环境 (IDE)。",
-    "link": "https://visualstudio.microsoft.com/",
-    "winget": "Microsoft.VisualStudio.Community",
-    "foss": false
-  },
-  "WPFInstallvivaldi": {
-    "category": "浏览器",
-    "choco": "vivaldi",
-    "content": "Vivaldi 浏览器",
-    "description": "Vivaldi 是一款高度可定制的网页浏览器。",
-    "link": "https://vivaldi.com/",
-    "winget": "Vivaldi.Vivaldi",
-    "foss": false
-  },
-  "WPFInstallvlc": {
-    "category": "多媒体工具",
-    "choco": "vlc",
-    "content": "VLC 视频播放器",
-    "description": "VLC 媒体播放器是一款免费开源的多媒体播放器",
-    "link": "https://www.videolan.org/vlc/",
-    "winget": "VideoLAN.VLC",
-    "foss": true
-  },
-  "WPFInstallvrdesktopstreamer": {
-    "category": "游戏",
-    "choco": "na",
-    "content": "Virtual Desktop Streamer VR串流",
-    "description": "Virtual Desktop Streamer 是一款将桌面屏幕串流到 VR 设备的工具。",
-    "link": "https://www.vrdesktop.net/",
-    "winget": "VirtualDesktop.Streamer",
-    "foss": false
-  },
-  "WPFInstallvscode": {
-    "category": "开发工具",
-    "choco": "vscode",
-    "content": "VS Code 代码编辑器",
-    "description": "Visual Studio Code 是一款免费开源的代码编辑器，支持多种编程语言。",
-    "link": "https://code.visualstudio.com/",
-    "winget": "Microsoft.VisualStudioCode",
-    "foss": true
-  },
-  "WPFInstallvscodium": {
-    "category": "开发工具",
-    "choco": "vscodium",
-    "content": "VS Codium 开源版",
-    "description": "VSCodium 是社区驱动的、自由许可的 Microsoft VS Code 二进制发行版。",
-    "link": "https://vscodium.com/",
-    "winget": "VSCodium.VSCodium",
-    "foss": true
-  },
-  "WPFInstallwaterfox": {
-    "category": "浏览器",
-    "choco": "waterfox",
-    "content": "Waterfox 隐私浏览器",
-    "description": "Waterfox 是一款基于 Firefox 的快速隐私浏览器。",
-    "link": "https://www.waterfox.net/",
-    "winget": "Waterfox.Waterfox",
-    "foss": true
-  },
-  "WPFInstallwhatsapp": {
-    "category": "通讯工具",
-    "choco": "na",
-    "content": "WhatsApp 桌面版",
-    "description": "WhatsApp Desktop 是 Meta 的官方 Windows 桌面消息应用。",
-    "link": "https://apps.microsoft.com/detail/9nksqgp7f2nh",
-    "winget": "msstore:9NKSQGP7F2NH",
-    "foss": false
-  },
-  "WPFInstallwingetui": {
-    "category": "工具类",
-    "choco": "wingetui",
-    "content": "UniGetUI 包管理GUI",
-    "description": "UniGetUI 是 WinGet、Chocolatey 和其他 Windows CLI 包管理器的图形界面。",
-    "link": "https://devolutions.net/unigetui/",
-    "winget": "Devolutions.UniGetUI",
-    "foss": true
-  },
-  "WPFInstallwinrar": {
-    "category": "工具类",
-    "choco": "winrar",
-    "content": "WinRAR 压缩工具",
-    "description": "WinRAR 是一款功能强大的压缩文件管理器。",
-    "link": "https://www.win-rar.com/",
-    "winget": "RARLab.WinRAR",
-    "foss": false
-  },
-  "WPFInstallwinscp": {
-    "category": "专业工具",
-    "choco": "winscp",
-    "content": "WinSCP 文件传输",
-    "description": "WinSCP 是一款流行的开源 SFTP/FTP/SCP 客户端",
-    "link": "https://winscp.net/",
-    "winget": "WinSCP.WinSCP",
-    "foss": true
-  },
-  "WPFInstallwireguard": {
-    "category": "专业工具",
-    "choco": "wireguard",
-    "content": "WireGuard VPN",
-    "description": "WireGuard 是一款快速、现代的 VPN（虚拟专用网络）",
-    "link": "https://www.wireguard.com/",
-    "winget": "WireGuard.WireGuard",
-    "foss": true
-  },
-  "WPFInstallwireshark": {
-    "category": "专业工具",
-    "choco": "wireshark",
-    "content": "Wireshark 网络分析",
-    "description": "Wireshark 是一款广泛使用的开源网络协议分析工具",
-    "link": "https://www.wireshark.org/",
-    "winget": "WiresharkFoundation.Wireshark",
-    "foss": true
-  },
-  "WPFInstallwiztree": {
-    "category": "工具类",
-    "choco": "wiztree",
-    "content": "WizTree 磁盘分析",
-    "description": "WizTree 是一款快速的磁盘空间分析工具",
-    "link": "https://wiztreefree.com/",
-    "winget": "AntibodySoftware.WizTree",
-    "foss": false
-  },
-  "WPFInstallxeheditor": {
-    "category": "工具类",
-    "choco": "HxD",
-    "content": "HxD 十六进制编辑器",
-    "description": "HxD 是一款免费的十六进制编辑器。",
-    "link": "https://mh-nexus.de/en/hxd/",
-    "winget": "MHNexus.HxD",
-    "foss": false
-  },
-  "WPFInstallyarn": {
-    "category": "开发工具",
-    "choco": "yarn",
-    "content": "Yarn 包管理器",
-    "description": "Yarn 是一款快速、可靠、安全的 JavaScript 项目依赖管理工具。",
-    "link": "https://yarnpkg.com/",
-    "winget": "Yarn.Yarn",
-    "foss": true
-  },
-  "WPFInstallzoom": {
-    "category": "通讯工具",
-    "choco": "zoom",
-    "content": "Zoom 视频会议",
-    "description": "Zoom 是一款流行的视频会议和网络会议服务。",
-    "link": "https://zoom.us/",
-    "winget": "Zoom.Zoom",
-    "foss": false
-  },
-  "WPFInstalluv": {
-    "category": "开发工具",
-    "choco": "uv",
-    "content": "uv Python包管理器",
-    "description": "uv 是一款用 Rust 编写的快速 Python 包和项目管理器。",
-    "link": "https://docs.astral.sh/uv/getting-started/installation/",
-    "winget": "astral-sh.uv",
-    "foss": true
-  },
-  "WPFInstalltightvnc": {
-    "category": "工具类",
-    "choco": "TightVNC",
-    "content": "TightVNC 远程桌面",
-    "description": "TightVNC 是一款免费开源的远程桌面软件",
-    "link": "https://www.tightvnc.com/",
-    "winget": "GlavSoft.TightVNC",
-    "foss": true
-  },
-  "WPFInstallglazewm": {
-    "category": "工具类",
-    "choco": "glazewm",
-    "content": "GlazeWM 平铺窗口管理器",
-    "description": "GlazeWM 是一款受 i3 和 Polybar 启发的 Windows 平铺窗口管理器。",
-    "link": "https://github.com/glzr-io/glazewm",
-    "winget": "glzr-io.glazewm",
-    "foss": true
-  },
-  "WPFInstallOverwolf": {
-    "category": "游戏",
-    "choco": "overwolf",
-    "content": "Overwolf 游戏插件平台",
-    "description": "流行的游戏覆盖层和辅助应用平台，广泛被游戏玩家使用。",
-    "link": "https://www.overwolf.com/app/overwolf-curseforge",
-    "winget": "Overwolf.CurseForge",
-    "foss": false
-  },
-  "WPFInstallOFGB": {
-    "category": "工具类",
-    "choco": "ofgb",
-    "content": "OFGB Windows广告移除",
-    "description": "从 Windows 11 各处移除广告的 GUI 工具。",
-    "link": "https://github.com/xM4ddy/OFGB",
-    "winget": "xM4ddy.OFGB",
-    "foss": true
-  },
-  "WPFInstallZenBrowser": {
-    "category": "浏览器",
-    "choco": "zen-browser",
-    "content": "Zen 浏览器",
-    "description": "基于 Firefox 构建的现代、注重隐私、性能驱动的浏览器。",
-    "link": "https://zen-browser.app/",
-    "winget": "Zen-Team.Zen-Browser",
-    "foss": true
-  },
-  "WPFInstallZed": {
-    "category": "开发工具",
-    "choco": "zed",
-    "content": "Zed 代码编辑器",
-    "description": "Zed 是一款现代高性能代码编辑器，从头设计以追求速度和协作。",
-    "link": "https://zed.dev/",
-    "winget": "ZedIndustries.Zed",
-    "foss": true
-  },
-  "WPFInstalldeskflow": {
-    "category": "工具类",
-    "choco": "deskflow",
-    "content": "Deskflow 键鼠共享",
-    "description": "Deskflow 是一款免费开源的软件 KVM，让您在多台计算机之间共享键盘和鼠标。",
-    "link": "https://github.com/deskflow/deskflow",
-    "winget": "Deskflow.Deskflow",
-    "foss": true
-  },
-  "WPFInstallRuby": {
-    "category": "开发工具",
-    "choco": "ruby",
-    "winget": "RubyInstallerTeam.Ruby.4.0",
-    "description": "包含 MSYS2 安装的 Ruby 语言执行环境。",
-    "content": "Ruby 编程语言",
-    "link": "https://rubyinstaller.org/",
-    "foss": true
-  },
-  "WPFInstallLua": {
-    "category": "开发工具",
-    "choco": "lua",
-    "winget": "rjpcomputing.luaforwindows",
-    "description": "Lua 脚本语言的电池齐全环境（含依赖库）",
-    "content": "Lua 脚本语言",
-    "link": "https://github.com/rjpcomputing/luaforwindows",
-    "foss": true
-  }
-}
-'@ | ConvertFrom-Json
+$sync.configs.appnavigation = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String('ewogICJXUEZJbnN0YWxsIjogewogICAgIkNvbnRlbnQiOiAi5a6J6KOFL+WNh+e6p+W6lOeUqCIsCiAgICAiQ2F0ZWdvcnkiOiAi5pON5L2cIiwKICAgICJUeXBlIjogIkJ1dHRvbiIsCiAgICAiT3JkZXIiOiAiMSIsCiAgICAiRGVzY3JpcHRpb24iOiAi5a6J6KOF5oiW5Y2H57qn5omA6YCJ5bqU55SoIgogIH0sCiAgIldQRlVuaW5zdGFsbCI6IHsKICAgICJDb250ZW50IjogIuWNuOi9veW6lOeUqCIsCiAgICAiQ2F0ZWdvcnkiOiAi5pON5L2cIiwKICAgICJUeXBlIjogIkJ1dHRvbiIsCiAgICAiT3JkZXIiOiAiMiIsCiAgICAiRGVzY3JpcHRpb24iOiAi5Y246L295omA6YCJ5bqU55SoIgogIH0sCiAgIldQRkluc3RhbGxVcGdyYWRlIjogewogICAgIkNvbnRlbnQiOiAi5Y2H57qn5omA5pyJ5bqU55SoIiwKICAgICJDYXRlZ29yeSI6ICLmk43kvZwiLAogICAgIlR5cGUiOiAiQnV0dG9uIiwKICAgICJPcmRlciI6ICIzIiwKICAgICJEZXNjcmlwdGlvbiI6ICLlsIbmiYDmnInlupTnlKjljYfnuqfliLDmnIDmlrDniYjmnKwiCiAgfSwKICAiV2luZ2V0UmFkaW9CdXR0b24iOiB7CiAgICAiQ29udGVudCI6ICJXaW5HZXQg5YyF566h55CG5ZmoIiwKICAgICJDYXRlZ29yeSI6ICLljIXnrqHnkIblmagiLAogICAgIlR5cGUiOiAiUmFkaW9CdXR0b24iLAogICAgIkdyb3VwTmFtZSI6ICJQYWNrYWdlTWFuYWdlckdyb3VwIiwKICAgICJDaGVja2VkIjogdHJ1ZSwKICAgICJPcmRlciI6ICIxIiwKICAgICJEZXNjcmlwdGlvbiI6ICLkvb/nlKggV2luR2V0IOi/m+ihjOWMheeuoeeQhiIKICB9LAogICJDaG9jb1JhZGlvQnV0dG9uIjogewogICAgIkNvbnRlbnQiOiAiQ2hvY29sYXRleSDljIXnrqHnkIblmagiLAogICAgIkNhdGVnb3J5IjogIuWMheeuoeeQhuWZqCIsCiAgICAiVHlwZSI6ICJSYWRpb0J1dHRvbiIsCiAgICAiR3JvdXBOYW1lIjogIlBhY2thZ2VNYW5hZ2VyR3JvdXAiLAogICAgIkNoZWNrZWQiOiBmYWxzZSwKICAgICJPcmRlciI6ICIyIiwKICAgICJEZXNjcmlwdGlvbiI6ICLkvb/nlKggQ2hvY29sYXRleSDov5vooYzljIXnrqHnkIYiCiAgfSwKICAiV1BGQ29sbGFwc2VBbGxDYXRlZ29yaWVzIjogewogICAgIkNvbnRlbnQiOiAi5oqY5Y+g5omA5pyJ5YiG57G7IiwKICAgICJDYXRlZ29yeSI6ICLpgInmi6kiLAogICAgIlR5cGUiOiAiQnV0dG9uIiwKICAgICJPcmRlciI6ICIxIiwKICAgICJEZXNjcmlwdGlvbiI6ICLmipjlj6DmiYDmnInlupTnlKjliIbnsbsiCiAgfSwKICAiV1BGRXhwYW5kQWxsQ2F0ZWdvcmllcyI6IHsKICAgICJDb250ZW50IjogIuWxleW8gOaJgOacieWIhuexuyIsCiAgICAiQ2F0ZWdvcnkiOiAi6YCJ5oupIiwKICAgICJUeXBlIjogIkJ1dHRvbiIsCiAgICAiT3JkZXIiOiAiMiIsCiAgICAiRGVzY3JpcHRpb24iOiAi5bGV5byA5omA5pyJ5bqU55So5YiG57G7IgogIH0sCiAgIldQRkNsZWFySW5zdGFsbFNlbGVjdGlvbiI6IHsKICAgICJDb250ZW50IjogIua4hemZpOmAieaLqSIsCiAgICAiQ2F0ZWdvcnkiOiAi6YCJ5oupIiwKICAgICJUeXBlIjogIkJ1dHRvbiIsCiAgICAiT3JkZXIiOiAiMyIsCiAgICAiRGVzY3JpcHRpb24iOiAi5riF6Zmk5bqU55So6YCJ5oupIgogIH0sCiAgIldQRkdldEluc3RhbGxlZCI6IHsKICAgICJDb250ZW50IjogIuaYvuekuuW3suWuieijheW6lOeUqCIsCiAgICAiQ2F0ZWdvcnkiOiAi6YCJ5oupIiwKICAgICJUeXBlIjogIkJ1dHRvbiIsCiAgICAiT3JkZXIiOiAiNCIsCiAgICAiRGVzY3JpcHRpb24iOiAi5pi+56S65bey5a6J6KOF55qE5bqU55SoIgogIH0sCiAgIldQRnNlbGVjdGVkQXBwc0J1dHRvbiI6IHsKICAgICJDb250ZW50IjogIuW3sumAieW6lOeUqO+8mjAiLAogICAgIkNhdGVnb3J5IjogIumAieaLqSIsCiAgICAiVHlwZSI6ICJCdXR0b24iLAogICAgIk9yZGVyIjogIjUiLAogICAgIkRlc2NyaXB0aW9uIjogIuaYvuekuuW3sumAieeahOW6lOeUqCIKICB9LAogICJXUEZJbnN0YWxsRk9TU0luZm8iOiB7CiAgICAiQ29udGVudCI6ICLlhY3otLnlvIDmupDova/ku7YiLAogICAgIkNhdGVnb3J5IjogIumAieaLqSIsCiAgICAiVHlwZSI6ICJOb3RlIiwKICAgICJPcmRlciI6ICIwIiwKICAgICJEZXNjcmlwdGlvbiI6ICLlhbPkuo7lupTnlKjmnaHnm67kuIogI0ZPU1Mg5qCH562+55qE5L+h5oGvIgogIH0KfQ==')) | ConvertFrom-Json
 
+$sync.configs.appx = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String('ewogICJXUEZBcHB4TWljcm9zb2Z0X1dpbmRvd3NGZWVkYmFja0h1YiI6IHsKICAgICJDYXRlZ29yeSI6ICLlvq7ova/lupTnlKgiLAogICAgIkNvbnRlbnQiOiAi5Y+N6aaI5Lit5b+DIiwKICAgICJEZXNjcmlwdGlvbiI6ICLlhYHorrjnlKjmiLfnm7TmjqXlkJEgTWljcm9zb2Z0IOaPkOS6pOmUmeivr+aKpeWRiuOAgeWKn+iDveW7uuiuruWSjOiviuaWreaVsOaNruOAgiIsCiAgICAiUGFuZWwiOiAiMCIsCiAgICAiUGFja2FnZUlkIjogIk1pY3Jvc29mdC5XaW5kb3dzRmVlZGJhY2tIdWIiLAogICAgIlN0b3JlSWQiOiAiOU5CTEdHSDRSMzJOIgogIH0sCiAgIldQRkFwcHhNaWNyb3NvZnRfR2V0SGVscCI6IHsKICAgICJDYXRlZ29yeSI6ICLlvq7ova/lupTnlKgiLAogICAgIkNvbnRlbnQiOiAi6I635Y+W5biu5YqpIiwKICAgICJEZXNjcmlwdGlvbiI6ICLmj5Dkvpvoh6rliqjmlYXpmpzmjpLpmaTmjIfljZfjgIHmlK/mjIHmlofmoaPlkoznm7TmjqUgTWljcm9zb2Z0IOWuouaIt+WNj+WKqeOAgiIsCiAgICAiUGFuZWwiOiAiMCIsCiAgICAiUGFja2FnZUlkIjogIk1pY3Jvc29mdC5HZXRIZWxwIiwKICAgICJTdG9yZUlkIjogIjlQS0RaQk1WMUgzVCIKICB9LAogICJXUEZBcHB4TWljcm9zb2Z0X091dGxvb2tGb3JXaW5kb3dzIjogewogICAgIkNhdGVnb3J5IjogIuW+rui9r+W6lOeUqCIsCiAgICAiQ29udGVudCI6ICJXaW5kb3dzIOeJiCBPdXRsb29rIiwKICAgICJEZXNjcmlwdGlvbiI6ICLmj5DkvpvnjrDku6PnlLXlrZDpgq7ku7bnrqHnkIbjgIHml6XljoblronmjpLlkozogZTns7vkurrnu4Tnu4flip/og73jgIIiLAogICAgIlBhbmVsIjogIjAiLAogICAgIlBhY2thZ2VJZCI6ICJNaWNyb3NvZnQuT3V0bG9va0ZvcldpbmRvd3MiLAogICAgIlN0b3JlSWQiOiAiOU5SWDYzMjA5UjdCIgogIH0sCiAgIldQRkFwcHhNU1RlYW1zIjogewogICAgIkNhdGVnb3J5IjogIuW+rui9r+W6lOeUqCIsCiAgICAiQ29udGVudCI6ICJNaWNyb3NvZnQgVGVhbXMiLAogICAgIkRlc2NyaXB0aW9uIjogIuS/g+i/m+WNs+aXtua2iOaBr+OAgeinhumikeS8muiuruOAgeaWh+S7tuWFseS6q+WSjOW3peS9nOWMuuWNj+S9nOOAgiIsCiAgICAiUGFuZWwiOiAiMCIsCiAgICAiUGFja2FnZUlkIjogIk1TVGVhbXMiLAogICAgIlN0b3JlSWQiOiAiWFA4QlQ4RFcyOTBNUFEiCiAgfSwKICAiV1BGQXBweENsaXBjaGFtcF9DbGlwY2hhbXAiOiB7CiAgICAiQ2F0ZWdvcnkiOiAi5bel5YW35LiO5pWI546HIiwKICAgICJDb250ZW50IjogIkNsaXBjaGFtcCDop4bpopHnvJbovpHlmagiLAogICAgIkRlc2NyaXB0aW9uIjogIuaPkOS+m+eUqOaIt+WPi+WlveeahOinhumikee8lui+keWZqO+8jOWMheWQq+WGhee9ruaooeadv+OAgeaViOaenOWSjOaXtumXtOe6v+e8lui+keW3peWFt+OAgiIsCiAgICAiUGFuZWwiOiAiMCIsCiAgICAiUGFja2FnZUlkIjogIkNsaXBjaGFtcC5DbGlwY2hhbXAiLAogICAgIlN0b3JlSWQiOiAiOVAxSjhTN0NDV1dUIgogIH0sCiAgIldQRkFwcHhNaWNyb3NvZnRfTWljcm9zb2Z0T2ZmaWNlSHViIjogewogICAgIkNhdGVnb3J5IjogIuW+rui9r+W6lOeUqCIsCiAgICAiQ29udGVudCI6ICJNaWNyb3NvZnQgMzY1IiwKICAgICJEZXNjcmlwdGlvbiI6ICLkvZzkuLrorr/pl67kupHnq68gTWljcm9zb2Z0IDM2NSDlupTnlKjlkozmnIDov5HmlofmoaPnmoTpm4bkuK3lkK/liqjlmajlkozku6rooajmnb/jgIIiLAogICAgIlBhbmVsIjogIjAiLAogICAgIlBhY2thZ2VJZCI6ICJNaWNyb3NvZnQuTWljcm9zb2Z0T2ZmaWNlSHViIiwKICAgICJTdG9yZUlkIjogIjlXWkROQ1JEMjlWOSIKICB9LAogICJXUEZBcHB4TWljcm9zb2Z0X1p1bmVNdXNpYyI6IHsKICAgICJDYXRlZ29yeSI6ICLlt6XlhbfkuI7mlYjnjociLAogICAgIkNvbnRlbnQiOiAi5aqS5L2T5pKt5pS+5ZmoIiwKICAgICJEZXNjcmlwdGlvbiI6ICLmkq3mlL7mnKzlnLDpn7PpopHlkozop4bpopHmlofku7bvvIzlhbfmnInnjrDku6Pmkq3mlL7liJfooajnrqHnkIblkozmipXlsITlip/og73jgIIiLAogICAgIlBhbmVsIjogIjAiLAogICAgIlBhY2thZ2VJZCI6ICJNaWNyb3NvZnQuWnVuZU11c2ljIiwKICAgICJTdG9yZUlkIjogIjlXWkROQ1JGSjNQVCIKICB9LAogICJXUEZBcHB4TWljcm9zb2Z0X0JpbmdTZWFyY2giOiB7CiAgICAiQ2F0ZWdvcnkiOiAi5b+F5bqU5LiO572R57uc5pyN5YqhIiwKICAgICJDb250ZW50IjogIuW/heW6lOaQnOe0oiIsCiAgICAiRGVzY3JpcHRpb24iOiAi5bCGIE1pY3Jvc29mdCBCaW5nIOaQnOe0ouWKn+iDveWSjOe9kee7nOacjeWKoeebtOaOpembhuaIkOWIsOaTjeS9nOezu+e7n+S4reOAgiIsCiAgICAiUGFuZWwiOiAiMSIsCiAgICAiUGFja2FnZUlkIjogIk1pY3Jvc29mdC5CaW5nU2VhcmNoIiwKICAgICJTdG9yZUlkIjogIjlOWkJGNEdUMDQwQyIKICB9LAogICJXUEZBcHB4TWljcm9zb2Z0Q29ycG9yYXRpb25JSV9RdWlja0Fzc2lzdCI6IHsKICAgICJDYXRlZ29yeSI6ICLlt6XlhbfkuI7mlYjnjociLAogICAgIkNvbnRlbnQiOiAi5b+r6YCf5Y2P5YqpIiwKICAgICJEZXNjcmlwdGlvbiI6ICLpgJrov4fkupLogZTnvZHov57mjqXlkK/nlKjlronlhajnmoTov5znqIvmioDmnK/mlK/mjIHlkozlsY/luZXlhbHkuqvjgIIiLAogICAgIlBhbmVsIjogIjAiLAogICAgIlBhY2thZ2VJZCI6ICJNaWNyb3NvZnRDb3Jwb3JhdGlvbklJLlF1aWNrQXNzaXN0IiwKICAgICJTdG9yZUlkIjogIjlQN0JQNVZOV0tYNSIKICB9LAogICJXUEZBcHB4TWljcm9zb2Z0X1dpbmRvd3NEZXZIb21lIjogewogICAgIkNhdGVnb3J5IjogIuW8gOWPkeiAheW3peWFtyIsCiAgICAiQ29udGVudCI6ICLlvIDlj5HkurrlkZjkuLvpobUiLAogICAgIkRlc2NyaXB0aW9uIjogIuS4uui9r+S7tuW8gOWPkeS6uuWRmOaPkOS+m+eOr+Wig+iuvue9ruOAgeS7o+eggeS7k+W6k+WQjOatpeWSjOehrOS7tuWwj+W3peWFt+eahOS4k+eUqOS7quihqOadv+OAgiIsCiAgICAiUGFuZWwiOiAiMSIsCiAgICAiUGFja2FnZUlkIjogIk1pY3Jvc29mdC5XaW5kb3dzLkRldkhvbWUiLAogICAgIlN0b3JlSWQiOiAiOU44TUhUUEhOR1ZWIgogIH0sCiAgIldQRkFwcHhNaWNyb3NvZnRfV2luZG93c0Nyb3NzRGV2aWNlIjogewogICAgIkNhdGVnb3J5IjogIuW+rui9r+eUn+aAgeezu+e7nyIsCiAgICAiQ29udGVudCI6ICLnp7vliqjorr7lpIciLAogICAgIkRlc2NyaXB0aW9uIjogIueuoeeQhuS4jumFjeWvueenu+WKqOiuvuWkh+eahOezu+e7n+e6p+WQjuWPsOi/nuaOpSIsCiAgICAiUGFuZWwiOiAiMCIsCiAgICAiUGFja2FnZUlkIjogIk1pY3Jvc29mdFdpbmRvd3MuQ3Jvc3NEZXZpY2UiLAogICAgIlN0b3JlSWQiOiAiOU5UWEdLUThQN04wIgogIH0sCiAgIldQRkFwcHhNaWNyb3NvZnRfVG9kb3MiOiB7CiAgICAiQ2F0ZWdvcnkiOiAi5bel5YW35LiO5pWI546HIiwKICAgICJDb250ZW50IjogIuW+heWKnuS6i+mhuSIsCiAgICAiRGVzY3JpcHRpb24iOiAi5Yib5bu644CB6Lef6Liq5ZKM5ZCM5q2l5Liq5Lq65Lu75Yqh44CB5pm66IO95YiX6KGo5ZKM5q+P5pel5o+Q6YaS44CCIiwKICAgICJQYW5lbCI6ICIwIiwKICAgICJQYWNrYWdlSWQiOiAiTWljcm9zb2Z0LlRvZG9zIiwKICAgICJTdG9yZUlkIjogIjlOQkxHR0g1UjU1OCIKICB9LAogICJXUEZBcHB4TWljcm9zb2Z0X1Bvd2VyQXV0b21hdGVEZXNrdG9wIjogewogICAgIkNhdGVnb3J5IjogIuW8gOWPkeiAheW3peWFtyIsCiAgICAiQ29udGVudCI6ICJQb3dlciBBdXRvbWF0ZSIsCiAgICAiRGVzY3JpcHRpb24iOiAi5L2/55So5L2O5Luj56CB5Y+v6KeG5YyW6ISa5pys6Ieq5Yqo5omn6KGM6YeN5aSN5oCn5bel5L2c5rWB5ZKM5qGM6Z2i5Lu75Yqh44CCIiwKICAgICJQYW5lbCI6ICIxIiwKICAgICJQYWNrYWdlSWQiOiAiTWljcm9zb2Z0LlBvd2VyQXV0b21hdGVEZXNrdG9wIiwKICAgICJTdG9yZUlkIjogIjlORlRDSDZKN0ZIViIKICB9LAogICJXUEZBcHB4TWljcm9zb2Z0X1lvdXJQaG9uZSI6IHsKICAgICJDYXRlZ29yeSI6ICLlvq7ova/nlJ/mgIHns7vnu58iLAogICAgIkNvbnRlbnQiOiAi5omL5py66L+e5o6lIiwKICAgICJEZXNjcmlwdGlvbiI6ICLlsIbnn63kv6HjgIHmiYvmnLrpgJrnn6XjgIHnhafniYflkozpgJror53ku47np7vliqjorr7lpIflkIzmraXliLDmoYzpnaLjgIIiLAogICAgIlBhbmVsIjogIjAiLAogICAgIlBhY2thZ2VJZCI6ICJNaWNyb3NvZnQuWW91clBob25lIiwKICAgICJTdG9yZUlkIjogIjlOTVBKOTlWSkJXViIKICB9LAogICJXUEZBcHB4TWljcm9zb2Z0X01pY3Jvc29mdFN0aWNreU5vdGVzIjogewogICAgIkNhdGVnb3J5IjogIuW3peWFt+S4juaViOeOhyIsCiAgICAiQ29udGVudCI6ICLkvr/nrLoiLAogICAgIkRlc2NyaXB0aW9uIjogIuWcqOahjOmdouS4iuWIm+W7uuW/q+mAn+a1ruWKqOaWh+acrOeslOiusO+8jOW5tuiHquWKqOi3qOiuvuWkh+WQjOatpeOAgiIsCiAgICAiUGFuZWwiOiAiMCIsCiAgICAiUGFja2FnZUlkIjogIk1pY3Jvc29mdC5NaWNyb3NvZnRTdGlja3lOb3RlcyIsCiAgICAiU3RvcmVJZCI6ICI5TkJMR0dINFFHSFciCiAgfSwKICAiV1BGQXBweE1pY3Jvc29mdF9XaW5kb3dzU291bmRSZWNvcmRlciI6IHsKICAgICJDYXRlZ29yeSI6ICLlt6XlhbfkuI7mlYjnjociLAogICAgIkNvbnRlbnQiOiAi5b2V6Z+z5py6IiwKICAgICJEZXNjcmlwdGlvbiI6ICLkvb/nlKjnroDljZXnmoTpuqblhYvpo47osIPoioLmjqfku7blvZXliLblkozkv67liarlrp7ml7bpn7PpopHovpPlhaXjgIIiLAogICAgIlBhbmVsIjogIjAiLAogICAgIlBhY2thZ2VJZCI6ICJNaWNyb3NvZnQuV2luZG93c1NvdW5kUmVjb3JkZXIiLAogICAgIlN0b3JlSWQiOiAiOVdaRE5DUkZIV0tOIgogIH0sCiAgIldQRkFwcHhNaWNyb3NvZnRfV2luZG93c0FsYXJtcyI6IHsKICAgICJDYXRlZ29yeSI6ICLlt6XlhbfkuI7mlYjnjociLAogICAgIkNvbnRlbnQiOiAi5pe26ZKfIiwKICAgICJEZXNjcmlwdGlvbiI6ICLlhbfmnInkuJbnlYzml7bpkp/jgIHpl7npkp/jgIHlgJLorqHml7bjgIHnp5LooajlkozkuJPms6jkvJror53ot5/ouKrlip/og73jgIIiLAogICAgIlBhbmVsIjogIjAiLAogICAgIlBhY2thZ2VJZCI6ICJNaWNyb3NvZnQuV2luZG93c0FsYXJtcyIsCiAgICAiU3RvcmVJZCI6ICI5V1pETkNSRkozUFIiCiAgfSwKICAiV1BGQXBweE1pY3Jvc29mdF9QYWludCI6IHsKICAgICJDYXRlZ29yeSI6ICLlt6XlhbfkuI7mlYjnjociLAogICAgIkNvbnRlbnQiOiAi55S75Zu+IiwKICAgICJEZXNjcmlwdGlvbiI6ICLmj5DkvpvlhoXnva7nmoTmlbDlrZfntKDmj4/jgIHln7rmnKzlm77lg4/nvJbovpHlkozlg4/ntKDnuqflm77lvaLmk43kvZzlt6XlhbfjgIIiLAogICAgIlBhbmVsIjogIjAiLAogICAgIlBhY2thZ2VJZCI6ICJNaWNyb3NvZnQuUGFpbnQiLAogICAgIlN0b3JlSWQiOiAiOVBDRlM1QjZUNzJIIgogIH0sCiAgIldQRkFwcHhNaWNyb3NvZnRfV2luZG93c05vdGVwYWQiOiB7CiAgICAiQ2F0ZWdvcnkiOiAi5bel5YW35LiO5pWI546HIiwKICAgICJDb250ZW50IjogIuiusOS6i+acrCIsCiAgICAiRGVzY3JpcHRpb24iOiAi5o+Q5L6b6L276YeP57qn5paH5pys57yW6L6R5Zmo77yM5pSv5oyB5aSa5qCH562+6aG15aSE55CG57qv5paH5pys5paH5Lu25ZKM5Luj56CB54mH5q6144CCIiwKICAgICJQYW5lbCI6ICIwIiwKICAgICJQYWNrYWdlSWQiOiAiTWljcm9zb2Z0LldpbmRvd3NOb3RlcGFkIiwKICAgICJTdG9yZUlkIjogIjlNU01MUkg2TFpGMyIKICB9LAogICJXUEZBcHB4TWljcm9zb2Z0X1NjcmVlblNrZXRjaCI6IHsKICAgICJDYXRlZ29yeSI6ICLlt6XlhbfkuI7mlYjnjociLAogICAgIkNvbnRlbnQiOiAi5oiq5Zu+5bel5YW3IiwKICAgICJEZXNjcmlwdGlvbiI6ICLmjZXojrfmiKrlm77miJblsY/luZXlvZXliLbvvIzlhbfmnInlhoXnva7moIforrDjgIHlm77lg4/oo4HliarlkozlhYnlrablrZfnrKbor4bliKsgKE9DUikg5Yqf6IO944CCIiwKICAgICJQYW5lbCI6ICIwIiwKICAgICJQYWNrYWdlSWQiOiAiTWljcm9zb2Z0LlNjcmVlblNrZXRjaCIsCiAgICAiU3RvcmVJZCI6ICI5TVo5NUtMOE1SMEwiCiAgfSwKICAiV1BGQXBweE1pY3Jvc29mdF9Db3BpbG90IjogewogICAgIkNhdGVnb3J5IjogIuW/heW6lOS4jue9kee7nOacjeWKoSIsCiAgICAiQ29udGVudCI6ICJDb3BpbG90IiwKICAgICJEZXNjcmlwdGlvbiI6ICLlkK/liqggTWljcm9zb2Z0IEFJIOS8tOS+o++8jOaPkOS+m+S4iuS4i+aWh+etlOahiOOAgeWIm+aEj+WGmeS9nOi+heWKqeWSjOaZuuiDvee9kemhteaQnOe0ouOAgiIsCiAgICAiUGFuZWwiOiAiMSIsCiAgICAiUGFja2FnZUlkIjogIk1pY3Jvc29mdC5Db3BpbG90IiwKICAgICJTdG9yZUlkIjogIjlOSFQ5UkIyRjRIRCIKICB9LAogICJXUEZBcHB4TWljcm9zb2Z0X1dpbmRvd3NDYWxjdWxhdG9yIjogewogICAgIkNhdGVnb3J5IjogIuW3peWFt+S4juaViOeOhyIsCiAgICAiQ29udGVudCI6ICLorqHnrpflmagiLAogICAgIkRlc2NyaXB0aW9uIjogIuaJp+ihjOagh+WHhueul+acr+OAgeenkeWtpui/kOeul+OAgee8lueoi+iuoeeul+WSjOWNleS9jei9rOaNouOAgiIsCiAgICAiUGFuZWwiOiAiMCIsCiAgICAiUGFja2FnZUlkIjogIk1pY3Jvc29mdC5XaW5kb3dzQ2FsY3VsYXRvciIsCiAgICAiU3RvcmVJZCI6ICI5V1pETkNSRkhWTjUiCiAgfSwKICAiV1BGQXBweE1pY3Jvc29mdF9XaW5kb3dzQ2FtZXJhIjogewogICAgIkNhdGVnb3J5IjogIuW3peWFt+S4juaViOeOhyIsCiAgICAiQ29udGVudCI6ICLnm7jmnLoiLAogICAgIkRlc2NyaXB0aW9uIjogIumAmui/h+i/nuaOpeeahOaRhOWDj+WktOaIluaIkOWDj+ehrOS7tuaNleiOt+eFp+eJh+WSjOW9leWItuinhumikeaWh+S7tuOAgiIsCiAgICAiUGFuZWwiOiAiMCIsCiAgICAiUGFja2FnZUlkIjogIk1pY3Jvc29mdC5XaW5kb3dzQ2FtZXJhIiwKICAgICJTdG9yZUlkIjogIjlXWkROQ1JGSkJCRyIKICB9LAogICJXUEZBcHB4TWljcm9zb2Z0X1dpbmRvd3NQaG90b3MiOiB7CiAgICAiQ2F0ZWdvcnkiOiAi5bel5YW35LiO5pWI546HIiwKICAgICJDb250ZW50IjogIuebuOWGjCIsCiAgICAiRGVzY3JpcHRpb24iOiAi5pW055CG44CB5p+l55yL5ZKM6KOB5Ymq5pys5Zyw5Zu+5YOP77yM5YW35pyJ5Z+65pys6aKc6Imy6LCD5pW05ZKM55u45YaM5Yib5bu65bel5YW344CCIiwKICAgICJQYW5lbCI6ICIwIiwKICAgICJQYWNrYWdlSWQiOiAiTWljcm9zb2Z0LldpbmRvd3MuUGhvdG9zIiwKICAgICJTdG9yZUlkIjogIjlXWkROQ1JGSkJINCIKICB9LAogICJXUEZBcHB4TWljcm9zb2Z0X0JpbmdOZXdzIjogewogICAgIkNhdGVnb3J5IjogIuW/heW6lOS4jue9kee7nOacjeWKoSIsCiAgICAiQ29udGVudCI6ICLmlrDpl7siLAogICAgIkRlc2NyaXB0aW9uIjogIuiBmuWQiOeqgeWPkeaWsOmXu+agh+mimOOAgeS4quaAp+WMluaWh+eroOaOqOmAgeWSjOS4lueVjOaXtuS6i+OAgiIsCiAgICAiUGFuZWwiOiAiMSIsCiAgICAiUGFja2FnZUlkIjogIk1pY3Jvc29mdC5CaW5nTmV3cyIsCiAgICAiU3RvcmVJZCI6ICI5V1pETkNSRkhWRlciCiAgfSwKICAiV1BGQXBweE1pY3Jvc29mdF9CaW5nV2VhdGhlciI6IHsKICAgICJDYXRlZ29yeSI6ICLlv4XlupTkuI7nvZHnu5zmnI3liqEiLAogICAgIkNvbnRlbnQiOiAi5aSp5rCUIiwKICAgICJEZXNjcmlwdGlvbiI6ICLmmL7npLrmnKzlnLDlrp7ml7blpKnmsJTot5/ouKrjgIHpm7fovr7lnLDlm77lkozljoblj7LmsJTosaHpooTmiqXjgIIiLAogICAgIlBhbmVsIjogIjEiLAogICAgIlBhY2thZ2VJZCI6ICJNaWNyb3NvZnQuQmluZ1dlYXRoZXIiLAogICAgIlN0b3JlSWQiOiAiOVdaRE5DUkZKM1EyIgogIH0sCiAgIldQRkFwcHhNaWNyb3NvZnRfR2FtaW5nQXBwIjogewogICAgIkNhdGVnb3J5IjogIlhib3jkuI7muLjmiI8iLAogICAgIkNvbnRlbnQiOiAiWGJveCDlupTnlKgiLAogICAgIkRlc2NyaXB0aW9uIjogIuS9nOS4uuS4u+imgea4uOaIj+W6k+euoeeQhuWZqOOAgeekvuS6pOekvuWMuueVjOmdouWSjCBQQyBHYW1lIFBhc3Mg5Luq6KGo5p2/44CCIiwKICAgICJQYW5lbCI6ICIxIiwKICAgICJQYWNrYWdlSWQiOiAiTWljcm9zb2Z0LkdhbWluZ0FwcCIsCiAgICAiU3RvcmVJZCI6ICI5TVYwQjVIWlZLOVoiCiAgfSwKICAiV1BGQXBweE1pY3Jvc29mdF9YYm94R2FtaW5nT3ZlcmxheSI6IHsKICAgICJDYXRlZ29yeSI6ICJYYm945LiO5ri45oiPIiwKICAgICJDb250ZW50IjogIlhib3ggR2FtZSBCYXIiLAogICAgIkRlc2NyaXB0aW9uIjogIuaPkOS+m+WPr+iHquWumuS5ieeahOa4uOaIj+WGheeKtuaAgeWwj+W3peWFt+OAgemfs+mikeW5s+ihoea7keWdl+OAgeezu+e7n+ebkeaOp+W3peWFt+WSjOa4uOaIj+W9leWItuOAgiIsCiAgICAiUGFuZWwiOiAiMSIsCiAgICAiUGFja2FnZUlkIjogIk1pY3Jvc29mdC5YYm94R2FtaW5nT3ZlcmxheSIsCiAgICAiU3RvcmVJZCI6ICI5TlpLUFNUU05XNFAiCiAgfSwKICAiV1BGQXBweE1pY3Jvc29mdF9YYm94SWRlbnRpdHlQcm92aWRlciI6IHsKICAgICJDYXRlZ29yeSI6ICJYYm945LiO5ri45oiPIiwKICAgICJDb250ZW50IjogIlhib3gg6Lqr5Lu95o+Q5L6b56iL5bqPIiwKICAgICJEZXNjcmlwdGlvbiI6ICLnrqHnkIYgWGJveCDnvZHnu5znlKjmiLforqTor4HlkozlkI7lj7DotKbmiLforr/pl64iLAogICAgIlBhbmVsIjogIjEiLAogICAgIlBhY2thZ2VJZCI6ICJNaWNyb3NvZnQuWGJveElkZW50aXR5UHJvdmlkZXIiLAogICAgIlN0b3JlSWQiOiAiOVdaRE5DUkQxSEtXIgogIH0sCiAgIldQRkFwcHhNaWNyb3NvZnRfWGJveFNwZWVjaFRvVGV4dE92ZXJsYXkiOiB7CiAgICAiQ2F0ZWdvcnkiOiAiWGJveOS4jua4uOaIjyIsCiAgICAiQ29udGVudCI6ICJYYm94IOivremfs+i9rOaWh+Wtl+imhuebliIsCiAgICAiRGVzY3JpcHRpb24iOiAi5Li65ri45oiP6IGK5aSp572R57uc5o+Q5L6b57O757uf57qn5a6e5pe26L6F5Yqp5a2X5bmV5ZKM6K+t6Z+z6L2s5paH5a2X57+76K+R44CCIiwKICAgICJQYW5lbCI6ICIxIiwKICAgICJQYWNrYWdlSWQiOiAiTWljcm9zb2Z0Llhib3hTcGVlY2hUb1RleHRPdmVybGF5IgogIH0sCiAgIldQRkFwcHhNaWNyb3NvZnRfWGJveF9UQ1VJIjogewogICAgIkNhdGVnb3J5IjogIlhib3jkuI7muLjmiI8iLAogICAgIkNvbnRlbnQiOiAiWGJveCBUQ1VJIiwKICAgICJEZXNjcmlwdGlvbiI6ICLkuLogWGJveCDmj5DkvpvmoLjlv4PotKbmiLfov57mjqUgVUkg5qih5Z2XIiwKICAgICJQYW5lbCI6ICIxIiwKICAgICJQYWNrYWdlSWQiOiAiTWljcm9zb2Z0Llhib3guVENVSSIKICB9LAogICJXUEZBcHB4TWljcm9zb2Z0X1N0YXJ0RXhwZXJpZW5jZXNBcHAiOiB7CiAgICAiQ2F0ZWdvcnkiOiAi5b+F5bqU5LiO572R57uc5pyN5YqhIiwKICAgICJDb250ZW50IjogIuW8gOWni+S9k+mqjOW6lOeUqCIsCiAgICAiRGVzY3JpcHRpb24iOiAi6amx5YqoIFdpbmRvd3Mg5bCP57uE5Lu26Z2i5p2/77yM5o+Q5L6b5paw6Ze744CB5aSp5rCU44CB5L2T6IKy5ZKM6LSi57uP5YaF5a6555qE5Liq5oCn5YyW5o6o6YCB44CCIiwKICAgICJQYW5lbCI6ICIxIiwKICAgICJQYWNrYWdlSWQiOiAiTWljcm9zb2Z0LlN0YXJ0RXhwZXJpZW5jZXNBcHAiLAogICAgIlN0b3JlSWQiOiAiOVBDMUg5Vk4xOENNIgogIH0sCiAgIldQRkFwcHhNaWNyb3NvZnRfTWljcm9zb2Z0U29saXRhaXJlQ29sbGVjdGlvbiI6IHsKICAgICJDYXRlZ29yeSI6ICJYYm945LiO5ri45oiPIiwKICAgICJDb250ZW50IjogIue6uOeJjOa4uOaIj+WQiOmbhiIsCiAgICAiRGVzY3JpcHRpb24iOiAi5YyF5ZCr5YaF572u57q454mM5ri45oiP5qih5byP77yM5YyF5ousIEtsb25kaWtl44CBU3BpZGVy44CBRnJlZUNlbGzjgIFQeXJhbWlkIOWSjCBUcmlQZWFrc+OAgiIsCiAgICAiUGFuZWwiOiAiMSIsCiAgICAiUGFja2FnZUlkIjogIk1pY3Jvc29mdC5NaWNyb3NvZnRTb2xpdGFpcmVDb2xsZWN0aW9uIgogIH0KfQ==')) | ConvertFrom-Json
 
-$sync.configs.appnavigation = @'
-{
-  "WPFInstall": {
-    "Content": "安装/升级应用",
-    "Category": "操作",
-    "Type": "Button",
-    "Order": "1",
-    "Description": "安装或升级所选应用"
-  },
-  "WPFUninstall": {
-    "Content": "卸载应用",
-    "Category": "操作",
-    "Type": "Button",
-    "Order": "2",
-    "Description": "卸载所选应用"
-  },
-  "WPFInstallUpgrade": {
-    "Content": "升级所有应用",
-    "Category": "操作",
-    "Type": "Button",
-    "Order": "3",
-    "Description": "将所有应用升级到最新版本"
-  },
-  "WingetRadioButton": {
-    "Content": "WinGet 包管理器",
-    "Category": "包管理器",
-    "Type": "RadioButton",
-    "GroupName": "PackageManagerGroup",
-    "Checked": true,
-    "Order": "1",
-    "Description": "使用 WinGet 进行包管理"
-  },
-  "ChocoRadioButton": {
-    "Content": "Chocolatey 包管理器",
-    "Category": "包管理器",
-    "Type": "RadioButton",
-    "GroupName": "PackageManagerGroup",
-    "Checked": false,
-    "Order": "2",
-    "Description": "使用 Chocolatey 进行包管理"
-  },
-  "WPFCollapseAllCategories": {
-    "Content": "折叠所有分类",
-    "Category": "选择",
-    "Type": "Button",
-    "Order": "1",
-    "Description": "折叠所有应用分类"
-  },
-  "WPFExpandAllCategories": {
-    "Content": "展开所有分类",
-    "Category": "选择",
-    "Type": "Button",
-    "Order": "2",
-    "Description": "展开所有应用分类"
-  },
-  "WPFClearInstallSelection": {
-    "Content": "清除选择",
-    "Category": "选择",
-    "Type": "Button",
-    "Order": "3",
-    "Description": "清除应用选择"
-  },
-  "WPFGetInstalled": {
-    "Content": "显示已安装应用",
-    "Category": "选择",
-    "Type": "Button",
-    "Order": "4",
-    "Description": "显示已安装的应用"
-  },
-  "WPFselectedAppsButton": {
-    "Content": "已选应用：0",
-    "Category": "选择",
-    "Type": "Button",
-    "Order": "5",
-    "Description": "显示已选的应用"
-  },
-  "WPFInstallFOSSInfo": {
-    "Content": "免费开源软件",
-    "Category": "选择",
-    "Type": "Note",
-    "Order": "0",
-    "Description": "关于应用条目上 #FOSS 标签的信息"
-  }
-}
-'@ | ConvertFrom-Json
+$sync.configs.dns = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String('ewogICJHb29nbGUiOiB7CiAgICAiUHJpbWFyeSI6ICI4LjguOC44IiwKICAgICJTZWNvbmRhcnkiOiAiOC44LjQuNCIsCiAgICAiUHJpbWFyeTYiOiAiMjAwMTo0ODYwOjQ4NjA6Ojg4ODgiLAogICAgIlNlY29uZGFyeTYiOiAiMjAwMTo0ODYwOjQ4NjA6Ojg4NDQiCiAgfSwKICAiQ2xvdWRmbGFyZSI6IHsKICAgICJQcmltYXJ5IjogIjEuMS4xLjEiLAogICAgIlNlY29uZGFyeSI6ICIxLjAuMC4xIiwKICAgICJQcmltYXJ5NiI6ICIyNjA2OjQ3MDA6NDcwMDo6MTExMSIsCiAgICAiU2Vjb25kYXJ5NiI6ICIyNjA2OjQ3MDA6NDcwMDo6MTAwMSIKICB9LAogICJDbG91ZGZsYXJlX01hbHdhcmUiOiB7CiAgICAiUHJpbWFyeSI6ICIxLjEuMS4yIiwKICAgICJTZWNvbmRhcnkiOiAiMS4wLjAuMiIsCiAgICAiUHJpbWFyeTYiOiAiMjYwNjo0NzAwOjQ3MDA6OjExMTIiLAogICAgIlNlY29uZGFyeTYiOiAiMjYwNjo0NzAwOjQ3MDA6OjEwMDIiCiAgfSwKICAiQ2xvdWRmbGFyZV9NYWx3YXJlX0FkdWx0IjogewogICAgIlByaW1hcnkiOiAiMS4xLjEuMyIsCiAgICAiU2Vjb25kYXJ5IjogIjEuMC4wLjMiLAogICAgIlByaW1hcnk2IjogIjI2MDY6NDcwMDo0NzAwOjoxMTEzIiwKICAgICJTZWNvbmRhcnk2IjogIjI2MDY6NDcwMDo0NzAwOjoxMDAzIgogIH0sCiAgIk9wZW5fRE5TIjogewogICAgIlByaW1hcnkiOiAiMjA4LjY3LjIyMi4yMjIiLAogICAgIlNlY29uZGFyeSI6ICIyMDguNjcuMjIwLjIyMCIsCiAgICAiUHJpbWFyeTYiOiAiMjYyMDoxMTk6MzU6OjM1IiwKICAgICJTZWNvbmRhcnk2IjogIjI2MjA6MTE5OjUzOjo1MyIKICB9LAogICJRdWFkOSI6IHsKICAgICJQcmltYXJ5IjogIjkuOS45LjkiLAogICAgIlNlY29uZGFyeSI6ICIxNDkuMTEyLjExMi4xMTIiLAogICAgIlByaW1hcnk2IjogIjI2MjA6ZmU6OmZlIiwKICAgICJTZWNvbmRhcnk2IjogIjI2MjA6ZmU6OjkiCiAgfSwKICAiQWRHdWFyZF9BZHNfVHJhY2tlcnMiOiB7CiAgICAiUHJpbWFyeSI6ICI5NC4xNDAuMTQuMTQiLAogICAgIlNlY29uZGFyeSI6ICI5NC4xNDAuMTUuMTUiLAogICAgIlByaW1hcnk2IjogIjJhMTA6NTBjMDo6YWQxOmZmIiwKICAgICJTZWNvbmRhcnk2IjogIjJhMTA6NTBjMDo6YWQyOmZmIgogIH0sCiAgIkFkR3VhcmRfQWRzX1RyYWNrZXJzX01hbHdhcmVfQWR1bHQiOiB7CiAgICAiUHJpbWFyeSI6ICI5NC4xNDAuMTQuMTUiLAogICAgIlNlY29uZGFyeSI6ICI5NC4xNDAuMTUuMTYiLAogICAgIlByaW1hcnk2IjogIjJhMTA6NTBjMDo6YmFkMTpmZiIsCiAgICAiU2Vjb25kYXJ5NiI6ICIyYTEwOjUwYzA6OmJhZDI6ZmYiCiAgfQp9')) | ConvertFrom-Json
 
+$sync.configs.feature = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String('ewogICJXUEZGZWF0dXJlc2RvdG5ldCI6IHsKICAgICJDb250ZW50IjogIi5ORVQgRnJhbWV3b3JrICgy44CBM+OAgTQg54mIKSAtIOWQr+eUqCIsCiAgICAiRGVzY3JpcHRpb24iOiAiLk5FVCDlkowgLk5FVCBGcmFtZXdvcmsg5piv5LiA5Liq5byA5Y+R6ICF5bmz5Y+w77yM55Sx5bel5YW344CB57yW56iL6K+t6KiA5ZKM5bqT57uE5oiQ44CCIiwKICAgICJjYXRlZ29yeSI6ICLlip/og70iLAogICAgInBhbmVsIjogIjEiLAogICAgImZlYXR1cmUiOiBbCiAgICAgICJOZXRGeDQtQWR2U3J2cyIsCiAgICAgICJOZXRGeDMiCiAgICBdLAogICAgIkludm9rZVNjcmlwdCI6IFtdLAogICAgImxpbmsiOiAiaHR0cHM6Ly93aW51dGlsLmNocmlzdGl0dXMuY29tL2Rldi9mZWF0dXJlcy9mZWF0dXJlcy9kb3RuZXQiCiAgfSwKICAiV1BGRml4ZXNOVFBQb29sIjogewogICAgIkNvbnRlbnQiOiAiTlRQIOacjeWKoeWZqCAtIOWQr+eUqCIsCiAgICAiRGVzY3JpcHRpb24iOiAi5bCG6buY6K6kIFdpbmRvd3MgTlRQIOacjeWKoeWZqOabv+aNouS4uiBwb29sLm50cC5vcmfvvIzku6Xmj5Dpq5jml7bpl7TlkIzmraXnmoTlh4bnoa7mgKflkozlj6/pnaDmgKfjgIIiLAogICAgImNhdGVnb3J5IjogIuS/ruWkjSIsCiAgICAicGFuZWwiOiAiMSIsCiAgICAiVHlwZSI6ICJCdXR0b24iLAogICAgIkJ1dHRvbldpZHRoIjogIjMwMCIsCiAgICAiZnVuY3Rpb24iOiAiSW52b2tlLVdQRkZpeGVzTlRQUG9vbCIsCiAgICAibGluayI6ICJodHRwczovL3dpbnV0aWwuY2hyaXN0aXR1cy5jb20vZGV2L2ZlYXR1cmVzL2ZpeGVzL250cHBvb2wiCiAgfSwKICAiV1BGRmVhdHVyZXNoeXBlcnYiOiB7CiAgICAiQ29udGVudCI6ICJIeXBlci1WIC0g5ZCv55SoIiwKICAgICJEZXNjcmlwdGlvbiI6ICJIeXBlci1WIOaYryBNaWNyb3NvZnQg5byA5Y+R55qE56Gs5Lu26Jma5ouf5YyW5Lqn5ZOB77yM5YWB6K6455So5oi35Yib5bu65ZKM566h55CG6Jma5ouf5py644CCIiwKICAgICJjYXRlZ29yeSI6ICLlip/og70iLAogICAgInBhbmVsIjogIjEiLAogICAgImZlYXR1cmUiOiBbCiAgICAgICJNaWNyb3NvZnQtSHlwZXItVi1BbGwiCiAgICBdLAogICAgImxpbmsiOiAiaHR0cHM6Ly93aW51dGlsLmNocmlzdGl0dXMuY29tL2Rldi9mZWF0dXJlcy9mZWF0dXJlcy9oeXBlcnYiCiAgfSwKICAiV1BGRmVhdHVyZXNsZWdhY3ltZWRpYSI6IHsKICAgICJDb250ZW50IjogIuaXp+eJiOWqkuS9k+e7hOS7tiAoV01Q44CBRGlyZWN0UGxheSkgLSDlkK/nlKgiLAogICAgIkRlc2NyaXB0aW9uIjogIuWQr+eUqOadpeiHquaXp+eJiCBXaW5kb3dzIOeahOaXp+eJiOeoi+W6j+OAgiIsCiAgICAiY2F0ZWdvcnkiOiAi5Yqf6IO9IiwKICAgICJwYW5lbCI6ICIxIiwKICAgICJmZWF0dXJlIjogWwogICAgICAiV2luZG93c01lZGlhUGxheWVyIiwKICAgICAgIk1lZGlhUGxheWJhY2siLAogICAgICAiRGlyZWN0UGxheSIsCiAgICAgICJMZWdhY3lDb21wb25lbnRzIgogICAgXSwKICAgICJJbnZva2VTY3JpcHQiOiBbXSwKICAgICJsaW5rIjogImh0dHBzOi8vd2ludXRpbC5jaHJpc3RpdHVzLmNvbS9kZXYvZmVhdHVyZXMvZmVhdHVyZXMvbGVnYWN5bWVkaWEiCiAgfSwKICAiV1BGRmVhdHVyZXdzbCI6IHsKICAgICJDb250ZW50IjogIldpbmRvd3MgTGludXgg5a2Q57O757ufIChXU0wpIC0g5ZCv55SoIiwKICAgICJEZXNjcmlwdGlvbiI6ICJXaW5kb3dzIExpbnV4IOWtkOezu+e7n+aYryBXaW5kb3dzIOeahOWPr+mAieWKn+iDve+8jOWFgeiuuCBMaW51eCDnqIvluo/lnKggV2luZG93cyDkuIrljp/nlJ/ov5DooYzjgIIiLAogICAgImNhdGVnb3J5IjogIuWKn+iDvSIsCiAgICAicGFuZWwiOiAiMSIsCiAgICAiZmVhdHVyZSI6IFsKICAgICAgIlZpcnR1YWxNYWNoaW5lUGxhdGZvcm0iLAogICAgICAiTWljcm9zb2Z0LVdpbmRvd3MtU3Vic3lzdGVtLUxpbnV4IgogICAgXSwKICAgICJJbnZva2VTY3JpcHQiOiBbXSwKICAgICJsaW5rIjogImh0dHBzOi8vd2ludXRpbC5jaHJpc3RpdHVzLmNvbS9kZXYvZmVhdHVyZXMvZmVhdHVyZXMvd3NsIgogIH0sCiAgIldQRkZlYXR1cmVuZnMiOiB7CiAgICAiQ29udGVudCI6ICLnvZHnu5zmlofku7bns7vnu58gKE5GUykgLSDlkK/nlKgiLAogICAgIkRlc2NyaXB0aW9uIjogIue9kee7nOaWh+S7tuezu+e7nyAoTkZTKSDmmK/kuIDnp43lnKjnvZHnu5zkuK3lrZjlgqjmlofku7bnmoTmnLrliLbjgIIiLAogICAgImNhdGVnb3J5IjogIuWKn+iDvSIsCiAgICAicGFuZWwiOiAiMSIsCiAgICAiZmVhdHVyZSI6IFsKICAgICAgIlNlcnZpY2VzRm9yTkZTLUNsaWVudE9ubHkiLAogICAgICAiQ2xpZW50Rm9yTkZTLUluZnJhc3RydWN0dXJlIiwKICAgICAgIk5GUy1BZG1pbmlzdHJhdGlvbiIKICAgIF0sCiAgICAiSW52b2tlU2NyaXB0IjogWwogICAgICAibmZzYWRtaW4gY2xpZW50IHN0b3AiLAogICAgICAiU2V0LUl0ZW1Qcm9wZXJ0eSAtUGF0aCAnSEtMTTpcXFNPRlRXQVJFXFxNaWNyb3NvZnRcXENsaWVudEZvck5GU1xcQ3VycmVudFZlcnNpb25cXERlZmF1bHQnIC1OYW1lICdBbm9ueW1vdXNVSUQnIC1UeXBlIERXb3JkIC1WYWx1ZSAwIiwKICAgICAgIlNldC1JdGVtUHJvcGVydHkgLVBhdGggJ0hLTE06XFxTT0ZUV0FSRVxcTWljcm9zb2Z0XFxDbGllbnRGb3JORlNcXEN1cnJlbnRWZXJzaW9uXFxEZWZhdWx0JyAtTmFtZSAnQW5vbnltb3VzR0lEJyAtVHlwZSBEV29yZCAtVmFsdWUgMCIsCiAgICAgICJuZnNhZG1pbiBjbGllbnQgc3RhcnQiLAogICAgICAibmZzYWRtaW4gY2xpZW50IGxvY2FsaG9zdCBjb25maWcgZmlsZWFjY2Vzcz03NTUgU2VjRmxhdm9ycz0rc3lzIC1rcmI1IC1rcmI1aSIKICAgIF0sCiAgICAibGluayI6ICJodHRwczovL3dpbnV0aWwuY2hyaXN0aXR1cy5jb20vZGV2L2ZlYXR1cmVzL2ZlYXR1cmVzL25mcyIKICB9LAogICJXUEZGZWF0dXJlUmVnQmFja3VwIjogewogICAgIkNvbnRlbnQiOiAi5rOo5YaM6KGo5aSH5Lu9ICjmr4/ml6Xlh4zmmaggMTI6MzAg5Lu75YqhKSAtIOWQr+eUqCIsCiAgICAiRGVzY3JpcHRpb24iOiAi5ZCv55So5q+P5pel5rOo5YaM6KGo5aSH5Lu977yM5q2k5Yqf6IO95ZyoIFdpbmRvd3MgMTAgMTgwMyDkuK3ooqsgTWljcm9zb2Z0IOemgeeUqOOAgiIsCiAgICAiY2F0ZWdvcnkiOiAi5Yqf6IO9IiwKICAgICJwYW5lbCI6ICIxIiwKICAgICJmZWF0dXJlIjogW10sCiAgICAiSW52b2tlU2NyaXB0IjogWwogICAgICAiICAgICAgTmV3LUl0ZW1Qcm9wZXJ0eSAtUGF0aCAnSEtMTTpcXFNZU1RFTVxcQ3VycmVudENvbnRyb2xTZXRcXENvbnRyb2xcXFNlc3Npb24gTWFuYWdlclxcQ29uZmlndXJhdGlvbiBNYW5hZ2VyJyAtTmFtZSAnRW5hYmxlUGVyaW9kaWNCYWNrdXAnIC1UeXBlIERXb3JkIC1WYWx1ZSAxIC1Gb3JjZSAgICAgIE5ldy1JdGVtUHJvcGVydHkgLVBhdGggJ0hLTE06XFxTWVNURU1cXEN1cnJlbnRDb250cm9sU2V0XFxDb250cm9sXFxTZXNzaW9uIE1hbmFnZXJcXENvbmZpZ3VyYXRpb24gTWFuYWdlcicgLU5hbWUgJ0JhY2t1cENvdW50JyAtVHlwZSBEV29yZCAtVmFsdWUgMiAtRm9yY2UgICAgICAkYWN0aW9uID0gTmV3LVNjaGVkdWxlZFRhc2tBY3Rpb24gLUV4ZWN1dGUgJ3NjaHRhc2tzJyAtQXJndW1lbnQgJy9ydW4gL2kgL3RuIFwiXFxNaWNyb3NvZnRcXFdpbmRvd3NcXFJlZ2lzdHJ5XFxSZWdJZGxlQmFja3VwXCInICAgICAgJHRyaWdnZXIgPSBOZXctU2NoZWR1bGVkVGFza1RyaWdnZXIgLURhaWx5IC1BdCAwMDozMCAgICAgIFJlZ2lzdGVyLVNjaGVkdWxlZFRhc2sgLUFjdGlvbiAkYWN0aW9uIC1UcmlnZ2VyICR0cmlnZ2VyIC1UYXNrTmFtZSAnQXV0b1JlZ0JhY2t1cCcgLURlc2NyaXB0aW9uICdDcmVhdGUgU3lzdGVtIFJlZ2lzdHJ5IEJhY2t1cHMnIC1Vc2VyICdTeXN0ZW0nICAgICAgIgogICAgXSwKICAgICJsaW5rIjogImh0dHBzOi8vd2ludXRpbC5jaHJpc3RpdHVzLmNvbS9kZXYvZmVhdHVyZXMvZmVhdHVyZXMvcmVnYmFja3VwIgogIH0sCiAgIldQRkZlYXR1cmVFbmFibGVMZWdhY3lSZWNvdmVyeSI6IHsKICAgICJDb250ZW50IjogIuaXp+eJiCBGOCDlkK/liqjmgaLlpI0gLSDlkK/nlKgiLAogICAgIkRlc2NyaXB0aW9uIjogIuWQr+eUqOmrmOe6p+WQr+WKqOmAiemhueWxj+W5le+8jOiuqeaCqOS9v+eUqOmrmOe6p+aVhemanOaOkumZpOaooeW8j+WQr+WKqCBXaW5kb3dz44CCIiwKICAgICJjYXRlZ29yeSI6ICLlip/og70iLAogICAgInBhbmVsIjogIjEiLAogICAgImZlYXR1cmUiOiBbXSwKICAgICJJbnZva2VTY3JpcHQiOiBbCiAgICAgICJiY2RlZGl0IC9zZXQgYm9vdG1lbnVwb2xpY3kgbGVnYWN5IgogICAgXSwKICAgICJsaW5rIjogImh0dHBzOi8vd2ludXRpbC5jaHJpc3RpdHVzLmNvbS9kZXYvZmVhdHVyZXMvZmVhdHVyZXMvZW5hYmxlbGVnYWN5cmVjb3ZlcnkiCiAgfSwKICAiV1BGRmVhdHVyZURpc2FibGVMZWdhY3lSZWNvdmVyeSI6IHsKICAgICJDb250ZW50IjogIuaXp+eJiCBGOCDlkK/liqjmgaLlpI0gLSDnpoHnlKgiLAogICAgIkRlc2NyaXB0aW9uIjogIuemgeeUqOWFgeiuuOaCqOS9v+eUqOmrmOe6p+aVhemanOaOkumZpOaooeW8j+WQr+WKqCBXaW5kb3dzIOeahOmrmOe6p+WQr+WKqOmAiemhueWxj+W5leOAgiIsCiAgICAiY2F0ZWdvcnkiOiAi5Yqf6IO9IiwKICAgICJwYW5lbCI6ICIxIiwKICAgICJmZWF0dXJlIjogW10sCiAgICAiSW52b2tlU2NyaXB0IjogWwogICAgICAiYmNkZWRpdCAvc2V0IGJvb3RtZW51cG9saWN5IHN0YW5kYXJkIgogICAgXSwKICAgICJsaW5rIjogImh0dHBzOi8vd2ludXRpbC5jaHJpc3RpdHVzLmNvbS9kZXYvZmVhdHVyZXMvZmVhdHVyZXMvZGlzYWJsZWxlZ2FjeXJlY292ZXJ5IgogIH0sCiAgIldQRkZlYXR1cmVzU2FuZGJveCI6IHsKICAgICJDb250ZW50IjogIldpbmRvd3Mg5rKZ55uSIC0g5ZCv55SoIiwKICAgICJEZXNjcmlwdGlvbiI6ICJXaW5kb3dzIOaymeebkuaYr+S4gOS4qui9u+mHj+e6p+iZmuaLn+acuu+8jOaPkOS+m+S4tOaXtueahOahjOmdoueOr+Wig+S7peWuieWFqOmalOemu+WcsOi/kOihjOW6lOeUqOeoi+W6j+OAgiIsCiAgICAiY2F0ZWdvcnkiOiAi5Yqf6IO9IiwKICAgICJwYW5lbCI6ICIxIiwKICAgICJmZWF0dXJlIjogWwogICAgICAiQ29udGFpbmVycy1EaXNwb3NhYmxlQ2xpZW50Vk0iCiAgICBdLAogICAgImxpbmsiOiAiaHR0cHM6Ly93aW51dGlsLmNocmlzdGl0dXMuY29tL2Rldi9mZWF0dXJlcy9mZWF0dXJlcy9zYW5kYm94IgogIH0sCiAgIldQRkZlYXR1cmVJbnN0YWxsIjogewogICAgIkNvbnRlbnQiOiAi5a6J6KOF5Yqf6IO9IiwKICAgICJjYXRlZ29yeSI6ICLlip/og70iLAogICAgInBhbmVsIjogIjEiLAogICAgIlR5cGUiOiAiQnV0dG9uIiwKICAgICJCdXR0b25XaWR0aCI6ICIzMDAiLAogICAgImZ1bmN0aW9uIjogIkludm9rZS1XUEZGZWF0dXJlSW5zdGFsbCIsCiAgICAibGluayI6ICJodHRwczovL3dpbnV0aWwuY2hyaXN0aXR1cy5jb20vZGV2L2ZlYXR1cmVzL2ZlYXR1cmVzL2luc3RhbGwiCiAgfSwKICAiV1BGUGFuZWxBdXRvbG9naW4iOiB7CiAgICAiQ29udGVudCI6ICLoh6rliqjnmbvlvZUgLSDov5DooYwiLAogICAgImNhdGVnb3J5IjogIuS/ruWkjSIsCiAgICAicGFuZWwiOiAiMSIsCiAgICAiVHlwZSI6ICJCdXR0b24iLAogICAgIkJ1dHRvbldpZHRoIjogIjMwMCIsCiAgICAiZnVuY3Rpb24iOiAiSW52b2tlLVdQRlBhbmVsQXV0b2xvZ2luIiwKICAgICJsaW5rIjogImh0dHBzOi8vd2ludXRpbC5jaHJpc3RpdHVzLmNvbS9kZXYvZmVhdHVyZXMvZml4ZXMvYXV0b2xvZ2luIgogIH0sCiAgIldQRkZpeGVzVXBkYXRlIjogewogICAgIkNvbnRlbnQiOiAiV2luZG93cyDmm7TmlrAgLSDph43nva4iLAogICAgImNhdGVnb3J5IjogIuS/ruWkjSIsCiAgICAicGFuZWwiOiAiMSIsCiAgICAiVHlwZSI6ICJCdXR0b24iLAogICAgIkJ1dHRvbldpZHRoIjogIjMwMCIsCiAgICAiZnVuY3Rpb24iOiAiSW52b2tlLVdQRkZpeGVzVXBkYXRlIiwKICAgICJsaW5rIjogImh0dHBzOi8vd2ludXRpbC5jaHJpc3RpdHVzLmNvbS9kZXYvZmVhdHVyZXMvZml4ZXMvdXBkYXRlIgogIH0sCiAgIldQRkZpeGVzTmV0d29yayI6IHsKICAgICJDb250ZW50IjogIue9kee7nCAtIOmHjee9riIsCiAgICAiY2F0ZWdvcnkiOiAi5L+u5aSNIiwKICAgICJwYW5lbCI6ICIxIiwKICAgICJUeXBlIjogIkJ1dHRvbiIsCiAgICAiQnV0dG9uV2lkdGgiOiAiMzAwIiwKICAgICJmdW5jdGlvbiI6ICJJbnZva2UtV1BGRml4ZXNOZXR3b3JrIiwKICAgICJsaW5rIjogImh0dHBzOi8vd2ludXRpbC5jaHJpc3RpdHVzLmNvbS9kZXYvZmVhdHVyZXMvZml4ZXMvbmV0d29yayIKICB9LAogICJXUEZQYW5lbERJU00iOiB7CiAgICAiQ29udGVudCI6ICLns7vnu5/mjZ/lnY/miavmj48gLSDov5DooYwiLAogICAgImNhdGVnb3J5IjogIuS/ruWkjSIsCiAgICAicGFuZWwiOiAiMSIsCiAgICAiVHlwZSI6ICJCdXR0b24iLAogICAgIkJ1dHRvbldpZHRoIjogIjMwMCIsCiAgICAiZnVuY3Rpb24iOiAiSW52b2tlLVdQRlN5c3RlbVJlcGFpciIsCiAgICAibGluayI6ICJodHRwczovL3dpbnV0aWwuY2hyaXN0aXR1cy5jb20vZGV2L2ZlYXR1cmVzL2ZpeGVzL2Rpc20iCiAgfSwKICAiV1BGRml4ZXNXaW5nZXQiOiB7CiAgICAiQ29udGVudCI6ICJXaW5HZXQgLSDph43mlrDlronoo4UiLAogICAgImNhdGVnb3J5IjogIuS/ruWkjSIsCiAgICAicGFuZWwiOiAiMSIsCiAgICAiVHlwZSI6ICJCdXR0b24iLAogICAgIkJ1dHRvbldpZHRoIjogIjMwMCIsCiAgICAiZnVuY3Rpb24iOiAiSW52b2tlLVdQRkZpeGVzV2luZ2V0IiwKICAgICJsaW5rIjogImh0dHBzOi8vd2ludXRpbC5jaHJpc3RpdHVzLmNvbS9kZXYvZmVhdHVyZXMvZml4ZXMvd2luZ2V0IgogIH0sCiAgIldQRlBhbmVsQ29tcHV0ZXIiOiB7CiAgICAiQ29udGVudCI6ICLorqHnrpfmnLrnrqHnkIYiLAogICAgImNhdGVnb3J5IjogIuS8oOe7nyBXaW5kb3dzIOmdouadvyIsCiAgICAicGFuZWwiOiAiMiIsCiAgICAiVHlwZSI6ICJCdXR0b24iLAogICAgIkJ1dHRvbldpZHRoIjogIjMwMCIsCiAgICAiSW52b2tlU2NyaXB0IjogWwogICAgICAiY29tcG1nbXQubXNjIgogICAgXSwKICAgICJsaW5rIjogImh0dHBzOi8vd2ludXRpbC5jaHJpc3RpdHVzLmNvbS9kZXYvZmVhdHVyZXMvbGVnYWN5LXdpbmRvd3MtcGFuZWxzL2NvbXB1dGVyIgogIH0sCiAgIldQRlBhbmVsQ29udHJvbCI6IHsKICAgICJDb250ZW50IjogIuaOp+WItumdouadvyIsCiAgICAiY2F0ZWdvcnkiOiAi5Lyg57ufIFdpbmRvd3Mg6Z2i5p2/IiwKICAgICJwYW5lbCI6ICIyIiwKICAgICJUeXBlIjogIkJ1dHRvbiIsCiAgICAiQnV0dG9uV2lkdGgiOiAiMzAwIiwKICAgICJJbnZva2VTY3JpcHQiOiBbCiAgICAgICJjb250cm9sIgogICAgXSwKICAgICJsaW5rIjogImh0dHBzOi8vd2ludXRpbC5jaHJpc3RpdHVzLmNvbS9kZXYvZmVhdHVyZXMvbGVnYWN5LXdpbmRvd3MtcGFuZWxzL2NvbnRyb2wiCiAgfSwKICAiV1BGUGFuZWxNb3VzZSI6IHsKICAgICJDb250ZW50IjogIum8oOagh+WxnuaApyIsCiAgICAiY2F0ZWdvcnkiOiAi5Lyg57ufIFdpbmRvd3Mg6Z2i5p2/IiwKICAgICJwYW5lbCI6ICIyIiwKICAgICJUeXBlIjogIkJ1dHRvbiIsCiAgICAiQnV0dG9uV2lkdGgiOiAiMzAwIiwKICAgICJJbnZva2VTY3JpcHQiOiBbCiAgICAgICJtYWluLmNwbCIKICAgIF0sCiAgICAibGluayI6ICJodHRwczovL3dpbnV0aWwuY2hyaXN0aXR1cy5jb20vZGV2L2ZlYXR1cmVzL2xlZ2FjeS13aW5kb3dzLXBhbmVscy9tb3VzZSIKICB9LAogICJXUEZQYW5lbE5ldHdvcmsiOiB7CiAgICAiQ29udGVudCI6ICLnvZHnu5zov57mjqUiLAogICAgImNhdGVnb3J5IjogIuS8oOe7nyBXaW5kb3dzIOmdouadvyIsCiAgICAicGFuZWwiOiAiMiIsCiAgICAiVHlwZSI6ICJCdXR0b24iLAogICAgIkJ1dHRvbldpZHRoIjogIjMwMCIsCiAgICAiSW52b2tlU2NyaXB0IjogWwogICAgICAibmNwYS5jcGwiCiAgICBdLAogICAgImxpbmsiOiAiaHR0cHM6Ly93aW51dGlsLmNocmlzdGl0dXMuY29tL2Rldi9mZWF0dXJlcy9sZWdhY3ktd2luZG93cy1wYW5lbHMvbmV0d29yayIKICB9LAogICJXUEZQYW5lbFBvd2VyIjogewogICAgIkNvbnRlbnQiOiAi55S15rqQ6K6+572uIiwKICAgICJjYXRlZ29yeSI6ICLkvKDnu58gV2luZG93cyDpnaLmnb8iLAogICAgInBhbmVsIjogIjIiLAogICAgIlR5cGUiOiAiQnV0dG9uIiwKICAgICJCdXR0b25XaWR0aCI6ICIzMDAiLAogICAgIkludm9rZVNjcmlwdCI6IFsKICAgICAgInBvd2VyY2ZnLmNwbCIKICAgIF0sCiAgICAibGluayI6ICJodHRwczovL3dpbnV0aWwuY2hyaXN0aXR1cy5jb20vZGV2L2ZlYXR1cmVzL2xlZ2FjeS13aW5kb3dzLXBhbmVscy9wb3dlciIKICB9LAogICJXUEZQYW5lbFByaW50ZXIiOiB7CiAgICAiQ29udGVudCI6ICLmiZPljbDmnLrorr7nva4iLAogICAgImNhdGVnb3J5IjogIuS8oOe7nyBXaW5kb3dzIOmdouadvyIsCiAgICAicGFuZWwiOiAiMiIsCiAgICAiVHlwZSI6ICJCdXR0b24iLAogICAgIkJ1dHRvbldpZHRoIjogIjMwMCIsCiAgICAiSW52b2tlU2NyaXB0IjogWwogICAgICAiU3RhcnQtUHJvY2VzcyAnc2hlbGw6Ojp7QThBOTFBNjYtM0E3RC00NDI0LThEMjQtMDRFMTgwNjk1QzdBfSciCiAgICBdLAogICAgImxpbmsiOiAiaHR0cHM6Ly93aW51dGlsLmNocmlzdGl0dXMuY29tL2Rldi9mZWF0dXJlcy9sZWdhY3ktd2luZG93cy1wYW5lbHMvcHJpbnRlciIKICB9LAogICJXUEZQYW5lbFByb2dyYW1zIjogewogICAgIkNvbnRlbnQiOiAi56iL5bqP5ZKM5Yqf6IO9IiwKICAgICJjYXRlZ29yeSI6ICLkvKDnu58gV2luZG93cyDpnaLmnb8iLAogICAgInBhbmVsIjogIjIiLAogICAgIlR5cGUiOiAiQnV0dG9uIiwKICAgICJCdXR0b25XaWR0aCI6ICIzMDAiLAogICAgIkludm9rZVNjcmlwdCI6IFsKICAgICAgImFwcHdpei5jcGwiCiAgICBdLAogICAgImxpbmsiOiAiaHR0cHM6Ly93aW51dGlsLmNocmlzdGl0dXMuY29tL2Rldi9mZWF0dXJlcy9sZWdhY3ktd2luZG93cy1wYW5lbHMvcHJvZ3JhbXMiCiAgfSwKICAiV1BGUGFuZWxSZWdpb24iOiB7CiAgICAiQ29udGVudCI6ICLljLrln58iLAogICAgImNhdGVnb3J5IjogIuS8oOe7nyBXaW5kb3dzIOmdouadvyIsCiAgICAicGFuZWwiOiAiMiIsCiAgICAiVHlwZSI6ICJCdXR0b24iLAogICAgIkJ1dHRvbldpZHRoIjogIjMwMCIsCiAgICAiSW52b2tlU2NyaXB0IjogWwogICAgICAiaW50bC5jcGwiCiAgICBdLAogICAgImxpbmsiOiAiaHR0cHM6Ly93aW51dGlsLmNocmlzdGl0dXMuY29tL2Rldi9mZWF0dXJlcy9sZWdhY3ktd2luZG93cy1wYW5lbHMvcmVnaW9uIgogIH0sCiAgIldQRlBhbmVsU2VjdXJpdHkiOiB7CiAgICAiQ29udGVudCI6ICLlronlhajlkoznu7TmiqQiLAogICAgImNhdGVnb3J5IjogIuS8oOe7nyBXaW5kb3dzIOmdouadvyIsCiAgICAicGFuZWwiOiAiMiIsCiAgICAiVHlwZSI6ICJCdXR0b24iLAogICAgIkJ1dHRvbldpZHRoIjogIjMwMCIsCiAgICAiSW52b2tlU2NyaXB0IjogWwogICAgICAid3NjdWkuY3BsIgogICAgXSwKICAgICJsaW5rIjogImh0dHBzOi8vd2ludXRpbC5jaHJpc3RpdHVzLmNvbS9kZXYvZmVhdHVyZXMvbGVnYWN5LXdpbmRvd3MtcGFuZWxzL3NlY3VyaXR5IgogIH0sCiAgIldQRlBhbmVsU291bmQiOiB7CiAgICAiQ29udGVudCI6ICLlo7Dpn7Porr7nva4iLAogICAgImNhdGVnb3J5IjogIuS8oOe7nyBXaW5kb3dzIOmdouadvyIsCiAgICAicGFuZWwiOiAiMiIsCiAgICAiVHlwZSI6ICJCdXR0b24iLAogICAgIkJ1dHRvbldpZHRoIjogIjMwMCIsCiAgICAiSW52b2tlU2NyaXB0IjogWwogICAgICAibW1zeXMuY3BsIgogICAgXSwKICAgICJsaW5rIjogImh0dHBzOi8vd2ludXRpbC5jaHJpc3RpdHVzLmNvbS9kZXYvZmVhdHVyZXMvbGVnYWN5LXdpbmRvd3MtcGFuZWxzL3NvdW5kIgogIH0sCiAgIldQRlBhbmVsU3lzdGVtIjogewogICAgIkNvbnRlbnQiOiAi57O757uf5bGe5oCnIiwKICAgICJjYXRlZ29yeSI6ICLkvKDnu58gV2luZG93cyDpnaLmnb8iLAogICAgInBhbmVsIjogIjIiLAogICAgIlR5cGUiOiAiQnV0dG9uIiwKICAgICJCdXR0b25XaWR0aCI6ICIzMDAiLAogICAgIkludm9rZVNjcmlwdCI6IFsKICAgICAgInN5c2RtLmNwbCIKICAgIF0sCiAgICAibGluayI6ICJodHRwczovL3dpbnV0aWwuY2hyaXN0aXR1cy5jb20vZGV2L2ZlYXR1cmVzL2xlZ2FjeS13aW5kb3dzLXBhbmVscy9zeXN0ZW0iCiAgfSwKICAiV1BGUGFuZWxUaW1lZGF0ZSI6IHsKICAgICJDb250ZW50IjogIuaXtumXtOWSjOaXpeacnyIsCiAgICAiY2F0ZWdvcnkiOiAi5Lyg57ufIFdpbmRvd3Mg6Z2i5p2/IiwKICAgICJwYW5lbCI6ICIyIiwKICAgICJUeXBlIjogIkJ1dHRvbiIsCiAgICAiQnV0dG9uV2lkdGgiOiAiMzAwIiwKICAgICJJbnZva2VTY3JpcHQiOiBbCiAgICAgICJ0aW1lZGF0ZS5jcGwiCiAgICBdLAogICAgImxpbmsiOiAiaHR0cHM6Ly93aW51dGlsLmNocmlzdGl0dXMuY29tL2Rldi9mZWF0dXJlcy9sZWdhY3ktd2luZG93cy1wYW5lbHMvdGltZWRhdGUiCiAgfSwKICAiV1BGUGFuZWxGaXJld2FsbCI6IHsKICAgICJDb250ZW50IjogIldpbmRvd3MgRGVmZW5kZXIg6Ziy54Gr5aKZIiwKICAgICJjYXRlZ29yeSI6ICLkvKDnu58gV2luZG93cyDpnaLmnb8iLAogICAgInBhbmVsIjogIjIiLAogICAgIlR5cGUiOiAiQnV0dG9uIiwKICAgICJCdXR0b25XaWR0aCI6ICIzMDAiLAogICAgIkludm9rZVNjcmlwdCI6IFsKICAgICAgImZpcmV3YWxsLmNwbCIKICAgIF0sCiAgICAibGluayI6ICJodHRwczovL3dpbnV0aWwuY2hyaXN0aXR1cy5jb20vZGV2L2ZlYXR1cmVzL2xlZ2FjeS13aW5kb3dzLXBhbmVscy9maXJld2FsbCIKICB9LAogICJXUEZQYW5lbFJlc3RvcmUiOiB7CiAgICAiQ29udGVudCI6ICJXaW5kb3dzIOi/mOWOnyIsCiAgICAiY2F0ZWdvcnkiOiAi5Lyg57ufIFdpbmRvd3Mg6Z2i5p2/IiwKICAgICJwYW5lbCI6ICIyIiwKICAgICJUeXBlIjogIkJ1dHRvbiIsCiAgICAiQnV0dG9uV2lkdGgiOiAiMzAwIiwKICAgICJJbnZva2VTY3JpcHQiOiBbCiAgICAgICJyc3RydWkuZXhlIgogICAgXSwKICAgICJsaW5rIjogImh0dHBzOi8vd2ludXRpbC5jaHJpc3RpdHVzLmNvbS9kZXYvZmVhdHVyZXMvbGVnYWN5LXdpbmRvd3MtcGFuZWxzL3Jlc3RvcmUiCiAgfSwKICAiV1BGV2luVXRpbEluc3RhbGxQU1Byb2ZpbGUiOiB7CiAgICAiQ29udGVudCI6ICJQb3dlclNoZWxsIOaYr+W+rui9r+eahOiHquWKqOWMluS7u+WKoeahhuaetuWSjOiEmuacrOivreiogCIsCiAgICAiY2F0ZWdvcnkiOiAiUG93ZXJTaGVsbCDphY3nva7mlofku7YgKOS7hSBQb3dlclNoZWxsIDcrKSIsCiAgICAicGFuZWwiOiAiMiIsCiAgICAiVHlwZSI6ICJCdXR0b24iLAogICAgIkJ1dHRvbldpZHRoIjogIjMwMCIsCiAgICAiZnVuY3Rpb24iOiAiSW52b2tlLVdpblV0aWxJbnN0YWxsUFNQcm9maWxlIiwKICAgICJsaW5rIjogImh0dHBzOi8vd2ludXRpbC5jaHJpc3RpdHVzLmNvbS9kZXYvZmVhdHVyZXMvcG93ZXJzaGVsbC1wcm9maWxlLXBvd2Vyc2hlbGwtNy0tb25seS9pbnN0YWxscHNwcm9maWxlIgogIH0sCiAgIldQRldpblV0aWxVbmluc3RhbGxQU1Byb2ZpbGUiOiB7CiAgICAiQ29udGVudCI6ICJQb3dlclNoZWxsIOaYr+W+rui9r+eahOiHquWKqOWMluS7u+WKoeahhuaetuWSjOiEmuacrOivreiogCIsCiAgICAiY2F0ZWdvcnkiOiAiUG93ZXJTaGVsbCDphY3nva7mlofku7YgKOS7hSBQb3dlclNoZWxsIDcrKSIsCiAgICAicGFuZWwiOiAiMiIsCiAgICAiVHlwZSI6ICJCdXR0b24iLAogICAgIkJ1dHRvbldpZHRoIjogIjMwMCIsCiAgICAiZnVuY3Rpb24iOiAiSW52b2tlLVdpblV0aWxVbmluc3RhbGxQU1Byb2ZpbGUiLAogICAgImxpbmsiOiAiaHR0cHM6Ly93aW51dGlsLmNocmlzdGl0dXMuY29tL2Rldi9mZWF0dXJlcy9wb3dlcnNoZWxsLXByb2ZpbGUtcG93ZXJzaGVsbC03LS1vbmx5L3VuaW5zdGFsbHBzcHJvZmlsZSIKICB9LAogICJXUEZXaW5VdGlsU1NIU2VydmVyIjogewogICAgIkNvbnRlbnQiOiAiT3BlblNTSCDmnI3liqHlmaggLSDlkK/nlKgiLAogICAgImNhdGVnb3J5IjogIui/nOeoi+iuv+mXriIsCiAgICAicGFuZWwiOiAiMiIsCiAgICAiVHlwZSI6ICJCdXR0b24iLAogICAgIkJ1dHRvbldpZHRoIjogIjMwMCIsCiAgICAiZnVuY3Rpb24iOiAiSW52b2tlLVdQRlNTSFNlcnZlciIsCiAgICAibGluayI6ICJodHRwczovL3dpbnV0aWwuY2hyaXN0aXR1cy5jb20vZGV2L2ZlYXR1cmVzL3JlbW90ZS1hY2Nlc3Mvc3Noc2VydmVyIgogIH0KfQ==')) | ConvertFrom-Json
 
-$sync.configs.appx = @'
-{
-  "WPFAppxMicrosoft_WindowsFeedbackHub": {
-    "Category": "微软应用",
-    "Content": "反馈中心",
-    "Description": "允许用户直接向 Microsoft 提交错误报告、功能建议和诊断数据。",
-    "Panel": "0",
-    "PackageId": "Microsoft.WindowsFeedbackHub",
-    "StoreId": "9NBLGGH4R32N"
-  },
-  "WPFAppxMicrosoft_GetHelp": {
-    "Category": "微软应用",
-    "Content": "获取帮助",
-    "Description": "提供自动故障排除指南、支持文档和直接 Microsoft 客户协助。",
-    "Panel": "0",
-    "PackageId": "Microsoft.GetHelp",
-    "StoreId": "9PKDZBMV1H3T"
-  },
-  "WPFAppxMicrosoft_OutlookForWindows": {
-    "Category": "微软应用",
-    "Content": "Windows 版 Outlook",
-    "Description": "提供现代电子邮件管理、日历安排和联系人组织功能。",
-    "Panel": "0",
-    "PackageId": "Microsoft.OutlookForWindows",
-    "StoreId": "9NRX63209R7B"
-  },
-  "WPFAppxMSTeams": {
-    "Category": "微软应用",
-    "Content": "Microsoft Teams",
-    "Description": "促进即时消息、视频会议、文件共享和工作区协作。",
-    "Panel": "0",
-    "PackageId": "MSTeams",
-    "StoreId": "XP8BT8DW290MPQ"
-  },
-  "WPFAppxClipchamp_Clipchamp": {
-    "Category": "工具与效率",
-    "Content": "Clipchamp 视频编辑器",
-    "Description": "提供用户友好的视频编辑器，包含内置模板、效果和时间线编辑工具。",
-    "Panel": "0",
-    "PackageId": "Clipchamp.Clipchamp",
-    "StoreId": "9P1J8S7CCWWT"
-  },
-  "WPFAppxMicrosoft_MicrosoftOfficeHub": {
-    "Category": "微软应用",
-    "Content": "Microsoft 365",
-    "Description": "作为访问云端 Microsoft 365 应用和最近文档的集中启动器和仪表板。",
-    "Panel": "0",
-    "PackageId": "Microsoft.MicrosoftOfficeHub",
-    "StoreId": "9WZDNCRD29V9"
-  },
-  "WPFAppxMicrosoft_ZuneMusic": {
-    "Category": "工具与效率",
-    "Content": "媒体播放器",
-    "Description": "播放本地音频和视频文件，具有现代播放列表管理和投射功能。",
-    "Panel": "0",
-    "PackageId": "Microsoft.ZuneMusic",
-    "StoreId": "9WZDNCRFJ3PT"
-  },
-  "WPFAppxMicrosoft_BingSearch": {
-    "Category": "必应与网络服务",
-    "Content": "必应搜索",
-    "Description": "将 Microsoft Bing 搜索功能和网络服务直接集成到操作系统中。",
-    "Panel": "1",
-    "PackageId": "Microsoft.BingSearch",
-    "StoreId": "9NZBF4GT040C"
-  },
-  "WPFAppxMicrosoftCorporationII_QuickAssist": {
-    "Category": "工具与效率",
-    "Content": "快速协助",
-    "Description": "通过互联网连接启用安全的远程技术支持和屏幕共享。",
-    "Panel": "0",
-    "PackageId": "MicrosoftCorporationII.QuickAssist",
-    "StoreId": "9P7BP5VNWKX5"
-  },
-  "WPFAppxMicrosoft_WindowsDevHome": {
-    "Category": "开发者工具",
-    "Content": "开发人员主页",
-    "Description": "为软件开发人员提供环境设置、代码仓库同步和硬件小工具的专用仪表板。",
-    "Panel": "1",
-    "PackageId": "Microsoft.Windows.DevHome",
-    "StoreId": "9N8MHTPHNGVV"
-  },
-  "WPFAppxMicrosoft_WindowsCrossDevice": {
-    "Category": "微软生态系统",
-    "Content": "移动设备",
-    "Description": "管理与配对移动设备的系统级后台连接",
-    "Panel": "0",
-    "PackageId": "MicrosoftWindows.CrossDevice",
-    "StoreId": "9NTXGKQ8P7N0"
-  },
-  "WPFAppxMicrosoft_Todos": {
-    "Category": "工具与效率",
-    "Content": "待办事项",
-    "Description": "创建、跟踪和同步个人任务、智能列表和每日提醒。",
-    "Panel": "0",
-    "PackageId": "Microsoft.Todos",
-    "StoreId": "9NBLGGH5R558"
-  },
-  "WPFAppxMicrosoft_PowerAutomateDesktop": {
-    "Category": "开发者工具",
-    "Content": "Power Automate",
-    "Description": "使用低代码可视化脚本自动执行重复性工作流和桌面任务。",
-    "Panel": "1",
-    "PackageId": "Microsoft.PowerAutomateDesktop",
-    "StoreId": "9NFTCH6J7FHV"
-  },
-  "WPFAppxMicrosoft_YourPhone": {
-    "Category": "微软生态系统",
-    "Content": "手机连接",
-    "Description": "将短信、手机通知、照片和通话从移动设备同步到桌面。",
-    "Panel": "0",
-    "PackageId": "Microsoft.YourPhone",
-    "StoreId": "9NMPJ99VJBWV"
-  },
-  "WPFAppxMicrosoft_MicrosoftStickyNotes": {
-    "Category": "工具与效率",
-    "Content": "便笺",
-    "Description": "在桌面上创建快速浮动文本笔记，并自动跨设备同步。",
-    "Panel": "0",
-    "PackageId": "Microsoft.MicrosoftStickyNotes",
-    "StoreId": "9NBLGGH4QGHW"
-  },
-  "WPFAppxMicrosoft_WindowsSoundRecorder": {
-    "Category": "工具与效率",
-    "Content": "录音机",
-    "Description": "使用简单的麦克风调节控件录制和修剪实时音频输入。",
-    "Panel": "0",
-    "PackageId": "Microsoft.WindowsSoundRecorder",
-    "StoreId": "9WZDNCRFHWKN"
-  },
-  "WPFAppxMicrosoft_WindowsAlarms": {
-    "Category": "工具与效率",
-    "Content": "时钟",
-    "Description": "具有世界时钟、闹钟、倒计时、秒表和专注会话跟踪功能。",
-    "Panel": "0",
-    "PackageId": "Microsoft.WindowsAlarms",
-    "StoreId": "9WZDNCRFJ3PR"
-  },
-  "WPFAppxMicrosoft_Paint": {
-    "Category": "工具与效率",
-    "Content": "画图",
-    "Description": "提供内置的数字素描、基本图像编辑和像素级图形操作工具。",
-    "Panel": "0",
-    "PackageId": "Microsoft.Paint",
-    "StoreId": "9PCFS5B6T72H"
-  },
-  "WPFAppxMicrosoft_WindowsNotepad": {
-    "Category": "工具与效率",
-    "Content": "记事本",
-    "Description": "提供轻量级文本编辑器，支持多标签页处理纯文本文件和代码片段。",
-    "Panel": "0",
-    "PackageId": "Microsoft.WindowsNotepad",
-    "StoreId": "9MSMLRH6LZF3"
-  },
-  "WPFAppxMicrosoft_ScreenSketch": {
-    "Category": "工具与效率",
-    "Content": "截图工具",
-    "Description": "捕获截图或屏幕录制，具有内置标记、图像裁剪和光学字符识别 (OCR) 功能。",
-    "Panel": "0",
-    "PackageId": "Microsoft.ScreenSketch",
-    "StoreId": "9MZ95KL8MR0L"
-  },
-  "WPFAppxMicrosoft_Copilot": {
-    "Category": "必应与网络服务",
-    "Content": "Copilot",
-    "Description": "启动 Microsoft AI 伴侣，提供上下文答案、创意写作辅助和智能网页搜索。",
-    "Panel": "1",
-    "PackageId": "Microsoft.Copilot",
-    "StoreId": "9NHT9RB2F4HD"
-  },
-  "WPFAppxMicrosoft_WindowsCalculator": {
-    "Category": "工具与效率",
-    "Content": "计算器",
-    "Description": "执行标准算术、科学运算、编程计算和单位转换。",
-    "Panel": "0",
-    "PackageId": "Microsoft.WindowsCalculator",
-    "StoreId": "9WZDNCRFHVN5"
-  },
-  "WPFAppxMicrosoft_WindowsCamera": {
-    "Category": "工具与效率",
-    "Content": "相机",
-    "Description": "通过连接的摄像头或成像硬件捕获照片和录制视频文件。",
-    "Panel": "0",
-    "PackageId": "Microsoft.WindowsCamera",
-    "StoreId": "9WZDNCRFJBBG"
-  },
-  "WPFAppxMicrosoft_WindowsPhotos": {
-    "Category": "工具与效率",
-    "Content": "相册",
-    "Description": "整理、查看和裁剪本地图像，具有基本颜色调整和相册创建工具。",
-    "Panel": "0",
-    "PackageId": "Microsoft.Windows.Photos",
-    "StoreId": "9WZDNCRFJBH4"
-  },
-  "WPFAppxMicrosoft_BingNews": {
-    "Category": "必应与网络服务",
-    "Content": "新闻",
-    "Description": "聚合突发新闻标题、个性化文章推送和世界时事。",
-    "Panel": "1",
-    "PackageId": "Microsoft.BingNews",
-    "StoreId": "9WZDNCRFHVFW"
-  },
-  "WPFAppxMicrosoft_BingWeather": {
-    "Category": "必应与网络服务",
-    "Content": "天气",
-    "Description": "显示本地实时天气跟踪、雷达地图和历史气象预报。",
-    "Panel": "1",
-    "PackageId": "Microsoft.BingWeather",
-    "StoreId": "9WZDNCRFJ3Q2"
-  },
-  "WPFAppxMicrosoft_GamingApp": {
-    "Category": "Xbox与游戏",
-    "Content": "Xbox 应用",
-    "Description": "作为主要游戏库管理器、社交社区界面和 PC Game Pass 仪表板。",
-    "Panel": "1",
-    "PackageId": "Microsoft.GamingApp",
-    "StoreId": "9MV0B5HZVK9Z"
-  },
-  "WPFAppxMicrosoft_XboxGamingOverlay": {
-    "Category": "Xbox与游戏",
-    "Content": "Xbox Game Bar",
-    "Description": "提供可自定义的游戏内状态小工具、音频平衡滑块、系统监控工具和游戏录制。",
-    "Panel": "1",
-    "PackageId": "Microsoft.XboxGamingOverlay",
-    "StoreId": "9NZKPSTSNW4P"
-  },
-  "WPFAppxMicrosoft_XboxIdentityProvider": {
-    "Category": "Xbox与游戏",
-    "Content": "Xbox 身份提供程序",
-    "Description": "管理 Xbox 网络用户认证和后台账户访问",
-    "Panel": "1",
-    "PackageId": "Microsoft.XboxIdentityProvider",
-    "StoreId": "9WZDNCRD1HKW"
-  },
-  "WPFAppxMicrosoft_XboxSpeechToTextOverlay": {
-    "Category": "Xbox与游戏",
-    "Content": "Xbox 语音转文字覆盖",
-    "Description": "为游戏聊天网络提供系统级实时辅助字幕和语音转文字翻译。",
-    "Panel": "1",
-    "PackageId": "Microsoft.XboxSpeechToTextOverlay"
-  },
-  "WPFAppxMicrosoft_Xbox_TCUI": {
-    "Category": "Xbox与游戏",
-    "Content": "Xbox TCUI",
-    "Description": "为 Xbox 提供核心账户连接 UI 模块",
-    "Panel": "1",
-    "PackageId": "Microsoft.Xbox.TCUI"
-  },
-  "WPFAppxMicrosoft_StartExperiencesApp": {
-    "Category": "必应与网络服务",
-    "Content": "开始体验应用",
-    "Description": "驱动 Windows 小组件面板，提供新闻、天气、体育和财经内容的个性化推送。",
-    "Panel": "1",
-    "PackageId": "Microsoft.StartExperiencesApp",
-    "StoreId": "9PC1H9VN18CM"
-  },
-  "WPFAppxMicrosoft_MicrosoftSolitaireCollection": {
-    "Category": "Xbox与游戏",
-    "Content": "纸牌游戏合集",
-    "Description": "包含内置纸牌游戏模式，包括 Klondike、Spider、FreeCell、Pyramid 和 TriPeaks。",
-    "Panel": "1",
-    "PackageId": "Microsoft.MicrosoftSolitaireCollection"
-  }
-}
-'@ | ConvertFrom-Json
+$sync.configs.preset = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String('ewogICJTdGFuZGFyZCI6IFsKICAgICJXUEZUd2Vha3NBY3Rpdml0eSIsCiAgICAiV1BGVHdlYWtzQ29uc3VtZXJGZWF0dXJlcyIsCiAgICAiV1BGVHdlYWtzRGlzYWJsZUV4cGxvcmVyQXV0b0Rpc2NvdmVyeSIsCiAgICAiV1BGVHdlYWtzV1BCVCIsCiAgICAiV1BGVHdlYWtzTG9jYXRpb24iLAogICAgIldQRlR3ZWFrc1NlcnZpY2VzIiwKICAgICJXUEZUd2Vha3NUZWxlbWV0cnkiLAogICAgIldQRlR3ZWFrc0RlbGl2ZXJ5T3B0aW1pemF0aW9uIiwKICAgICJXUEZUd2Vha3NEaXNrQ2xlYW51cCIsCiAgICAiV1BGVHdlYWtzRGVsZXRlVGVtcEZpbGVzIiwKICAgICJXUEZUd2Vha3NFbmRUYXNrT25UYXNrYmFyIiwKICAgICJXUEZUd2Vha3NSZXN0b3JlUG9pbnQiCiAgXSwKICAiTWluaW1hbCI6IFsKICAgICJXUEZUd2Vha3NDb25zdW1lckZlYXR1cmVzIiwKICAgICJXUEZUd2Vha3NXUEJUIiwKICAgICJXUEZUd2Vha3NTZXJ2aWNlcyIsCiAgICAiV1BGVHdlYWtzVGVsZW1ldHJ5IgogIF0sCiAgIkFkdmFuY2VkIjogWwogICAgIldQRlR3ZWFrc1Jlc3RvcmVQb2ludCIsCiAgICAiV1BGVHdlYWtzQWN0aXZpdHkiLAogICAgIldQRlR3ZWFrc0NvbnN1bWVyRmVhdHVyZXMiLAogICAgIldQRlR3ZWFrc0Rpc2FibGVFeHBsb3JlckF1dG9EaXNjb3ZlcnkiLAogICAgIldQRlR3ZWFrc1dQQlQiLAogICAgIldQRlR3ZWFrc0xvY2F0aW9uIiwKICAgICJXUEZUd2Vha3NTZXJ2aWNlcyIsCiAgICAiV1BGVHdlYWtzVGVsZW1ldHJ5IiwKICAgICJXUEZUd2Vha3NEZWxpdmVyeU9wdGltaXphdGlvbiIsCiAgICAiV1BGVHdlYWtzRGVsZXRlVGVtcEZpbGVzIiwKICAgICJXUEZUd2Vha3NFbmRUYXNrT25UYXNrYmFyIiwKICAgICJXUEZUd2Vha3NEaXNhYmxlU3RvcmVTZWFyY2giLAogICAgIldQRlR3ZWFrc1JldmVydFN0YXJ0TWVudSIsCiAgICAiV1BGVHdlYWtzV2lkZ2V0IiwKICAgICJXUEZUd2Vha3NSZW1vdmVPbmVEcml2ZSIsCiAgICAiV1BGVHdlYWtzV2luZG93c0FJIiwKICAgICJXUEZUd2Vha3NSaWdodENsaWNrTWVudSIKICBdLAogICJBcHB4RGVmYXVsdCI6IFsKICAgICJXUEZBcHB4TWljcm9zb2Z0X1dpbmRvd3NGZWVkYmFja0h1YiIsCiAgICAiV1BGQXBweE1pY3Jvc29mdF9HZXRIZWxwIiwKICAgICJXUEZBcHB4TWljcm9zb2Z0X01pY3Jvc29mdE9mZmljZUh1YiIsCiAgICAiV1BGQXBweE1pY3Jvc29mdF9XaW5kb3dzQ2FsY3VsYXRvciIsCiAgICAiV1BGQXBweENsaXBjaGFtcF9DbGlwY2hhbXAiLAogICAgIldQRkFwcHhNaWNyb3NvZnRfV2luZG93c0FsYXJtcyIsCiAgICAiV1BGQXBweE1pY3Jvc29mdENvcnBvcmF0aW9uSUlfUXVpY2tBc3Npc3QiLAogICAgIldQRkFwcHhNaWNyb3NvZnRfV2luZG93c1NvdW5kUmVjb3JkZXIiLAogICAgIldQRkFwcHhNaWNyb3NvZnRfTWljcm9zb2Z0U3RpY2t5Tm90ZXMiLAogICAgIldQRkFwcHhNaWNyb3NvZnRfVG9kb3MiLAogICAgIldQRkFwcHhNaWNyb3NvZnRfTWljcm9zb2Z0U29saXRhaXJlQ29sbGVjdGlvbiIsCiAgICAiV1BGQXBweE1pY3Jvc29mdF9Qb3dlckF1dG9tYXRlRGVza3RvcCIsCiAgICAiV1BGQXBweE1pY3Jvc29mdF9XaW5kb3dzRGV2SG9tZSIsCiAgICAiV1BGQXBweE1pY3Jvc29mdF9CaW5nV2VhdGhlciIsCiAgICAiV1BGQXBweE1pY3Jvc29mdF9TdGFydEV4cGVyaWVuY2VzQXBwIiwKICAgICJXUEZBcHB4TWljcm9zb2Z0X0JpbmdOZXdzIiwKICAgICJXUEZBcHB4TWljcm9zb2Z0X0NvcGlsb3QiLAogICAgIldQRkFwcHhNaWNyb3NvZnRfQmluZ1NlYXJjaCIKICBdCn0=')) | ConvertFrom-Json
 
+$sync.configs.themes = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String('ewogICJzaGFyZWQiOiB7CiAgICAiQXBwRW50cnlXaWR0aCI6ICIyMjAiLAogICAgIkFwcEVudHJ5Rm9udFNpemUiOiAiMTMuMiIsCiAgICAiQXBwRW50cnlJY29uU2l6ZSI6ICIyOCIsCiAgICAiQXBwRW50cnlNYXJnaW4iOiAiMyIsCiAgICAiQXBwRW50cnlCb3JkZXJUaGlja25lc3MiOiAiMSIsCiAgICAiQ3VzdG9tRGlhbG9nRm9udFNpemUiOiAiMTIiLAogICAgIkN1c3RvbURpYWxvZ0ZvbnRTaXplSGVhZGVyIjogIjE0IiwKICAgICJDdXN0b21EaWFsb2dMb2dvU2l6ZSI6ICIyNSIsCiAgICAiQ3VzdG9tRGlhbG9nV2lkdGgiOiAiNDAwIiwKICAgICJDdXN0b21EaWFsb2dIZWlnaHQiOiAiMjAwIiwKICAgICJGb250U2l6ZSI6ICIxMiIsCiAgICAiRm9udEZhbWlseSI6ICJBcmlhbCIsCiAgICAiSGVhZGVyRm9udFNpemUiOiAiMTYiLAogICAgIkhlYWRlckZvbnRGYW1pbHkiOiAiQ29uc29sYXMsIE1vbmFjbyIsCiAgICAiQ2hlY2tCb3hCdWxsZXREZWNvcmF0b3JTaXplIjogIjE0IiwKICAgICJDaGVja0JveE1hcmdpbiI6ICIxNSwwLDAsMiIsCiAgICAiVGFiQ29udGVudE1hcmdpbiI6ICI1IiwKICAgICJUYWJCdXR0b25Gb250U2l6ZSI6ICIxNCIsCiAgICAiVGFiQnV0dG9uV2lkdGgiOiAiMTEwIiwKICAgICJUYWJCdXR0b25IZWlnaHQiOiAiMjYiLAogICAgIlRhYlJvd0hlaWdodEluUGl4ZWxzIjogIjUwIiwKICAgICJUb29sVGlwV2lkdGgiOiAiMzAwIiwKICAgICJJY29uRm9udFNpemUiOiAiMTQiLAogICAgIkljb25CdXR0b25TaXplIjogIjM1IiwKICAgICJTZXR0aW5nc0ljb25Gb250U2l6ZSI6ICIxOCIsCiAgICAiQ2xvc2VJY29uRm9udFNpemUiOiAiMTIiLAogICAgIkdyb3VwQm9yZGVyQmFja2dyb3VuZENvbG9yIjogIiMyMzI2MjkiLAogICAgIkJ1dHRvbkZvbnRTaXplIjogIjEyIiwKICAgICJCdXR0b25Gb250RmFtaWx5IjogIkFyaWFsIiwKICAgICJCdXR0b25XaWR0aCI6ICIyMDAiLAogICAgIkJ1dHRvbkhlaWdodCI6ICIyNSIsCiAgICAiQ29uZmlnVGFiQnV0dG9uRm9udFNpemUiOiAiMTQiLAogICAgIkNvbmZpZ1VwZGF0ZUJ1dHRvbkZvbnRTaXplIjogIjE0IiwKICAgICJTZWFyY2hCYXJXaWR0aCI6ICIyMDAiLAogICAgIlNlYXJjaEJhckhlaWdodCI6ICIyNiIsCiAgICAiU2VhcmNoQmFyVGV4dEJveEZvbnRTaXplIjogIjEyIiwKICAgICJTZWFyY2hCYXJDbGVhckJ1dHRvbkZvbnRTaXplIjogIjE0IiwKICAgICJDaGVja2JveE1vdXNlT3ZlckNvbG9yIjogIiM5OTk5OTkiLAogICAgIkJ1dHRvbkJvcmRlclRoaWNrbmVzcyI6ICIxIiwKICAgICJCdXR0b25NYXJnaW4iOiAiMSIsCiAgICAiQnV0dG9uQ29ybmVyUmFkaXVzIjogIjIiCiAgfSwKICAiTGlnaHQiOiB7CiAgICAiQXBwSW5zdGFsbFVuc2VsZWN0ZWRDb2xvciI6ICIjRjdGN0Y3IiwKICAgICJBcHBJbnN0YWxsSGlnaGxpZ2h0ZWRDb2xvciI6ICIjQ0ZDRkNGIiwKICAgICJBcHBJbnN0YWxsU2VsZWN0ZWRDb2xvciI6ICIjQzJDMkMyIiwKICAgICJDb21ib0JveEZvcmVncm91bmRDb2xvciI6ICIjMjMyNjI5IiwKICAgICJDb21ib0JveEJhY2tncm91bmRDb2xvciI6ICIjRjdGN0Y3IiwKICAgICJMYWJlbGJveEZvcmVncm91bmRDb2xvciI6ICIjMjMyNjI5IiwKICAgICJNYWluRm9yZWdyb3VuZENvbG9yIjogIiMyMzI2MjkiLAogICAgIk1haW5CYWNrZ3JvdW5kQ29sb3IiOiAiI0Y3RjdGNyIsCiAgICAiTGFiZWxCYWNrZ3JvdW5kQ29sb3IiOiAiI0Y3RjdGNyIsCiAgICAiTGlua0ZvcmVncm91bmRDb2xvciI6ICIjNDg0ODQ4IiwKICAgICJMaW5rSG92ZXJGb3JlZ3JvdW5kQ29sb3IiOiAiIzIzMjYyOSIsCiAgICAiU2Nyb2xsQmFyQmFja2dyb3VuZENvbG9yIjogIiM0QTRENTIiLAogICAgIlNjcm9sbEJhckhvdmVyQ29sb3IiOiAiIzVBNUQ2MiIsCiAgICAiU2Nyb2xsQmFyRHJhZ2dpbmdDb2xvciI6ICIjNkE2RDcyIiwKICAgICJQcm9ncmVzc0JhckZvcmVncm91bmRDb2xvciI6ICIjMkU3N0ZGIiwKICAgICJQcm9ncmVzc0JhckJhY2tncm91bmRDb2xvciI6ICJUcmFuc3BhcmVudCIsCiAgICAiQnV0dG9uSW5zdGFsbEJhY2tncm91bmRDb2xvciI6ICIjRjdGN0Y3IiwKICAgICJCdXR0b25Ud2Vha3NCYWNrZ3JvdW5kQ29sb3IiOiAiI0Y3RjdGNyIsCiAgICAiQnV0dG9uQ29uZmlnQmFja2dyb3VuZENvbG9yIjogIiNGN0Y3RjciLAogICAgIkJ1dHRvblVwZGF0ZXNCYWNrZ3JvdW5kQ29sb3IiOiAiI0Y3RjdGNyIsCiAgICAiQnV0dG9uV2luMTFJU09CYWNrZ3JvdW5kQ29sb3IiOiAiI0Y3RjdGNyIsCiAgICAiQnV0dG9uQXBweEJhY2tncm91bmRDb2xvciI6ICIjRjdGN0Y3IiwKICAgICJCdXR0b25JbnN0YWxsRm9yZWdyb3VuZENvbG9yIjogIiMyMzI2MjkiLAogICAgIkJ1dHRvblR3ZWFrc0ZvcmVncm91bmRDb2xvciI6ICIjMjMyNjI5IiwKICAgICJCdXR0b25Db25maWdGb3JlZ3JvdW5kQ29sb3IiOiAiIzIzMjYyOSIsCiAgICAiQnV0dG9uVXBkYXRlc0ZvcmVncm91bmRDb2xvciI6ICIjMjMyNjI5IiwKICAgICJCdXR0b25XaW4xMUlTT0ZvcmVncm91bmRDb2xvciI6ICIjMjMyNjI5IiwKICAgICJCdXR0b25BcHB4Rm9yZWdyb3VuZENvbG9yIjogIiMyMzI2MjkiLAogICAgIkJ1dHRvbkJhY2tncm91bmRDb2xvciI6ICIjRjVGNUY1IiwKICAgICJCdXR0b25CYWNrZ3JvdW5kUHJlc3NlZENvbG9yIjogIiMxQTFBMUEiLAogICAgIkJ1dHRvbkJhY2tncm91bmRNb3VzZW92ZXJDb2xvciI6ICIjQzJDMkMyIiwKICAgICJCdXR0b25CYWNrZ3JvdW5kU2VsZWN0ZWRDb2xvciI6ICIjRjBGMEYwIiwKICAgICJCdXR0b25Gb3JlZ3JvdW5kQ29sb3IiOiAiIzIzMjYyOSIsCiAgICAiVG9nZ2xlQnV0dG9uT25Db2xvciI6ICIjMkU3N0ZGIiwKICAgICJUb2dnbGVCdXR0b25PZmZDb2xvciI6ICIjNzA3MDcwIiwKICAgICJUb29sVGlwQmFja2dyb3VuZENvbG9yIjogIiNGN0Y3RjciLAogICAgIkJvcmRlckNvbG9yIjogIiMyMzI2MjkiLAogICAgIkJvcmRlck9wYWNpdHkiOiAiMC4yIgogIH0sCiAgIkRhcmsiOiB7CiAgICAiQXBwSW5zdGFsbFVuc2VsZWN0ZWRDb2xvciI6ICIjMjMyNjI5IiwKICAgICJBcHBJbnN0YWxsSGlnaGxpZ2h0ZWRDb2xvciI6ICIjM0MzQzNDIiwKICAgICJBcHBJbnN0YWxsU2VsZWN0ZWRDb2xvciI6ICIjNEM0QzRDIiwKICAgICJDb21ib0JveEZvcmVncm91bmRDb2xvciI6ICIjRjdGN0Y3IiwKICAgICJDb21ib0JveEJhY2tncm91bmRDb2xvciI6ICIjMUUzNzQ3IiwKICAgICJMYWJlbGJveEZvcmVncm91bmRDb2xvciI6ICIjNUJEQ0ZGIiwKICAgICJNYWluRm9yZWdyb3VuZENvbG9yIjogIiNGN0Y3RjciLAogICAgIk1haW5CYWNrZ3JvdW5kQ29sb3IiOiAiIzIzMjYyOSIsCiAgICAiTGFiZWxCYWNrZ3JvdW5kQ29sb3IiOiAiIzIzMjYyOSIsCiAgICAiTGlua0ZvcmVncm91bmRDb2xvciI6ICIjQUREOEU2IiwKICAgICJMaW5rSG92ZXJGb3JlZ3JvdW5kQ29sb3IiOiAiI0Y3RjdGNyIsCiAgICAiU2Nyb2xsQmFyQmFja2dyb3VuZENvbG9yIjogIiMyRTMxMzUiLAogICAgIlNjcm9sbEJhckhvdmVyQ29sb3IiOiAiIzNCNDI1MiIsCiAgICAiU2Nyb2xsQmFyRHJhZ2dpbmdDb2xvciI6ICIjNUU4MUFDIiwKICAgICJQcm9ncmVzc0JhckZvcmVncm91bmRDb2xvciI6ICIjNkVGRjcyIiwKICAgICJQcm9ncmVzc0JhckJhY2tncm91bmRDb2xvciI6ICJUcmFuc3BhcmVudCIsCiAgICAiQnV0dG9uSW5zdGFsbEJhY2tncm91bmRDb2xvciI6ICIjMjIyMjIyIiwKICAgICJCdXR0b25Ud2Vha3NCYWNrZ3JvdW5kQ29sb3IiOiAiIzMzMzMzMyIsCiAgICAiQnV0dG9uQ29uZmlnQmFja2dyb3VuZENvbG9yIjogIiM0NDQ0NDQiLAogICAgIkJ1dHRvblVwZGF0ZXNCYWNrZ3JvdW5kQ29sb3IiOiAiIzU1NTU1NSIsCiAgICAiQnV0dG9uV2luMTFJU09CYWNrZ3JvdW5kQ29sb3IiOiAiIzY2NjY2NiIsCiAgICAiQnV0dG9uQXBweEJhY2tncm91bmRDb2xvciI6ICIjNzc3Nzc3IiwKICAgICJCdXR0b25JbnN0YWxsRm9yZWdyb3VuZENvbG9yIjogIiNGN0Y3RjciLAogICAgIkJ1dHRvblR3ZWFrc0ZvcmVncm91bmRDb2xvciI6ICIjRjdGN0Y3IiwKICAgICJCdXR0b25Db25maWdGb3JlZ3JvdW5kQ29sb3IiOiAiI0Y3RjdGNyIsCiAgICAiQnV0dG9uVXBkYXRlc0ZvcmVncm91bmRDb2xvciI6ICIjRjdGN0Y3IiwKICAgICJCdXR0b25XaW4xMUlTT0ZvcmVncm91bmRDb2xvciI6ICIjRjdGN0Y3IiwKICAgICJCdXR0b25BcHB4Rm9yZWdyb3VuZENvbG9yIjogIiNGN0Y3RjciLAogICAgIkJ1dHRvbkJhY2tncm91bmRDb2xvciI6ICIjMUUzNzQ3IiwKICAgICJCdXR0b25CYWNrZ3JvdW5kUHJlc3NlZENvbG9yIjogIiNGN0Y3RjciLAogICAgIkJ1dHRvbkJhY2tncm91bmRNb3VzZW92ZXJDb2xvciI6ICIjM0I0MjUyIiwKICAgICJCdXR0b25CYWNrZ3JvdW5kU2VsZWN0ZWRDb2xvciI6ICIjNUU4MUFDIiwKICAgICJCdXR0b25Gb3JlZ3JvdW5kQ29sb3IiOiAiI0Y3RjdGNyIsCiAgICAiVG9nZ2xlQnV0dG9uT25Db2xvciI6ICIjMkU3N0ZGIiwKICAgICJUb2dnbGVCdXR0b25PZmZDb2xvciI6ICIjNzA3MDcwIiwKICAgICJUb29sVGlwQmFja2dyb3VuZENvbG9yIjogIiMyRjM3M0QiLAogICAgIkJvcmRlckNvbG9yIjogIiMyRjM3M0QiLAogICAgIkJvcmRlck9wYWNpdHkiOiAiMC4yIgogIH0KfQ==')) | ConvertFrom-Json
 
-$sync.configs.dns = @'
-{
-  "Google": {
-    "Primary": "8.8.8.8",
-    "Secondary": "8.8.4.4",
-    "Primary6": "2001:4860:4860::8888",
-    "Secondary6": "2001:4860:4860::8844"
-  },
-  "Cloudflare": {
-    "Primary": "1.1.1.1",
-    "Secondary": "1.0.0.1",
-    "Primary6": "2606:4700:4700::1111",
-    "Secondary6": "2606:4700:4700::1001"
-  },
-  "Cloudflare_Malware": {
-    "Primary": "1.1.1.2",
-    "Secondary": "1.0.0.2",
-    "Primary6": "2606:4700:4700::1112",
-    "Secondary6": "2606:4700:4700::1002"
-  },
-  "Cloudflare_Malware_Adult": {
-    "Primary": "1.1.1.3",
-    "Secondary": "1.0.0.3",
-    "Primary6": "2606:4700:4700::1113",
-    "Secondary6": "2606:4700:4700::1003"
-  },
-  "Open_DNS": {
-    "Primary": "208.67.222.222",
-    "Secondary": "208.67.220.220",
-    "Primary6": "2620:119:35::35",
-    "Secondary6": "2620:119:53::53"
-  },
-  "Quad9": {
-    "Primary": "9.9.9.9",
-    "Secondary": "149.112.112.112",
-    "Primary6": "2620:fe::fe",
-    "Secondary6": "2620:fe::9"
-  },
-  "AdGuard_Ads_Trackers": {
-    "Primary": "94.140.14.14",
-    "Secondary": "94.140.15.15",
-    "Primary6": "2a10:50c0::ad1:ff",
-    "Secondary6": "2a10:50c0::ad2:ff"
-  },
-  "AdGuard_Ads_Trackers_Malware_Adult": {
-    "Primary": "94.140.14.15",
-    "Secondary": "94.140.15.16",
-    "Primary6": "2a10:50c0::bad1:ff",
-    "Secondary6": "2a10:50c0::bad2:ff"
-  }
-}
-'@ | ConvertFrom-Json
+$sync.configs.tweaks = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String('ewogICJXUEZUd2Vha3NBY3Rpdml0eSI6IHsKICAgICJDb250ZW50IjogIua0u+WKqOWOhuWPsuiusOW9lSAtIOemgeeUqCIsCiAgICAiRGVzY3JpcHRpb24iOiAi5riF6Zmk5pyA6L+R55qE5paH5qGj44CB5Ymq6LS05p2/5ZKM6L+Q6KGM5Y6G5Y+y6K6w5b2V44CCIiwKICAgICJjYXRlZ29yeSI6ICLln7rmnKzkvJjljJYiLAogICAgInBhbmVsIjogIjEiLAogICAgInJlZ2lzdHJ5IjogWwogICAgICB7CiAgICAgICAgIlBhdGgiOiAiSEtMTTpcXFNPRlRXQVJFXFxQb2xpY2llc1xcTWljcm9zb2Z0XFxXaW5kb3dzXFxTeXN0ZW0iLAogICAgICAgICJOYW1lIjogIkVuYWJsZUFjdGl2aXR5RmVlZCIsCiAgICAgICAgIlZhbHVlIjogIjAiLAogICAgICAgICJUeXBlIjogIkRXb3JkIiwKICAgICAgICAiT3JpZ2luYWxWYWx1ZSI6ICI8UmVtb3ZlRW50cnk+IgogICAgICB9LAogICAgICB7CiAgICAgICAgIlBhdGgiOiAiSEtMTTpcXFNPRlRXQVJFXFxQb2xpY2llc1xcTWljcm9zb2Z0XFxXaW5kb3dzXFxTeXN0ZW0iLAogICAgICAgICJOYW1lIjogIlB1Ymxpc2hVc2VyQWN0aXZpdGllcyIsCiAgICAgICAgIlZhbHVlIjogIjAiLAogICAgICAgICJUeXBlIjogIkRXb3JkIiwKICAgICAgICAiT3JpZ2luYWxWYWx1ZSI6ICI8UmVtb3ZlRW50cnk+IgogICAgICB9LAogICAgICB7CiAgICAgICAgIlBhdGgiOiAiSEtMTTpcXFNPRlRXQVJFXFxQb2xpY2llc1xcTWljcm9zb2Z0XFxXaW5kb3dzXFxTeXN0ZW0iLAogICAgICAgICJOYW1lIjogIlVwbG9hZFVzZXJBY3Rpdml0aWVzIiwKICAgICAgICAiVmFsdWUiOiAiMCIsCiAgICAgICAgIlR5cGUiOiAiRFdvcmQiLAogICAgICAgICJPcmlnaW5hbFZhbHVlIjogIjxSZW1vdmVFbnRyeT4iCiAgICAgIH0KICAgIF0sCiAgICAibGluayI6ICJodHRwczovL3dpbnV0aWwuY2hyaXN0aXR1cy5jb20vZGV2L3R3ZWFrcy9lc3NlbnRpYWwtdHdlYWtzL2FjdGl2aXR5IgogIH0sCiAgIldQRlR3ZWFrc0hpYmVyIjogewogICAgIkNvbnRlbnQiOiAi5LyR55yg5Yqf6IO9IC0g56aB55SoIiwKICAgICJEZXNjcmlwdGlvbiI6ICLkvJHnnKDlip/og73pgILnlKjkuo7nrJTorrDmnKznlLXohJHvvIzlnKjlhbPmnLrliY3kv53lrZjlhoXlrZjlhoXlrrnjgILpgJrluLjkuI3mjqjojZDkvb/nlKjjgIIiLAogICAgImNhdGVnb3J5IjogIuWfuuacrOS8mOWMliIsCiAgICAicGFuZWwiOiAiMSIsCiAgICAicmVnaXN0cnkiOiBbCiAgICAgIHsKICAgICAgICAiUGF0aCI6ICJIS0xNOlxcU3lzdGVtXFxDdXJyZW50Q29udHJvbFNldFxcQ29udHJvbFxcU2Vzc2lvbiBNYW5hZ2VyXFxQb3dlciIsCiAgICAgICAgIk5hbWUiOiAiSGliZXJuYXRlRW5hYmxlZCIsCiAgICAgICAgIlZhbHVlIjogIjAiLAogICAgICAgICJUeXBlIjogIkRXb3JkIiwKICAgICAgICAiT3JpZ2luYWxWYWx1ZSI6ICIxIgogICAgICB9LAogICAgICB7CiAgICAgICAgIlBhdGgiOiAiSEtMTTpcXFNPRlRXQVJFXFxNaWNyb3NvZnRcXFdpbmRvd3NcXEN1cnJlbnRWZXJzaW9uXFxFeHBsb3JlclxcRmx5b3V0TWVudVNldHRpbmdzIiwKICAgICAgICAiTmFtZSI6ICJTaG93SGliZXJuYXRlT3B0aW9uIiwKICAgICAgICAiVmFsdWUiOiAiMCIsCiAgICAgICAgIlR5cGUiOiAiRFdvcmQiLAogICAgICAgICJPcmlnaW5hbFZhbHVlIjogIjEiCiAgICAgIH0KICAgIF0sCiAgICAiSW52b2tlU2NyaXB0IjogWwogICAgICAicG93ZXJjZmcuZXhlIC9oaWJlcm5hdGUgb2ZmIgogICAgXSwKICAgICJVbmRvU2NyaXB0IjogWwogICAgICAicG93ZXJjZmcuZXhlIC9oaWJlcm5hdGUgb24iCiAgICBdLAogICAgImxpbmsiOiAiaHR0cHM6Ly93aW51dGlsLmNocmlzdGl0dXMuY29tL2Rldi90d2Vha3MvZXNzZW50aWFsLXR3ZWFrcy9oaWJlciIKICB9LAogICJXUEZUd2Vha3NXaWRnZXQiOiB7CiAgICAiQ29udGVudCI6ICLlsI/nu4Tku7YgLSDnp7vpmaQiLAogICAgIkRlc2NyaXB0aW9uIjogIuenu+mZpOS7u+WKoeagj+W3puS4i+inkueahOeDpuS6uuWwj+e7hOS7tuOAgiIsCiAgICAiY2F0ZWdvcnkiOiAi5Z+65pys5LyY5YyWIiwKICAgICJwYW5lbCI6ICIxIiwKICAgICJJbnZva2VTY3JpcHQiOiBbCiAgICAgICIgICAgICAjIFNvbWV0aW1lcyBpZiB5b3UgZG9udCBzdG9wIHRoZSBXaWRnZXRzIHByb2Nlc3MgdGhlIHJlbW92YWwgbWF5IGZhaWwgICAgICBHZXQtUHJvY2VzcyAqV2lkZ2V0KiB8IFN0b3AtUHJvY2VzcyAgICAgIEdldC1BcHB4UGFja2FnZSBNaWNyb3NvZnQuV2lkZ2V0c1BsYXRmb3JtUnVudGltZSAtQWxsVXNlcnMgfCBSZW1vdmUtQXBweFBhY2thZ2UgLUFsbFVzZXJzICAgICAgR2V0LUFwcHhQYWNrYWdlIE1pY3Jvc29mdFdpbmRvd3MuQ2xpZW50LldlYkV4cGVyaWVuY2UgLUFsbFVzZXJzIHwgUmVtb3ZlLUFwcHhQYWNrYWdlIC1BbGxVc2VycyAgICAgIEludm9rZS1XaW5VdGlsRXhwbG9yZXJVcGRhdGUgLWFjdGlvbiBcInJlc3RhcnRcIiAgICAgIFdyaXRlLUhvc3QgXCJSZW1vdmVkIHdpZGdldHNcIiAgICAgICIKICAgIF0sCiAgICAibGluayI6ICJodHRwczovL3dpbnV0aWwuY2hyaXN0aXR1cy5jb20vZGV2L3R3ZWFrcy9lc3NlbnRpYWwtdHdlYWtzL3dpZGdldCIKICB9LAogICJXUEZUd2Vha3NSZXZlcnRTdGFydE1lbnUiOiB7CiAgICAiQ29udGVudCI6ICLlvIDlp4voj5zljZXml6fniYjluIPlsYAgLSDlkK/nlKgiLAogICAgIkRlc2NyaXB0aW9uIjogIuaBouWkjSAyNUgyIOaWsOeJiOacrOS5i+WJjeeahOaXp+W8gOWni+iPnOWNleW4g+WxgOOAguWcqOabtOaWsOeahCBXaW5kb3dzIOeJiOacrOS4iuatpOiwg+aVtOWwhuS4jei1t+S9nOeUqOOAgiIsCiAgICAiY2F0ZWdvcnkiOiAi5Z+65pys5LyY5YyWIiwKICAgICJwYW5lbCI6ICIxIiwKICAgICJyZWdpc3RyeSI6IFsKICAgICAgewogICAgICAgICJQYXRoIjogIkhLTE06XFxTWVNURU1cXENvbnRyb2xTZXQwMDFcXENvbnRyb2xcXEZlYXR1cmVNYW5hZ2VtZW50XFxPdmVycmlkZXNcXDhcXDMwMzYyNDE1NDgiLAogICAgICAgICJOYW1lIjogIkVuYWJsZWRTdGF0ZSIsCiAgICAgICAgIlZhbHVlIjogIjEiLAogICAgICAgICJUeXBlIjogIkRXb3JkIiwKICAgICAgICAiT3JpZ2luYWxWYWx1ZSI6ICI8UmVtb3ZlRW50cnk+IgogICAgICB9CiAgICBdLAogICAgImxpbmsiOiAiaHR0cHM6Ly93aW51dGlsLmNocmlzdGl0dXMuY29tL2Rldi90d2Vha3MvZXNzZW50aWFsLXR3ZWFrcy9yZXZlcnRzdGFydG1lbnUiCiAgfSwKICAiV1BGVHdlYWtzRGlzYWJsZVN0b3JlU2VhcmNoIjogewogICAgIkNvbnRlbnQiOiAiTWljcm9zb2Z0IFN0b3JlIOaOqOiNkOaQnOe0oue7k+aenCAtIOemgeeUqCIsCiAgICAiRGVzY3JpcHRpb24iOiAi5Zyo5byA5aeL6I+c5Y2V5pCc57Si5bqU55So5pe25bCG5LiN5pi+56S65o6o6I2Q55qEIE1pY3Jvc29mdCBTdG9yZSDlupTnlKjjgIIiLAogICAgImNhdGVnb3J5IjogIuWfuuacrOS8mOWMliIsCiAgICAicGFuZWwiOiAiMSIsCiAgICAiSW52b2tlU2NyaXB0IjogWwogICAgICAiaWNhY2xzIFwiJEVudjpMb2NhbEFwcERhdGFcXFBhY2thZ2VzXFxNaWNyb3NvZnQuV2luZG93c1N0b3JlXzh3ZWt5YjNkOGJid2VcXExvY2FsU3RhdGVcXHN0b3JlLmRiXCIgL2RlbnkgRXZlcnlvbmU6RiIKICAgIF0sCiAgICAiVW5kb1NjcmlwdCI6IFsKICAgICAgImljYWNscyBcIiRFbnY6TG9jYWxBcHBEYXRhXFxQYWNrYWdlc1xcTWljcm9zb2Z0LldpbmRvd3NTdG9yZV84d2VreWIzZDhiYndlXFxMb2NhbFN0YXRlXFxzdG9yZS5kYlwiIC9ncmFudCBFdmVyeW9uZTpGIgogICAgXSwKICAgICJsaW5rIjogImh0dHBzOi8vd2ludXRpbC5jaHJpc3RpdHVzLmNvbS9kZXYvdHdlYWtzL2Vzc2VudGlhbC10d2Vha3MvZGlzYWJsZXN0b3Jlc2VhcmNoIgogIH0sCiAgIldQRlR3ZWFrc0xvY2F0aW9uIjogewogICAgIkNvbnRlbnQiOiAi5L2N572u6Lef6LiqIC0g56aB55SoIiwKICAgICJEZXNjcmlwdGlvbiI6ICLnpoHnlKjkvY3nva7ot5/ouKrjgIIiLAogICAgImNhdGVnb3J5IjogIuWfuuacrOS8mOWMliIsCiAgICAicGFuZWwiOiAiMSIsCiAgICAic2VydmljZSI6IFsKICAgICAgewogICAgICAgICJOYW1lIjogImxmc3ZjIiwKICAgICAgICAiU3RhcnR1cFR5cGUiOiAiRGlzYWJsZSIsCiAgICAgICAgIk9yaWdpbmFsVHlwZSI6ICJNYW51YWwiCiAgICAgIH0KICAgIF0sCiAgICAicmVnaXN0cnkiOiBbCiAgICAgIHsKICAgICAgICAiUGF0aCI6ICJIS0xNOlxcU09GVFdBUkVcXE1pY3Jvc29mdFxcV2luZG93c1xcQ3VycmVudFZlcnNpb25cXENhcGFiaWxpdHlBY2Nlc3NNYW5hZ2VyXFxDb25zZW50U3RvcmVcXGxvY2F0aW9uIiwKICAgICAgICAiTmFtZSI6ICJWYWx1ZSIsCiAgICAgICAgIlZhbHVlIjogIkRlbnkiLAogICAgICAgICJUeXBlIjogIlN0cmluZyIsCiAgICAgICAgIk9yaWdpbmFsVmFsdWUiOiAiQWxsb3ciCiAgICAgIH0sCiAgICAgIHsKICAgICAgICAiUGF0aCI6ICJIS0xNOlxcU09GVFdBUkVcXE1pY3Jvc29mdFxcV2luZG93cyBOVFxcQ3VycmVudFZlcnNpb25cXFNlbnNvclxcT3ZlcnJpZGVzXFx7QkZBNzk0RTQtRjk2NC00RkRCLTkwRjYtNTEwNTZCRkU0QjQ0fSIsCiAgICAgICAgIk5hbWUiOiAiU2Vuc29yUGVybWlzc2lvblN0YXRlIiwKICAgICAgICAiVmFsdWUiOiAiMCIsCiAgICAgICAgIlR5cGUiOiAiRFdvcmQiLAogICAgICAgICJPcmlnaW5hbFZhbHVlIjogIjEiCiAgICAgIH0sCiAgICAgIHsKICAgICAgICAiUGF0aCI6ICJIS0xNOlxcU1lTVEVNXFxNYXBzIiwKICAgICAgICAiTmFtZSI6ICJBdXRvVXBkYXRlRW5hYmxlZCIsCiAgICAgICAgIlZhbHVlIjogIjAiLAogICAgICAgICJUeXBlIjogIkRXb3JkIiwKICAgICAgICAiT3JpZ2luYWxWYWx1ZSI6ICIxIgogICAgICB9CiAgICBdLAogICAgImxpbmsiOiAiaHR0cHM6Ly93aW51dGlsLmNocmlzdGl0dXMuY29tL2Rldi90d2Vha3MvZXNzZW50aWFsLXR3ZWFrcy9sb2NhdGlvbiIKICB9LAogICJXUEZUd2Vha3NTZXJ2aWNlcyI6IHsKICAgICJDb250ZW50IjogIuacjeWKoSAtIOiuvuS4uuaJi+WKqCIsCiAgICAiRGVzY3JpcHRpb24iOiAi5bCG5p+Q5Lqb5pyN5Yqh6K6+5Li65omL5Yqo5ZCv5Yqo5bm26LCD5pW05rOo5YaM6KGo5YC85Lul5Yy56YWN57O757uf5YaF5a2Y77yM5Y+v5pi+6JGX5YeP5bCRIHN2Y2hvc3QuZXhlIOi/m+eoi+aVsOmHj+OAgiIsCiAgICAiY2F0ZWdvcnkiOiAi5Z+65pys5LyY5YyWIiwKICAgICJwYW5lbCI6ICIxIiwKICAgICJzZXJ2aWNlIjogWwogICAgICB7CiAgICAgICAgIk5hbWUiOiAiQ3NjU2VydmljZSIsCiAgICAgICAgIlN0YXJ0dXBUeXBlIjogIkRpc2FibGVkIiwKICAgICAgICAiT3JpZ2luYWxUeXBlIjogIk1hbnVhbCIKICAgICAgfSwKICAgICAgewogICAgICAgICJOYW1lIjogIkRpYWdUcmFjayIsCiAgICAgICAgIlN0YXJ0dXBUeXBlIjogIkRpc2FibGVkIiwKICAgICAgICAiT3JpZ2luYWxUeXBlIjogIkF1dG9tYXRpYyIKICAgICAgfSwKICAgICAgewogICAgICAgICJOYW1lIjogIk1hcHNCcm9rZXIiLAogICAgICAgICJTdGFydHVwVHlwZSI6ICJNYW51YWwiLAogICAgICAgICJPcmlnaW5hbFR5cGUiOiAiQXV0b21hdGljIgogICAgICB9LAogICAgICB7CiAgICAgICAgIk5hbWUiOiAiU3RvclN2YyIsCiAgICAgICAgIlN0YXJ0dXBUeXBlIjogIk1hbnVhbCIsCiAgICAgICAgIk9yaWdpbmFsVHlwZSI6ICJBdXRvbWF0aWMiCiAgICAgIH0sCiAgICAgIHsKICAgICAgICAiTmFtZSI6ICJTaGFyZWRBY2Nlc3MiLAogICAgICAgICJTdGFydHVwVHlwZSI6ICJEaXNhYmxlZCIsCiAgICAgICAgIk9yaWdpbmFsVHlwZSI6ICJBdXRvbWF0aWMiCiAgICAgIH0KICAgIF0sCiAgICAiSW52b2tlU2NyaXB0IjogWwogICAgICAiICAgICAgJE1lbW9yeSA9IChHZXQtQ2ltSW5zdGFuY2UgV2luMzJfUGh5c2ljYWxNZW1vcnkgfCBNZWFzdXJlLU9iamVjdCBDYXBhY2l0eSAtU3VtKS5TdW0gLyAxS0IgICAgICBTZXQtSXRlbVByb3BlcnR5IC1QYXRoIFwiSEtMTTpcXFNZU1RFTVxcQ3VycmVudENvbnRyb2xTZXRcXENvbnRyb2xcIiAtTmFtZSBTdmNIb3N0U3BsaXRUaHJlc2hvbGRJbktCIC1WYWx1ZSAkTWVtb3J5ICAgICAgIgogICAgXSwKICAgICJsaW5rIjogImh0dHBzOi8vd2ludXRpbC5jaHJpc3RpdHVzLmNvbS9kZXYvdHdlYWtzL2Vzc2VudGlhbC10d2Vha3Mvc2VydmljZXMiCiAgfSwKICAiV1BGVHdlYWtzQnJhdmVEZWJsb2F0IjogewogICAgIkNvbnRlbnQiOiAiQnJhdmUg5rWP6KeI5ZmoIC0g57K+566AIiwKICAgICJEZXNjcmlwdGlvbiI6ICLnpoHnlKjlkITnp43ng6bkurrlip/og73vvIzlpoIgQnJhdmUgUmV3YXJkc+OAgUxlbyBBSeOAgeWKoOWvhumSseWMheWSjCBWUE7jgIIiLAogICAgImNhdGVnb3J5IjogIumrmOe6p+S8mOWMliAtIOiwqOaFjuaTjeS9nCIsCiAgICAicGFuZWwiOiAiMSIsCiAgICAicmVnaXN0cnkiOiBbCiAgICAgIHsKICAgICAgICAiUGF0aCI6ICJIS0xNOlxcU09GVFdBUkVcXFBvbGljaWVzXFxCcmF2ZVNvZnR3YXJlXFxCcmF2ZSIsCiAgICAgICAgIk5hbWUiOiAiQnJhdmVSZXdhcmRzRGlzYWJsZWQiLAogICAgICAgICJWYWx1ZSI6ICIxIiwKICAgICAgICAiVHlwZSI6ICJEV29yZCIsCiAgICAgICAgIk9yaWdpbmFsVmFsdWUiOiAiPFJlbW92ZUVudHJ5PiIKICAgICAgfSwKICAgICAgewogICAgICAgICJQYXRoIjogIkhLTE06XFxTT0ZUV0FSRVxcUG9saWNpZXNcXEJyYXZlU29mdHdhcmVcXEJyYXZlIiwKICAgICAgICAiTmFtZSI6ICJCcmF2ZVdhbGxldERpc2FibGVkIiwKICAgICAgICAiVmFsdWUiOiAiMSIsCiAgICAgICAgIlR5cGUiOiAiRFdvcmQiLAogICAgICAgICJPcmlnaW5hbFZhbHVlIjogIjxSZW1vdmVFbnRyeT4iCiAgICAgIH0sCiAgICAgIHsKICAgICAgICAiUGF0aCI6ICJIS0xNOlxcU09GVFdBUkVcXFBvbGljaWVzXFxCcmF2ZVNvZnR3YXJlXFxCcmF2ZSIsCiAgICAgICAgIk5hbWUiOiAiQnJhdmVWUE5EaXNhYmxlZCIsCiAgICAgICAgIlZhbHVlIjogIjEiLAogICAgICAgICJUeXBlIjogIkRXb3JkIiwKICAgICAgICAiT3JpZ2luYWxWYWx1ZSI6ICI8UmVtb3ZlRW50cnk+IgogICAgICB9LAogICAgICB7CiAgICAgICAgIlBhdGgiOiAiSEtMTTpcXFNPRlRXQVJFXFxQb2xpY2llc1xcQnJhdmVTb2Z0d2FyZVxcQnJhdmUiLAogICAgICAgICJOYW1lIjogIkJyYXZlQUlDaGF0RW5hYmxlZCIsCiAgICAgICAgIlZhbHVlIjogIjAiLAogICAgICAgICJUeXBlIjogIkRXb3JkIiwKICAgICAgICAiT3JpZ2luYWxWYWx1ZSI6ICI8UmVtb3ZlRW50cnk+IgogICAgICB9LAogICAgICB7CiAgICAgICAgIlBhdGgiOiAiSEtMTTpcXFNPRlRXQVJFXFxQb2xpY2llc1xcQnJhdmVTb2Z0d2FyZVxcQnJhdmUiLAogICAgICAgICJOYW1lIjogIkJyYXZlU3RhdHNQaW5nRW5hYmxlZCIsCiAgICAgICAgIlZhbHVlIjogIjAiLAogICAgICAgICJUeXBlIjogIkRXb3JkIiwKICAgICAgICAiT3JpZ2luYWxWYWx1ZSI6ICI8UmVtb3ZlRW50cnk+IgogICAgICB9LAogICAgICB7CiAgICAgICAgIlBhdGgiOiAiSEtMTTpcXFNPRlRXQVJFXFxQb2xpY2llc1xcQnJhdmVTb2Z0d2FyZVxcQnJhdmUiLAogICAgICAgICJOYW1lIjogIkJyYXZlTmV3c0Rpc2FibGVkIiwKICAgICAgICAiVmFsdWUiOiAiMSIsCiAgICAgICAgIlR5cGUiOiAiRFdvcmQiLAogICAgICAgICJPcmlnaW5hbFZhbHVlIjogIjxSZW1vdmVFbnRyeT4iCiAgICAgIH0sCiAgICAgIHsKICAgICAgICAiUGF0aCI6ICJIS0xNOlxcU09GVFdBUkVcXFBvbGljaWVzXFxCcmF2ZVNvZnR3YXJlXFxCcmF2ZSIsCiAgICAgICAgIk5hbWUiOiAiQnJhdmVUYWxrRGlzYWJsZWQiLAogICAgICAgICJWYWx1ZSI6ICIxIiwKICAgICAgICAiVHlwZSI6ICJEV29yZCIsCiAgICAgICAgIk9yaWdpbmFsVmFsdWUiOiAiPFJlbW92ZUVudHJ5PiIKICAgICAgfSwKICAgICAgewogICAgICAgICJQYXRoIjogIkhLTE06XFxTT0ZUV0FSRVxcUG9saWNpZXNcXEJyYXZlU29mdHdhcmVcXEJyYXZlIiwKICAgICAgICAiTmFtZSI6ICJUb3JEaXNhYmxlZCIsCiAgICAgICAgIlZhbHVlIjogIjEiLAogICAgICAgICJUeXBlIjogIkRXb3JkIiwKICAgICAgICAiT3JpZ2luYWxWYWx1ZSI6ICI8UmVtb3ZlRW50cnk+IgogICAgICB9LAogICAgICB7CiAgICAgICAgIlBhdGgiOiAiSEtMTTpcXFNPRlRXQVJFXFxQb2xpY2llc1xcQnJhdmVTb2Z0d2FyZVxcQnJhdmUiLAogICAgICAgICJOYW1lIjogIkJyYXZlUDNBRW5hYmxlZCIsCiAgICAgICAgIlZhbHVlIjogIjAiLAogICAgICAgICJUeXBlIjogIkRXb3JkIiwKICAgICAgICAiT3JpZ2luYWxWYWx1ZSI6ICI8UmVtb3ZlRW50cnk+IgogICAgICB9LAogICAgICB7CiAgICAgICAgIlBhdGgiOiAiSEtMTTpcXFNPRlRXQVJFXFxQb2xpY2llc1xcQnJhdmVTb2Z0d2FyZVxcQnJhdmUiLAogICAgICAgICJOYW1lIjogIlVybEtleWVkQW5vbnltaXplZERhdGFDb2xsZWN0aW9uRW5hYmxlZCIsCiAgICAgICAgIlZhbHVlIjogIjAiLAogICAgICAgICJUeXBlIjogIkRXb3JkIiwKICAgICAgICAiT3JpZ2luYWxWYWx1ZSI6ICI8UmVtb3ZlRW50cnk+IgogICAgICB9LAogICAgICB7CiAgICAgICAgIlBhdGgiOiAiSEtMTTpcXFNPRlRXQVJFXFxQb2xpY2llc1xcQnJhdmVTb2Z0d2FyZVxcQnJhdmUiLAogICAgICAgICJOYW1lIjogIlNhZmVCcm93c2luZ0V4dGVuZGVkUmVwb3J0aW5nRW5hYmxlZCIsCiAgICAgICAgIlZhbHVlIjogIjAiLAogICAgICAgICJUeXBlIjogIkRXb3JkIiwKICAgICAgICAiT3JpZ2luYWxWYWx1ZSI6ICI8UmVtb3ZlRW50cnk+IgogICAgICB9LAogICAgICB7CiAgICAgICAgIlBhdGgiOiAiSEtMTTpcXFNPRlRXQVJFXFxQb2xpY2llc1xcQnJhdmVTb2Z0d2FyZVxcQnJhdmUiLAogICAgICAgICJOYW1lIjogIk1ldHJpY3NSZXBvcnRpbmdFbmFibGVkIiwKICAgICAgICAiVmFsdWUiOiAiMCIsCiAgICAgICAgIlR5cGUiOiAiRFdvcmQiLAogICAgICAgICJPcmlnaW5hbFZhbHVlIjogIjxSZW1vdmVFbnRyeT4iCiAgICAgIH0KICAgIF0sCiAgICAibGluayI6ICJodHRwczovL3dpbnV0aWwuY2hyaXN0aXR1cy5jb20vZGV2L3R3ZWFrcy96LS1hZHZhbmNlZC10d2Vha3MtLS1jYXV0aW9uL2JyYXZlZGVibG9hdCIKICB9LAogICJXUEZUd2Vha3NEaXNhYmxlV2FybmluZ0ZvclVuc2lnbmVkUmRwIjogewogICAgIkNvbnRlbnQiOiAiUkRQIOacquetvuWQjeaWh+S7tuitpuWRiiAtIOemgeeUqCIsCiAgICAiRGVzY3JpcHRpb24iOiAi56aB55So5ZCv5Yqo5pyq562+5ZCNIFJEUCDmlofku7bml7bmmL7npLrnmoTorablkYrjgIIiLAogICAgImNhdGVnb3J5IjogIumrmOe6p+S8mOWMliAtIOiwqOaFjuaTjeS9nCIsCiAgICAicGFuZWwiOiAiMSIsCiAgICAicmVnaXN0cnkiOiBbCiAgICAgIHsKICAgICAgICAiUGF0aCI6ICJIS0xNOlxcU09GVFdBUkVcXFBvbGljaWVzXFxNaWNyb3NvZnRcXFdpbmRvd3MgTlRcXFRlcm1pbmFsIFNlcnZpY2VzXFxDbGllbnQiLAogICAgICAgICJOYW1lIjogIlJlZGlyZWN0aW9uV2FybmluZ0RpYWxvZ1ZlcnNpb24iLAogICAgICAgICJWYWx1ZSI6ICIxIiwKICAgICAgICAiVHlwZSI6ICJEV29yZCIsCiAgICAgICAgIk9yaWdpbmFsVmFsdWUiOiAiPFJlbW92ZUVudHJ5PiIKICAgICAgfSwKICAgICAgewogICAgICAgICJQYXRoIjogIkhLQ1U6XFxTT0ZUV0FSRVxcTWljcm9zb2Z0XFxUZXJtaW5hbCBTZXJ2ZXIgQ2xpZW50IiwKICAgICAgICAiTmFtZSI6ICJSZHBMYXVuY2hDb25zZW50QWNjZXB0ZWQiLAogICAgICAgICJWYWx1ZSI6ICIxIiwKICAgICAgICAiVHlwZSI6ICJEV29yZCIsCiAgICAgICAgIk9yaWdpbmFsVmFsdWUiOiAiPFJlbW92ZUVudHJ5PiIKICAgICAgfQogICAgXSwKICAgICJsaW5rIjogImh0dHBzOi8vd2ludXRpbC5jaHJpc3RpdHVzLmNvbS9kZXYvdHdlYWtzL3otLWFkdmFuY2VkLXR3ZWFrcy0tLWNhdXRpb24vZGlzYWJsZXdhcm5pbmdmb3J1bnNpZ25lZHJkcCIKICB9LAogICJXUEZUd2Vha3NFZGdlRGVibG9hdCI6IHsKICAgICJDb250ZW50IjogIk1pY3Jvc29mdCBFZGdlIC0g57K+566AIiwKICAgICJEZXNjcmlwdGlvbiI6ICLnpoHnlKggRWRnZSDkuK3nmoTlkITnp43pgaXmtYvpgInpobnjgIHlvLnnqpflkozlhbbku5bng6bkurrlip/og73jgIIiLAogICAgImNhdGVnb3J5IjogIumrmOe6p+S8mOWMliAtIOiwqOaFjuaTjeS9nCIsCiAgICAicGFuZWwiOiAiMSIsCiAgICAicmVnaXN0cnkiOiBbCiAgICAgIHsKICAgICAgICAiUGF0aCI6ICJIS0xNOlxcU09GVFdBUkVcXFBvbGljaWVzXFxNaWNyb3NvZnRcXEVkZ2VVcGRhdGUiLAogICAgICAgICJOYW1lIjogIkNyZWF0ZURlc2t0b3BTaG9ydGN1dERlZmF1bHQiLAogICAgICAgICJWYWx1ZSI6ICIwIiwKICAgICAgICAiVHlwZSI6ICJEV29yZCIsCiAgICAgICAgIk9yaWdpbmFsVmFsdWUiOiAiPFJlbW92ZUVudHJ5PiIKICAgICAgfSwKICAgICAgewogICAgICAgICJQYXRoIjogIkhLTE06XFxTT0ZUV0FSRVxcUG9saWNpZXNcXE1pY3Jvc29mdFxcRWRnZSIsCiAgICAgICAgIk5hbWUiOiAiUGVyc29uYWxpemF0aW9uUmVwb3J0aW5nRW5hYmxlZCIsCiAgICAgICAgIlZhbHVlIjogIjAiLAogICAgICAgICJUeXBlIjogIkRXb3JkIiwKICAgICAgICAiT3JpZ2luYWxWYWx1ZSI6ICI8UmVtb3ZlRW50cnk+IgogICAgICB9LAogICAgICB7CiAgICAgICAgIlBhdGgiOiAiSEtMTTpcXFNPRlRXQVJFXFxQb2xpY2llc1xcTWljcm9zb2Z0XFxFZGdlXFxFeHRlbnNpb25JbnN0YWxsQmxvY2tsaXN0IiwKICAgICAgICAiTmFtZSI6ICIxIiwKICAgICAgICAiVmFsdWUiOiAib2ZlZmNnamJlZ2hwaWdwcGZta29sb2dmamFkYWZkZGkiLAogICAgICAgICJUeXBlIjogIlN0cmluZyIsCiAgICAgICAgIk9yaWdpbmFsVmFsdWUiOiAiPFJlbW92ZUVudHJ5PiIKICAgICAgfSwKICAgICAgewogICAgICAgICJQYXRoIjogIkhLTE06XFxTT0ZUV0FSRVxcUG9saWNpZXNcXE1pY3Jvc29mdFxcRWRnZSIsCiAgICAgICAgIk5hbWUiOiAiU2hvd1JlY29tbWVuZGF0aW9uc0VuYWJsZWQiLAogICAgICAgICJWYWx1ZSI6ICIwIiwKICAgICAgICAiVHlwZSI6ICJEV29yZCIsCiAgICAgICAgIk9yaWdpbmFsVmFsdWUiOiAiPFJlbW92ZUVudHJ5PiIKICAgICAgfSwKICAgICAgewogICAgICAgICJQYXRoIjogIkhLTE06XFxTT0ZUV0FSRVxcUG9saWNpZXNcXE1pY3Jvc29mdFxcRWRnZSIsCiAgICAgICAgIk5hbWUiOiAiSGlkZUZpcnN0UnVuRXhwZXJpZW5jZSIsCiAgICAgICAgIlZhbHVlIjogIjEiLAogICAgICAgICJUeXBlIjogIkRXb3JkIiwKICAgICAgICAiT3JpZ2luYWxWYWx1ZSI6ICI8UmVtb3ZlRW50cnk+IgogICAgICB9LAogICAgICB7CiAgICAgICAgIlBhdGgiOiAiSEtMTTpcXFNPRlRXQVJFXFxQb2xpY2llc1xcTWljcm9zb2Z0XFxFZGdlIiwKICAgICAgICAiTmFtZSI6ICJVc2VyRmVlZGJhY2tBbGxvd2VkIiwKICAgICAgICAiVmFsdWUiOiAiMCIsCiAgICAgICAgIlR5cGUiOiAiRFdvcmQiLAogICAgICAgICJPcmlnaW5hbFZhbHVlIjogIjxSZW1vdmVFbnRyeT4iCiAgICAgIH0sCiAgICAgIHsKICAgICAgICAiUGF0aCI6ICJIS0xNOlxcU09GVFdBUkVcXFBvbGljaWVzXFxNaWNyb3NvZnRcXEVkZ2UiLAogICAgICAgICJOYW1lIjogIkNvbmZpZ3VyZURvTm90VHJhY2siLAogICAgICAgICJWYWx1ZSI6ICIxIiwKICAgICAgICAiVHlwZSI6ICJEV29yZCIsCiAgICAgICAgIk9yaWdpbmFsVmFsdWUiOiAiPFJlbW92ZUVudHJ5PiIKICAgICAgfSwKICAgICAgewogICAgICAgICJQYXRoIjogIkhLTE06XFxTT0ZUV0FSRVxcUG9saWNpZXNcXE1pY3Jvc29mdFxcRWRnZSIsCiAgICAgICAgIk5hbWUiOiAiQWx0ZXJuYXRlRXJyb3JQYWdlc0VuYWJsZWQiLAogICAgICAgICJWYWx1ZSI6ICIwIiwKICAgICAgICAiVHlwZSI6ICJEV29yZCIsCiAgICAgICAgIk9yaWdpbmFsVmFsdWUiOiAiPFJlbW92ZUVudHJ5PiIKICAgICAgfSwKICAgICAgewogICAgICAgICJQYXRoIjogIkhLTE06XFxTT0ZUV0FSRVxcUG9saWNpZXNcXE1pY3Jvc29mdFxcRWRnZSIsCiAgICAgICAgIk5hbWUiOiAiRWRnZUNvbGxlY3Rpb25zRW5hYmxlZCIsCiAgICAgICAgIlZhbHVlIjogIjAiLAogICAgICAgICJUeXBlIjogIkRXb3JkIiwKICAgICAgICAiT3JpZ2luYWxWYWx1ZSI6ICI8UmVtb3ZlRW50cnk+IgogICAgICB9LAogICAgICB7CiAgICAgICAgIlBhdGgiOiAiSEtMTTpcXFNPRlRXQVJFXFxQb2xpY2llc1xcTWljcm9zb2Z0XFxFZGdlIiwKICAgICAgICAiTmFtZSI6ICJFZGdlU2hvcHBpbmdBc3Npc3RhbnRFbmFibGVkIiwKICAgICAgICAiVmFsdWUiOiAiMCIsCiAgICAgICAgIlR5cGUiOiAiRFdvcmQiLAogICAgICAgICJPcmlnaW5hbFZhbHVlIjogIjxSZW1vdmVFbnRyeT4iCiAgICAgIH0sCiAgICAgIHsKICAgICAgICAiUGF0aCI6ICJIS0xNOlxcU09GVFdBUkVcXFBvbGljaWVzXFxNaWNyb3NvZnRcXEVkZ2UiLAogICAgICAgICJOYW1lIjogIk1pY3Jvc29mdEVkZ2VJbnNpZGVyUHJvbW90aW9uRW5hYmxlZCIsCiAgICAgICAgIlZhbHVlIjogIjAiLAogICAgICAgICJUeXBlIjogIkRXb3JkIiwKICAgICAgICAiT3JpZ2luYWxWYWx1ZSI6ICI8UmVtb3ZlRW50cnk+IgogICAgICB9LAogICAgICB7CiAgICAgICAgIlBhdGgiOiAiSEtMTTpcXFNPRlRXQVJFXFxQb2xpY2llc1xcTWljcm9zb2Z0XFxFZGdlIiwKICAgICAgICAiTmFtZSI6ICJTaG93TWljcm9zb2Z0UmV3YXJkcyIsCiAgICAgICAgIlZhbHVlIjogIjAiLAogICAgICAgICJUeXBlIjogIkRXb3JkIiwKICAgICAgICAiT3JpZ2luYWxWYWx1ZSI6ICI8UmVtb3ZlRW50cnk+IgogICAgICB9LAogICAgICB7CiAgICAgICAgIlBhdGgiOiAiSEtMTTpcXFNPRlRXQVJFXFxQb2xpY2llc1xcTWljcm9zb2Z0XFxFZGdlIiwKICAgICAgICAiTmFtZSI6ICJXZWJXaWRnZXRBbGxvd2VkIiwKICAgICAgICAiVmFsdWUiOiAiMCIsCiAgICAgICAgIlR5cGUiOiAiRFdvcmQiLAogICAgICAgICJPcmlnaW5hbFZhbHVlIjogIjxSZW1vdmVFbnRyeT4iCiAgICAgIH0sCiAgICAgIHsKICAgICAgICAiUGF0aCI6ICJIS0xNOlxcU09GVFdBUkVcXFBvbGljaWVzXFxNaWNyb3NvZnRcXEVkZ2UiLAogICAgICAgICJOYW1lIjogIkRpYWdub3N0aWNEYXRhIiwKICAgICAgICAiVmFsdWUiOiAiMCIsCiAgICAgICAgIlR5cGUiOiAiRFdvcmQiLAogICAgICAgICJPcmlnaW5hbFZhbHVlIjogIjxSZW1vdmVFbnRyeT4iCiAgICAgIH0sCiAgICAgIHsKICAgICAgICAiUGF0aCI6ICJIS0xNOlxcU09GVFdBUkVcXFBvbGljaWVzXFxNaWNyb3NvZnRcXEVkZ2UiLAogICAgICAgICJOYW1lIjogIkVkZ2VBc3NldERlbGl2ZXJ5U2VydmljZUVuYWJsZWQiLAogICAgICAgICJWYWx1ZSI6ICIwIiwKICAgICAgICAiVHlwZSI6ICJEV29yZCIsCiAgICAgICAgIk9yaWdpbmFsVmFsdWUiOiAiPFJlbW92ZUVudHJ5PiIKICAgICAgfSwKICAgICAgewogICAgICAgICJQYXRoIjogIkhLTE06XFxTT0ZUV0FSRVxcUG9saWNpZXNcXE1pY3Jvc29mdFxcRWRnZSIsCiAgICAgICAgIk5hbWUiOiAiV2FsbGV0RG9uYXRpb25FbmFibGVkIiwKICAgICAgICAiVmFsdWUiOiAiMCIsCiAgICAgICAgIlR5cGUiOiAiRFdvcmQiLAogICAgICAgICJPcmlnaW5hbFZhbHVlIjogIjxSZW1vdmVFbnRyeT4iCiAgICAgIH0sCiAgICAgIHsKICAgICAgICAiUGF0aCI6ICJIS0xNOlxcU09GVFdBUkVcXFBvbGljaWVzXFxNaWNyb3NvZnRcXEVkZ2UiLAogICAgICAgICJOYW1lIjogIkRlZmF1bHRCcm93c2VyU2V0dGluZ3NDYW1wYWlnbkVuYWJsZWQiLAogICAgICAgICJWYWx1ZSI6ICIwIiwKICAgICAgICAiVHlwZSI6ICJEV29yZCIsCiAgICAgICAgIk9yaWdpbmFsVmFsdWUiOiAiPFJlbW92ZUVudHJ5PiIKICAgICAgfQogICAgXSwKICAgICJsaW5rIjogImh0dHBzOi8vd2ludXRpbC5jaHJpc3RpdHVzLmNvbS9kZXYvdHdlYWtzL3otLWFkdmFuY2VkLXR3ZWFrcy0tLWNhdXRpb24vZWRnZWRlYmxvYXQiCiAgfSwKICAiV1BGVHdlYWtzQ29uc3VtZXJGZWF0dXJlcyI6IHsKICAgICJDb250ZW50IjogIua2iOi0ueiAheWKn+iDvSAtIOemgeeUqCIsCiAgICAiRGVzY3JpcHRpb24iOiAi5YGc5q2i5o6o5bm/5bqU55So5a6J6KOF5bm25YeP5bCRIE1pY3Jvc29mdCBTdG9yZSDlhoXlrrnnmoTlupTnlKjlu7rorq7jgIIiLAogICAgImNhdGVnb3J5IjogIuWfuuacrOS8mOWMliIsCiAgICAicGFuZWwiOiAiMSIsCiAgICAicmVnaXN0cnkiOiBbCiAgICAgIHsKICAgICAgICAiUGF0aCI6ICJIS0xNOlxcU09GVFdBUkVcXFBvbGljaWVzXFxNaWNyb3NvZnRcXFdpbmRvd3NcXENsb3VkQ29udGVudCIsCiAgICAgICAgIk5hbWUiOiAiRGlzYWJsZVdpbmRvd3NDb25zdW1lckZlYXR1cmVzIiwKICAgICAgICAiVmFsdWUiOiAiMSIsCiAgICAgICAgIlR5cGUiOiAiRFdvcmQiLAogICAgICAgICJPcmlnaW5hbFZhbHVlIjogIjxSZW1vdmVFbnRyeT4iCiAgICAgIH0KICAgIF0sCiAgICAibGluayI6ICJodHRwczovL3dpbnV0aWwuY2hyaXN0aXR1cy5jb20vZGV2L3R3ZWFrcy9lc3NlbnRpYWwtdHdlYWtzL2NvbnN1bWVyZmVhdHVyZXMiCiAgfSwKICAiV1BGVHdlYWtzVGVsZW1ldHJ5IjogewogICAgIkNvbnRlbnQiOiAi6YGl5rWLIC0g56aB55SoIiwKICAgICJEZXNjcmlwdGlvbiI6ICLnpoHnlKggTWljcm9zb2Z0IOmBpea1i+OAgiIsCiAgICAiY2F0ZWdvcnkiOiAi5Z+65pys5LyY5YyWIiwKICAgICJwYW5lbCI6ICIxIiwKICAgICJyZWdpc3RyeSI6IFsKICAgICAgewogICAgICAgICJQYXRoIjogIkhLQ1U6XFxTb2Z0d2FyZVxcTWljcm9zb2Z0XFxXaW5kb3dzXFxDdXJyZW50VmVyc2lvblxcQWR2ZXJ0aXNpbmdJbmZvIiwKICAgICAgICAiTmFtZSI6ICJFbmFibGVkIiwKICAgICAgICAiVmFsdWUiOiAiMCIsCiAgICAgICAgIlR5cGUiOiAiRFdvcmQiLAogICAgICAgICJPcmlnaW5hbFZhbHVlIjogIjxSZW1vdmVFbnRyeT4iCiAgICAgIH0sCiAgICAgIHsKICAgICAgICAiUGF0aCI6ICJIS0NVOlxcU29mdHdhcmVcXE1pY3Jvc29mdFxcV2luZG93c1xcQ3VycmVudFZlcnNpb25cXFByaXZhY3kiLAogICAgICAgICJOYW1lIjogIlRhaWxvcmVkRXhwZXJpZW5jZXNXaXRoRGlhZ25vc3RpY0RhdGFFbmFibGVkIiwKICAgICAgICAiVmFsdWUiOiAiMCIsCiAgICAgICAgIlR5cGUiOiAiRFdvcmQiLAogICAgICAgICJPcmlnaW5hbFZhbHVlIjogIjxSZW1vdmVFbnRyeT4iCiAgICAgIH0sCiAgICAgIHsKICAgICAgICAiUGF0aCI6ICJIS0NVOlxcU29mdHdhcmVcXE1pY3Jvc29mdFxcU3BlZWNoX09uZUNvcmVcXFNldHRpbmdzXFxPbmxpbmVTcGVlY2hQcml2YWN5IiwKICAgICAgICAiTmFtZSI6ICJIYXNBY2NlcHRlZCIsCiAgICAgICAgIlZhbHVlIjogIjAiLAogICAgICAgICJUeXBlIjogIkRXb3JkIiwKICAgICAgICAiT3JpZ2luYWxWYWx1ZSI6ICI8UmVtb3ZlRW50cnk+IgogICAgICB9LAogICAgICB7CiAgICAgICAgIlBhdGgiOiAiSEtDVTpcXFNvZnR3YXJlXFxNaWNyb3NvZnRcXElucHV0XFxUSVBDIiwKICAgICAgICAiTmFtZSI6ICJFbmFibGVkIiwKICAgICAgICAiVmFsdWUiOiAiMCIsCiAgICAgICAgIlR5cGUiOiAiRFdvcmQiLAogICAgICAgICJPcmlnaW5hbFZhbHVlIjogIjxSZW1vdmVFbnRyeT4iCiAgICAgIH0sCiAgICAgIHsKICAgICAgICAiUGF0aCI6ICJIS0NVOlxcU29mdHdhcmVcXE1pY3Jvc29mdFxcSW5wdXRQZXJzb25hbGl6YXRpb24iLAogICAgICAgICJOYW1lIjogIlJlc3RyaWN0SW1wbGljaXRJbmtDb2xsZWN0aW9uIiwKICAgICAgICAiVmFsdWUiOiAiMSIsCiAgICAgICAgIlR5cGUiOiAiRFdvcmQiLAogICAgICAgICJPcmlnaW5hbFZhbHVlIjogIjxSZW1vdmVFbnRyeT4iCiAgICAgIH0sCiAgICAgIHsKICAgICAgICAiUGF0aCI6ICJIS0NVOlxcU29mdHdhcmVcXE1pY3Jvc29mdFxcSW5wdXRQZXJzb25hbGl6YXRpb24iLAogICAgICAgICJOYW1lIjogIlJlc3RyaWN0SW1wbGljaXRUZXh0Q29sbGVjdGlvbiIsCiAgICAgICAgIlZhbHVlIjogIjEiLAogICAgICAgICJUeXBlIjogIkRXb3JkIiwKICAgICAgICAiT3JpZ2luYWxWYWx1ZSI6ICI8UmVtb3ZlRW50cnk+IgogICAgICB9LAogICAgICB7CiAgICAgICAgIlBhdGgiOiAiSEtDVTpcXFNvZnR3YXJlXFxNaWNyb3NvZnRcXElucHV0UGVyc29uYWxpemF0aW9uXFxUcmFpbmVkRGF0YVN0b3JlIiwKICAgICAgICAiTmFtZSI6ICJIYXJ2ZXN0Q29udGFjdHMiLAogICAgICAgICJWYWx1ZSI6ICIwIiwKICAgICAgICAiVHlwZSI6ICJEV29yZCIsCiAgICAgICAgIk9yaWdpbmFsVmFsdWUiOiAiPFJlbW92ZUVudHJ5PiIKICAgICAgfSwKICAgICAgewogICAgICAgICJQYXRoIjogIkhLQ1U6XFxTb2Z0d2FyZVxcTWljcm9zb2Z0XFxQZXJzb25hbGl6YXRpb25cXFNldHRpbmdzIiwKICAgICAgICAiTmFtZSI6ICJBY2NlcHRlZFByaXZhY3lQb2xpY3kiLAogICAgICAgICJWYWx1ZSI6ICIwIiwKICAgICAgICAiVHlwZSI6ICJEV29yZCIsCiAgICAgICAgIk9yaWdpbmFsVmFsdWUiOiAiPFJlbW92ZUVudHJ5PiIKICAgICAgfSwKICAgICAgewogICAgICAgICJQYXRoIjogIkhLTE06XFxTT0ZUV0FSRVxcTWljcm9zb2Z0XFxXaW5kb3dzXFxDdXJyZW50VmVyc2lvblxcUG9saWNpZXNcXERhdGFDb2xsZWN0aW9uIiwKICAgICAgICAiTmFtZSI6ICJBbGxvd1RlbGVtZXRyeSIsCiAgICAgICAgIlZhbHVlIjogIjAiLAogICAgICAgICJUeXBlIjogIkRXb3JkIiwKICAgICAgICAiT3JpZ2luYWxWYWx1ZSI6ICI8UmVtb3ZlRW50cnk+IgogICAgICB9LAogICAgICB7CiAgICAgICAgIlBhdGgiOiAiSEtDVTpcXFNvZnR3YXJlXFxNaWNyb3NvZnRcXFdpbmRvd3NcXEN1cnJlbnRWZXJzaW9uXFxFeHBsb3JlclxcQWR2YW5jZWQiLAogICAgICAgICJOYW1lIjogIlN0YXJ0X1RyYWNrUHJvZ3MiLAogICAgICAgICJWYWx1ZSI6ICIwIiwKICAgICAgICAiVHlwZSI6ICJEV29yZCIsCiAgICAgICAgIk9yaWdpbmFsVmFsdWUiOiAiPFJlbW92ZUVudHJ5PiIKICAgICAgfSwKICAgICAgewogICAgICAgICJQYXRoIjogIkhLTE06XFxTT0ZUV0FSRVxcUG9saWNpZXNcXE1pY3Jvc29mdFxcV2luZG93c1xcU3lzdGVtIiwKICAgICAgICAiTmFtZSI6ICJQdWJsaXNoVXNlckFjdGl2aXRpZXMiLAogICAgICAgICJWYWx1ZSI6ICIwIiwKICAgICAgICAiVHlwZSI6ICJEV29yZCIsCiAgICAgICAgIk9yaWdpbmFsVmFsdWUiOiAiPFJlbW92ZUVudHJ5PiIKICAgICAgfSwKICAgICAgewogICAgICAgICJQYXRoIjogIkhLQ1U6XFxTb2Z0d2FyZVxcTWljcm9zb2Z0XFxTaXVmXFxSdWxlcyIsCiAgICAgICAgIk5hbWUiOiAiTnVtYmVyT2ZTSVVGSW5QZXJpb2QiLAogICAgICAgICJWYWx1ZSI6ICIwIiwKICAgICAgICAiVHlwZSI6ICJEV29yZCIsCiAgICAgICAgIk9yaWdpbmFsVmFsdWUiOiAiPFJlbW92ZUVudHJ5PiIKICAgICAgfQogICAgXSwKICAgICJJbnZva2VTY3JpcHQiOiBbCiAgICAgICIgICAgICAjIERpc2FibGUgRGVmZW5kZXIgQXV0byBTYW1wbGUgU3VibWlzc2lvbiAgICAgIFNldC1NcFByZWZlcmVuY2UgLVN1Ym1pdFNhbXBsZXNDb25zZW50IDIgICAgICAjIERpc2FibGUgKENvbm5lY3RlZCBVc2VyIEV4cGVyaWVuY2VzIGFuZCBUZWxlbWV0cnkpIFNlcnZpY2UgICAgICBTZXQtU2VydmljZSAtTmFtZSBkaWFndHJhY2sgLVN0YXJ0dXBUeXBlIERpc2FibGVkICAgICAgIyBEaXNhYmxlIChXaW5kb3dzIEVycm9yIFJlcG9ydGluZyBNYW5hZ2VyKSBTZXJ2aWNlICAgICAgU2V0LVNlcnZpY2UgLU5hbWUgd2VybWdyIC1TdGFydHVwVHlwZSBEaXNhYmxlZCAgICAgICMgRGlzYWJsZSBQb3dlclNoZWxsIDcgdGVsZW1ldHJ5ICAgICAgW0Vudmlyb25tZW50XTo6U2V0RW52aXJvbm1lbnRWYXJpYWJsZSgnUE9XRVJTSEVMTF9URUxFTUVUUllfT1BUT1VUJywgJzEnLCAnTWFjaGluZScpICAgICAgUmVtb3ZlLUl0ZW1Qcm9wZXJ0eSAtUGF0aCBcIkhLQ1U6XFxTb2Z0d2FyZVxcTWljcm9zb2Z0XFxTaXVmXFxSdWxlc1wiIC1OYW1lIFBlcmlvZEluTmFub1NlY29uZHMgICAgICAiCiAgICBdLAogICAgIlVuZG9TY3JpcHQiOiBbCiAgICAgICIgICAgICAjIEVuYWJsZSBEZWZlbmRlciBBdXRvIFNhbXBsZSBTdWJtaXNzaW9uICAgICAgU2V0LU1wUHJlZmVyZW5jZSAtU3VibWl0U2FtcGxlc0NvbnNlbnQgMSAgICAgICMgRW5hYmxlIChDb25uZWN0ZWQgVXNlciBFeHBlcmllbmNlcyBhbmQgVGVsZW1ldHJ5KSBTZXJ2aWNlICAgICAgU2V0LVNlcnZpY2UgLU5hbWUgZGlhZ3RyYWNrIC1TdGFydHVwVHlwZSBBdXRvbWF0aWMgICAgICAjIEVuYWJsZSAoV2luZG93cyBFcnJvciBSZXBvcnRpbmcgTWFuYWdlcikgU2VydmljZSAgICAgIFNldC1TZXJ2aWNlIC1OYW1lIHdlcm1nciAtU3RhcnR1cFR5cGUgQXV0b21hdGljICAgICAgIyBFbmFibGUgUG93ZXJTaGVsbCA3IHRlbGVtZXRyeSAgICAgIFtFbnZpcm9ubWVudF06OlNldEVudmlyb25tZW50VmFyaWFibGUoJ1BPV0VSU0hFTExfVEVMRU1FVFJZX09QVE9VVCcsICcnLCAnTWFjaGluZScpICAgICAgIgogICAgXSwKICAgICJsaW5rIjogImh0dHBzOi8vd2ludXRpbC5jaHJpc3RpdHVzLmNvbS9kZXYvdHdlYWtzL2Vzc2VudGlhbC10d2Vha3MvdGVsZW1ldHJ5IgogIH0sCiAgIldQRlR3ZWFrc0RlbGl2ZXJ5T3B0aW1pemF0aW9uIjogewogICAgIkNvbnRlbnQiOiAi5Lyg6YCS5LyY5YyWIC0g56aB55SoIiwKICAgICJEZXNjcmlwdGlvbiI6ICLpmLvmraIgV2luZG93cyDkvb/nlKjmgqjnmoTluKblrr3lkJHlhbbku5bnlLXohJHkuIrkvKDmm7TmlrDjgIIiLAogICAgImNhdGVnb3J5IjogIuWfuuacrOS8mOWMliIsCiAgICAicGFuZWwiOiAiMSIsCiAgICAicmVnaXN0cnkiOiBbCiAgICAgIHsKICAgICAgICAiUGF0aCI6ICJIS0xNOlxcU09GVFdBUkVcXFBvbGljaWVzXFxNaWNyb3NvZnRcXFdpbmRvd3NcXERlbGl2ZXJ5T3B0aW1pemF0aW9uIiwKICAgICAgICAiTmFtZSI6ICJET0Rvd25sb2FkTW9kZSIsCiAgICAgICAgIlZhbHVlIjogIjAiLAogICAgICAgICJUeXBlIjogIkRXb3JkIiwKICAgICAgICAiT3JpZ2luYWxWYWx1ZSI6ICI8UmVtb3ZlRW50cnk+IgogICAgICB9CiAgICBdLAogICAgImxpbmsiOiAiaHR0cHM6Ly93aW51dGlsLmNocmlzdGl0dXMuY29tL2Rldi90d2Vha3MvZXNzZW50aWFsLXR3ZWFrcy9kZWxpdmVyeW9wdGltaXphdGlvbiIKICB9LAogICJXUEZUd2Vha3NSZW1vdmVFZGdlIjogewogICAgIkNvbnRlbnQiOiAiTWljcm9zb2Z0IEVkZ2UgLSDnp7vpmaQiLAogICAgIkRlc2NyaXB0aW9uIjogIumAmui/h+WIm+W7uuiZmuaLnyBNaWNyb3NvZnRFZGdlLmV4ZSDmlofku7bop6PplIHlrpjmlrnljbjovb3nqIvluo/vvIzlrp7njrDns7vnu5/nuqfnp7vpmaQgTWljcm9zb2Z0IEVkZ2UiLAogICAgImNhdGVnb3J5IjogIumrmOe6p+S8mOWMliAtIOiwqOaFjuaTjeS9nCIsCiAgICAicGFuZWwiOiAiMSIsCiAgICAiSW52b2tlU2NyaXB0IjogWwogICAgICAiICAgICAgJFBhdGggPSBSZXNvbHZlLVBhdGggLVBhdGggXCIkRW52OlByb2dyYW1GaWxlcyAoeDg2KVxcTWljcm9zb2Z0XFxFZGdlXFxBcHBsaWNhdGlvblxcKlxcSW5zdGFsbGVyXFxzZXR1cC5leGVcIiB8IFNlbGVjdC1PYmplY3QgLUxhc3QgMSAgICAgIGlmIChUZXN0LVBhdGggJFBhdGgpIHsgICAgICAgICAgTmV3LUl0ZW0gLVBhdGggXCIkRW52OlN5c3RlbVJvb3RcXFN5c3RlbUFwcHNcXE1pY3Jvc29mdC5NaWNyb3NvZnRFZGdlXzh3ZWt5YjNkOGJid2VcXE1pY3Jvc29mdEVkZ2UuZXhlXCIgLUZvcmNlICAgICAgICAgIFN0YXJ0LVByb2Nlc3MgLUZpbGVQYXRoICRQYXRoIC1Bcmd1bWVudExpc3QgXCItLXVuaW5zdGFsbCAtLXN5c3RlbS1sZXZlbCAtLWZvcmNlLXVuaW5zdGFsbCAtLWRlbGV0ZS1wcm9maWxlXCIgLVdhaXQgICAgICAgICAgV3JpdGUtSG9zdCBcIk1pY3Jvc29mdCBFZGdlIHdhcyByZW1vdmVkXCIgICAgICB9IGVsc2UgeyAgICAgICAgICBXcml0ZS1Ib3N0IFwiTWljcm9zb2Z0IEVkZ2UgaXMgbm90IGluc3RhbGxlZFwiICAgICAgfSAgICAgICIKICAgIF0sCiAgICAiVW5kb1NjcmlwdCI6IFsKICAgICAgIiAgICAgIFdyaXRlLUhvc3QgXCJJbnN0YWxsaW5nIE1pY3Jvc29mdCBFZGdlLi4uXCIgICAgICB3aW5nZXQgaW5zdGFsbCBNaWNyb3NvZnQuRWRnZSAtLXNvdXJjZSB3aW5nZXQgICAgICAiCiAgICBdLAogICAgImxpbmsiOiAiaHR0cHM6Ly93aW51dGlsLmNocmlzdGl0dXMuY29tL2Rldi90d2Vha3Mvei0tYWR2YW5jZWQtdHdlYWtzLS0tY2F1dGlvbi9yZW1vdmVlZGdlIgogIH0sCiAgIldQRlR3ZWFrc0Rpc2FibGVCaXRMb2NrZXIiOiB7CiAgICAiQ29udGVudCI6ICJCaXRMb2NrZXIgLSDnpoHnlKgiLAogICAgIkRlc2NyaXB0aW9uIjogIuemgeeUqCBCaXRMb2NrZXLjgIIiLAogICAgImNhdGVnb3J5IjogIuWfuuacrOS8mOWMliIsCiAgICAicGFuZWwiOiAiMSIsCiAgICAiSW52b2tlU2NyaXB0IjogWwogICAgICAiRGlzYWJsZS1CaXRMb2NrZXIgLU1vdW50UG9pbnQgJEVudjpTeXN0ZW1Ecml2ZSIKICAgIF0sCiAgICAiVW5kb1NjcmlwdCI6IFsKICAgICAgIkVuYWJsZS1CaXRMb2NrZXIgLU1vdW50UG9pbnQgJEVudjpTeXN0ZW1Ecml2ZSIKICAgIF0sCiAgICAibGluayI6ICJodHRwczovL3dpbnV0aWwuY2hyaXN0aXR1cy5jb20vZGV2L3R3ZWFrcy9lc3NlbnRpYWwtdHdlYWtzL2Rpc2FibGViaXRsb2NrZXIiCiAgfSwKICAiV1BGVHdlYWtzVVRDIjogewogICAgIkNvbnRlbnQiOiAi5pel5pyf5ZKM5pe26Ze0IC0g6K6+572u5Li6IFVUQyIsCiAgICAiRGVzY3JpcHRpb24iOiAi5a+55Y+M57O757uf5ZCv5Yqo55qE6K6h566X5py66Iez5YWz6YeN6KaB77yM5L+u5aSN5LiOIExpbnV4IOezu+e7n+eahOaXtumXtOWQjOatpemXrumimOOAgiIsCiAgICAiY2F0ZWdvcnkiOiAi6auY57qn5LyY5YyWIC0g6LCo5oWO5pON5L2cIiwKICAgICJwYW5lbCI6ICIxIiwKICAgICJyZWdpc3RyeSI6IFsKICAgICAgewogICAgICAgICJQYXRoIjogIkhLTE06XFxTWVNURU1cXEN1cnJlbnRDb250cm9sU2V0XFxDb250cm9sXFxUaW1lWm9uZUluZm9ybWF0aW9uIiwKICAgICAgICAiTmFtZSI6ICJSZWFsVGltZUlzVW5pdmVyc2FsIiwKICAgICAgICAiVmFsdWUiOiAiMSIsCiAgICAgICAgIlR5cGUiOiAiUVdvcmQiLAogICAgICAgICJPcmlnaW5hbFZhbHVlIjogIjAiCiAgICAgIH0KICAgIF0sCiAgICAibGluayI6ICJodHRwczovL3dpbnV0aWwuY2hyaXN0aXR1cy5jb20vZGV2L3R3ZWFrcy96LS1hZHZhbmNlZC10d2Vha3MtLS1jYXV0aW9uL3V0YyIKICB9LAogICJXUEZUd2Vha3NSZW1vdmVPbmVEcml2ZSI6IHsKICAgICJDb250ZW50IjogIk1pY3Jvc29mdCBPbmVEcml2ZSAtIOenu+mZpCIsCiAgICAiRGVzY3JpcHRpb24iOiAi5ouS57ud5Yig6ZmkIE9uZURyaXZlIOeUqOaIt+aWh+S7tueahOadg+mZkO+8jOWNuOi9veWQjuaBouWkjeWOn+Wni+adg+mZkOOAgiIsCiAgICAiY2F0ZWdvcnkiOiAi6auY57qn5LyY5YyWIC0g6LCo5oWO5pON5L2cIiwKICAgICJwYW5lbCI6ICIxIiwKICAgICJJbnZva2VTY3JpcHQiOiBbCiAgICAgICIgICAgICAjIERlbnkgcGVybWlzc2lvbiB0byByZW1vdmUgT25lRHJpdmUgZm9sZGVyICAgICAgaWNhY2xzICRFbnY6T25lRHJpdmUgL2RlbnkgXCJBZG1pbmlzdHJhdG9yczooRCxEQylcIiAgICAgIFdyaXRlLUhvc3QgXCJVbmluc3RhbGxpbmcgT25lRHJpdmUuLi5cIiAgICAgIFN0YXJ0LVByb2Nlc3MgLUZpbGVQYXRoIChKb2luLVBhdGggJEVudjpTeXN0ZW1Sb290IFwiU3lzdGVtMzJcXE9uZURyaXZlU2V0dXAuZXhlXCIpIC1Bcmd1bWVudExpc3QgJy91bmluc3RhbGwnIC1XYWl0ICAgICAgIyBTb21lIG9mIE9uZURyaXZlIGZpbGVzIHVzZSBleHBsb3JlciwgYW5kIE9uZURyaXZlIHVzZXMgRmlsZUNvQXV0aCAgICAgIFdyaXRlLUhvc3QgXCJSZW1vdmluZyBsZWZ0b3ZlciBPbmVEcml2ZSBGaWxlcy4uLlwiICAgICAgU3RvcC1Qcm9jZXNzIC1OYW1lIEZpbGVDb0F1dGgsRXhwbG9yZXIgICAgICBSZW1vdmUtSXRlbSBcIiRFbnY6TG9jYWxBcHBEYXRhXFxNaWNyb3NvZnRcXE9uZURyaXZlXCIgLVJlY3Vyc2UgLUZvcmNlICAgICAgUmVtb3ZlLUl0ZW0gXCIkRW52OlByb2dyYW1EYXRhXFxNaWNyb3NvZnQgT25lRHJpdmVcIiAtUmVjdXJzZSAtRm9yY2UgICAgICAjIEdyYW50IGJhY2sgcGVybWlzc2lvbiB0byBhY2Nlc3MgT25lRHJpdmUgZm9sZGVyICAgICAgaWNhY2xzICRFbnY6T25lRHJpdmUgL2dyYW50IFwiQWRtaW5pc3RyYXRvcnM6KEQsREMpXCIgICAgICBpZiAoLW5vdCAoR2V0LUNoaWxkSXRlbSAtUGF0aCAkRW52Ok9uZURyaXZlKSkgeyAgICAgICAgICBSZW1vdmUtSXRlbSAtUGF0aCAkRW52Ok9uZURyaXZlIC1SZWN1cnNlICAgICAgICAgIFtFbnZpcm9ubWVudF06OlNldEVudmlyb25tZW50VmFyaWFibGUoJ09uZURyaXZlJywgJG51bGwsICdVc2VyJykgICAgICB9ICAgICAgIyBEaXNhYmxlIE9uZVN5bmNTdmMgICAgICBTZXQtU2VydmljZSAtTmFtZSBPbmVTeW5jU3ZjIC1TdGFydHVwVHlwZSBEaXNhYmxlZCAgICAgICIKICAgIF0sCiAgICAiVW5kb1NjcmlwdCI6IFsKICAgICAgIiAgICAgIFdyaXRlLUhvc3QgXCJJbnN0YWxsaW5nIE9uZURyaXZlXCIgICAgICB3aW5nZXQgaW5zdGFsbCBNaWNyb3NvZnQuT25lZHJpdmUgLS1zb3VyY2Ugd2luZ2V0ICAgICAgIyBFbmFibGVkIE9uZVN5bmNTdmMgICAgICBTZXQtU2VydmljZSAtTmFtZSBPbmVTeW5jU3ZjIC1TdGFydHVwVHlwZSBBdXRvbWF0aWMgICAgICAiCiAgICBdLAogICAgImxpbmsiOiAiaHR0cHM6Ly93aW51dGlsLmNocmlzdGl0dXMuY29tL2Rldi90d2Vha3Mvei0tYWR2YW5jZWQtdHdlYWtzLS0tY2F1dGlvbi9yZW1vdmVvbmVkcml2ZSIKICB9LAogICJXUEZUd2Vha3NSZW1vdmVIb21lQW5kR2FsbGVyeSI6IHsKICAgICJDb250ZW50IjogIuaWh+S7tui1hOa6kOeuoeeQhuWZqOS4u+mhteWSjOWbvuW6kyAtIOemgeeUqCIsCiAgICAiRGVzY3JpcHRpb24iOiAi5LuO6LWE5rqQ566h55CG5Zmo5Lit56e76Zmk5Li76aG15ZKM5Zu+5bqT77yM5bm25bCG5q2k55S16ISR6K6+5Li66buY6K6k44CCIiwKICAgICJjYXRlZ29yeSI6ICLpq5jnuqfkvJjljJYgLSDosKjmhY7mk43kvZwiLAogICAgInBhbmVsIjogIjEiLAogICAgInJlZ2lzdHJ5IjogWwogICAgICB7CiAgICAgICAgIlBhdGgiOiAiSEtDVTpcXFNvZnR3YXJlXFxDbGFzc2VzXFxDTFNJRFxce2Y4NzQzMTBlLWI2YjctNDdkYy1iYzg0LWI5ZTZiMzhmNTkwM30iLAogICAgICAgICJOYW1lIjogIlN5c3RlbS5Jc1Bpbm5lZFRvTmFtZVNwYWNlVHJlZSIsCiAgICAgICAgIlZhbHVlIjogIjAiLAogICAgICAgICJUeXBlIjogIkRXb3JkIiwKICAgICAgICAiT3JpZ2luYWxWYWx1ZSI6ICI8UmVtb3ZlRW50cnk+IgogICAgICB9LAogICAgICB7CiAgICAgICAgIlBhdGgiOiAiSEtDVTpcXFNvZnR3YXJlXFxDbGFzc2VzXFxDTFNJRFxce2U4ODg2NWVhLTBlMWMtNGUyMC05YWE2LWVkY2QwMjEyYzg3Y30iLAogICAgICAgICJOYW1lIjogIlN5c3RlbS5Jc1Bpbm5lZFRvTmFtZVNwYWNlVHJlZSIsCiAgICAgICAgIlZhbHVlIjogIjAiLAogICAgICAgICJUeXBlIjogIkRXb3JkIiwKICAgICAgICAiT3JpZ2luYWxWYWx1ZSI6ICI8UmVtb3ZlRW50cnk+IgogICAgICB9LAogICAgICB7CiAgICAgICAgIlBhdGgiOiAiSEtDVTpcXFNvZnR3YXJlXFxNaWNyb3NvZnRcXFdpbmRvd3NcXEN1cnJlbnRWZXJzaW9uXFxFeHBsb3JlclxcQWR2YW5jZWQiLAogICAgICAgICJOYW1lIjogIkxhdW5jaFRvIiwKICAgICAgICAiVmFsdWUiOiAiMSIsCiAgICAgICAgIlR5cGUiOiAiRFdvcmQiLAogICAgICAgICJPcmlnaW5hbFZhbHVlIjogIjxSZW1vdmVFbnRyeT4iCiAgICAgIH0KICAgIF0sCiAgICAibGluayI6ICJodHRwczovL3dpbnV0aWwuY2hyaXN0aXR1cy5jb20vZGV2L3R3ZWFrcy96LS1hZHZhbmNlZC10d2Vha3MtLS1jYXV0aW9uL3JlbW92ZWhvbWVhbmRnYWxsZXJ5IgogIH0sCiAgIldQRlR3ZWFrc0Rpc3BsYXkiOiB7CiAgICAiQ29udGVudCI6ICLop4bop4nmlYjmnpwgLSDorr7nva7kuLrmnIDkvbPmgKfog70iLAogICAgIkRlc2NyaXB0aW9uIjogIuWwhuezu+e7n+WBj+Wlveiuvue9ruS4uuaAp+iDveaooeW8j+OAgiIsCiAgICAiY2F0ZWdvcnkiOiAi6auY57qn5LyY5YyWIC0g6LCo5oWO5pON5L2cIiwKICAgICJwYW5lbCI6ICIxIiwKICAgICJyZWdpc3RyeSI6IFsKICAgICAgewogICAgICAgICJQYXRoIjogIkhLQ1U6XFxDb250cm9sIFBhbmVsXFxEZXNrdG9wIiwKICAgICAgICAiTmFtZSI6ICJEcmFnRnVsbFdpbmRvd3MiLAogICAgICAgICJWYWx1ZSI6ICIwIiwKICAgICAgICAiVHlwZSI6ICJTdHJpbmciLAogICAgICAgICJPcmlnaW5hbFZhbHVlIjogIjEiCiAgICAgIH0sCiAgICAgIHsKICAgICAgICAiUGF0aCI6ICJIS0NVOlxcQ29udHJvbCBQYW5lbFxcRGVza3RvcCIsCiAgICAgICAgIk5hbWUiOiAiTWVudVNob3dEZWxheSIsCiAgICAgICAgIlZhbHVlIjogIjIwMCIsCiAgICAgICAgIlR5cGUiOiAiU3RyaW5nIiwKICAgICAgICAiT3JpZ2luYWxWYWx1ZSI6ICI0MDAiCiAgICAgIH0sCiAgICAgIHsKICAgICAgICAiUGF0aCI6ICJIS0NVOlxcQ29udHJvbCBQYW5lbFxcRGVza3RvcFxcV2luZG93TWV0cmljcyIsCiAgICAgICAgIk5hbWUiOiAiTWluQW5pbWF0ZSIsCiAgICAgICAgIlZhbHVlIjogIjAiLAogICAgICAgICJUeXBlIjogIlN0cmluZyIsCiAgICAgICAgIk9yaWdpbmFsVmFsdWUiOiAiMSIKICAgICAgfSwKICAgICAgewogICAgICAgICJQYXRoIjogIkhLQ1U6XFxDb250cm9sIFBhbmVsXFxLZXlib2FyZCIsCiAgICAgICAgIk5hbWUiOiAiS2V5Ym9hcmREZWxheSIsCiAgICAgICAgIlZhbHVlIjogIjAiLAogICAgICAgICJUeXBlIjogIkRXb3JkIiwKICAgICAgICAiT3JpZ2luYWxWYWx1ZSI6ICIxIgogICAgICB9LAogICAgICB7CiAgICAgICAgIlBhdGgiOiAiSEtDVTpcXFNvZnR3YXJlXFxNaWNyb3NvZnRcXFdpbmRvd3NcXEN1cnJlbnRWZXJzaW9uXFxFeHBsb3JlclxcQWR2YW5jZWQiLAogICAgICAgICJOYW1lIjogIkxpc3R2aWV3QWxwaGFTZWxlY3QiLAogICAgICAgICJWYWx1ZSI6ICIwIiwKICAgICAgICAiVHlwZSI6ICJEV29yZCIsCiAgICAgICAgIk9yaWdpbmFsVmFsdWUiOiAiMSIKICAgICAgfSwKICAgICAgewogICAgICAgICJQYXRoIjogIkhLQ1U6XFxTb2Z0d2FyZVxcTWljcm9zb2Z0XFxXaW5kb3dzXFxDdXJyZW50VmVyc2lvblxcRXhwbG9yZXJcXEFkdmFuY2VkIiwKICAgICAgICAiTmFtZSI6ICJMaXN0dmlld1NoYWRvdyIsCiAgICAgICAgIlZhbHVlIjogIjAiLAogICAgICAgICJUeXBlIjogIkRXb3JkIiwKICAgICAgICAiT3JpZ2luYWxWYWx1ZSI6ICIxIgogICAgICB9LAogICAgICB7CiAgICAgICAgIlBhdGgiOiAiSEtDVTpcXFNvZnR3YXJlXFxNaWNyb3NvZnRcXFdpbmRvd3NcXEN1cnJlbnRWZXJzaW9uXFxFeHBsb3JlclxcQWR2YW5jZWQiLAogICAgICAgICJOYW1lIjogIlRhc2tiYXJBbmltYXRpb25zIiwKICAgICAgICAiVmFsdWUiOiAiMCIsCiAgICAgICAgIlR5cGUiOiAiRFdvcmQiLAogICAgICAgICJPcmlnaW5hbFZhbHVlIjogIjEiCiAgICAgIH0sCiAgICAgIHsKICAgICAgICAiUGF0aCI6ICJIS0NVOlxcU29mdHdhcmVcXE1pY3Jvc29mdFxcV2luZG93c1xcQ3VycmVudFZlcnNpb25cXEV4cGxvcmVyXFxWaXN1YWxFZmZlY3RzIiwKICAgICAgICAiTmFtZSI6ICJWaXN1YWxGWFNldHRpbmciLAogICAgICAgICJWYWx1ZSI6ICIzIiwKICAgICAgICAiVHlwZSI6ICJEV29yZCIsCiAgICAgICAgIk9yaWdpbmFsVmFsdWUiOiAiMSIKICAgICAgfSwKICAgICAgewogICAgICAgICJQYXRoIjogIkhLQ1U6XFxTb2Z0d2FyZVxcTWljcm9zb2Z0XFxXaW5kb3dzXFxEV00iLAogICAgICAgICJOYW1lIjogIkVuYWJsZUFlcm9QZWVrIiwKICAgICAgICAiVmFsdWUiOiAiMCIsCiAgICAgICAgIlR5cGUiOiAiRFdvcmQiLAogICAgICAgICJPcmlnaW5hbFZhbHVlIjogIjEiCiAgICAgIH0sCiAgICAgIHsKICAgICAgICAiUGF0aCI6ICJIS0NVOlxcU29mdHdhcmVcXE1pY3Jvc29mdFxcV2luZG93c1xcQ3VycmVudFZlcnNpb25cXEV4cGxvcmVyXFxBZHZhbmNlZCIsCiAgICAgICAgIk5hbWUiOiAiVGFza2Jhck1uIiwKICAgICAgICAiVmFsdWUiOiAiMCIsCiAgICAgICAgIlR5cGUiOiAiRFdvcmQiLAogICAgICAgICJPcmlnaW5hbFZhbHVlIjogIjEiCiAgICAgIH0sCiAgICAgIHsKICAgICAgICAiUGF0aCI6ICJIS0NVOlxcU29mdHdhcmVcXE1pY3Jvc29mdFxcV2luZG93c1xcQ3VycmVudFZlcnNpb25cXEV4cGxvcmVyXFxBZHZhbmNlZCIsCiAgICAgICAgIk5hbWUiOiAiU2hvd1Rhc2tWaWV3QnV0dG9uIiwKICAgICAgICAiVmFsdWUiOiAiMCIsCiAgICAgICAgIlR5cGUiOiAiRFdvcmQiLAogICAgICAgICJPcmlnaW5hbFZhbHVlIjogIjEiCiAgICAgIH0sCiAgICAgIHsKICAgICAgICAiUGF0aCI6ICJIS0NVOlxcU29mdHdhcmVcXE1pY3Jvc29mdFxcV2luZG93c1xcQ3VycmVudFZlcnNpb25cXFNlYXJjaCIsCiAgICAgICAgIk5hbWUiOiAiU2VhcmNoYm94VGFza2Jhck1vZGUiLAogICAgICAgICJWYWx1ZSI6ICIwIiwKICAgICAgICAiVHlwZSI6ICJEV29yZCIsCiAgICAgICAgIk9yaWdpbmFsVmFsdWUiOiAiMSIKICAgICAgfQogICAgXSwKICAgICJJbnZva2VTY3JpcHQiOiBbCiAgICAgICJTZXQtSXRlbVByb3BlcnR5IC1QYXRoIFwiSEtDVTpcXENvbnRyb2wgUGFuZWxcXERlc2t0b3BcIiAtTmFtZSBcIlVzZXJQcmVmZXJlbmNlc01hc2tcIiAtVHlwZSBCaW5hcnkgLVZhbHVlIChbYnl0ZVtdXSgxNDQsMTgsMywxMjgsMTYsMCwwLDApKSIKICAgIF0sCiAgICAiVW5kb1NjcmlwdCI6IFsKICAgICAgIlJlbW92ZS1JdGVtUHJvcGVydHkgLVBhdGggXCJIS0NVOlxcQ29udHJvbCBQYW5lbFxcRGVza3RvcFwiIC1OYW1lIFwiVXNlclByZWZlcmVuY2VzTWFza1wiIgogICAgXSwKICAgICJsaW5rIjogImh0dHBzOi8vd2ludXRpbC5jaHJpc3RpdHVzLmNvbS9kZXYvdHdlYWtzL3otLWFkdmFuY2VkLXR3ZWFrcy0tLWNhdXRpb24vZGlzcGxheSIKICB9LAogICJXUEZUd2Vha3NSZXNlcnZlZFN0b3JhZ2UiOiB7CiAgICAiQ29udGVudCI6ICLnpoHnlKjpooTnlZnlrZjlgqgiLAogICAgIkRlc2NyaXB0aW9uIjogIuemgeeUqCBXaW5kb3dzIOmihOeVmeWtmOWCqO+8iOe6piA3LTEwIEdCIOeUqOS6juabtOaWsOWSjOS4tOaXtuaWh+S7tu+8ieOAguS7heW7uuiuruWwj+WuuemHj+ehrOebmOS9v+eUqCIsCiAgICAiY2F0ZWdvcnkiOiAi6auY57qn5LyY5YyWIC0g6LCo5oWO5pON5L2cIiwKICAgICJwYW5lbCI6ICIxIiwKICAgICJJbnZva2VTY3JpcHQiOiBbCiAgICAgICJESVNNIC9PbmxpbmUgL1NldC1SZXNlcnZlZFN0b3JhZ2VTdGF0ZSAvU3RhdGU6RGlzYWJsZWQiCiAgICBdLAogICAgIlVuZG9TY3JpcHQiOiBbCiAgICAgICJESVNNIC9PbmxpbmUgL1NldC1SZXNlcnZlZFN0b3JhZ2VTdGF0ZSAvU3RhdGU6RW5hYmxlZCIKICAgIF0sCiAgICAibGluayI6ICJodHRwczovL3dpbnV0aWwuY2hyaXN0aXR1cy5jb20vZGV2L3R3ZWFrcy96LS1hZHZhbmNlZC10d2Vha3MtLS1jYXV0aW9uL3Jlc2VydmVkc3RvcmFnZSIKICB9LAogICJXUEZUd2Vha3NSZXN0b3JlUG9pbnQiOiB7CiAgICAiQ29udGVudCI6ICLov5jljp/ngrkgLSDliJvlu7oiLAogICAgIkRlc2NyaXB0aW9uIjogIuWcqOi/kOihjOaXtuWIm+W7uui/mOWOn+eCue+8jOS7peS+v+WcqOmcgOimgeaXtuaBouWkjSBXaW5VdGlsIOeahOS/ruaUueOAgiIsCiAgICAiY2F0ZWdvcnkiOiAi5Z+65pys5LyY5YyWIiwKICAgICJwYW5lbCI6ICIxIiwKICAgICJDaGVja2VkIjogIkZhbHNlIiwKICAgICJyZWdpc3RyeSI6IFsKICAgICAgewogICAgICAgICJQYXRoIjogIkhLTE06XFxTT0ZUV0FSRVxcTWljcm9zb2Z0XFxXaW5kb3dzIE5UXFxDdXJyZW50VmVyc2lvblxcU3lzdGVtUmVzdG9yZSIsCiAgICAgICAgIk5hbWUiOiAiU3lzdGVtUmVzdG9yZVBvaW50Q3JlYXRpb25GcmVxdWVuY3kiLAogICAgICAgICJWYWx1ZSI6ICIwIiwKICAgICAgICAiVHlwZSI6ICJEV29yZCIsCiAgICAgICAgIk9yaWdpbmFsVmFsdWUiOiAiMTQ0MCIKICAgICAgfQogICAgXSwKICAgICJJbnZva2VTY3JpcHQiOiBbCiAgICAgICIgICAgICBpZiAoLW5vdCAoR2V0LUNvbXB1dGVyUmVzdG9yZVBvaW50KSkgeyAgICAgICAgICBFbmFibGUtQ29tcHV0ZXJSZXN0b3JlIC1Ecml2ZSAkRW52OlN5c3RlbURyaXZlICAgICAgfSAgICAgIENoZWNrcG9pbnQtQ29tcHV0ZXIgLURlc2NyaXB0aW9uIFwiU3lzdGVtIFJlc3RvcmUgUG9pbnQgY3JlYXRlZCBieSBXaW5VdGlsXCIgLVJlc3RvcmVQb2ludFR5cGUgTU9ESUZZX1NFVFRJTkdTICAgICAgV3JpdGUtSG9zdCBcIlN5c3RlbSBSZXN0b3JlIFBvaW50IENyZWF0ZWQgU3VjY2Vzc2Z1bGx5XCIgLUZvcmVncm91bmRDb2xvciBHcmVlbiAgICAgICIKICAgIF0sCiAgICAibGluayI6ICJodHRwczovL3dpbnV0aWwuY2hyaXN0aXR1cy5jb20vZGV2L3R3ZWFrcy9lc3NlbnRpYWwtdHdlYWtzL3Jlc3RvcmVwb2ludCIKICB9LAogICJXUEZUd2Vha3NFbmRUYXNrT25UYXNrYmFyIjogewogICAgIkNvbnRlbnQiOiAi5Y+z6ZSu57uT5p2f5Lu75YqhIC0g5ZCv55SoIiwKICAgICJEZXNjcmlwdGlvbiI6ICLlkK/nlKjlj7PplK7ljZXlh7vku7vliqHmoI/nqIvluo/ml7bnu5PmnZ/ku7vliqHnmoTpgInpobnjgIIiLAogICAgImNhdGVnb3J5IjogIuWfuuacrOS8mOWMliIsCiAgICAicGFuZWwiOiAiMSIsCiAgICAicmVnaXN0cnkiOiBbCiAgICAgIHsKICAgICAgICAiUGF0aCI6ICJIS0NVOlxcU29mdHdhcmVcXE1pY3Jvc29mdFxcV2luZG93c1xcQ3VycmVudFZlcnNpb25cXEV4cGxvcmVyXFxBZHZhbmNlZFxcVGFza2JhckRldmVsb3BlclNldHRpbmdzIiwKICAgICAgICAiTmFtZSI6ICJUYXNrYmFyRW5kVGFzayIsCiAgICAgICAgIlZhbHVlIjogIjEiLAogICAgICAgICJUeXBlIjogIkRXb3JkIiwKICAgICAgICAiT3JpZ2luYWxWYWx1ZSI6ICI8UmVtb3ZlRW50cnk+IgogICAgICB9CiAgICBdLAogICAgImxpbmsiOiAiaHR0cHM6Ly93aW51dGlsLmNocmlzdGl0dXMuY29tL2Rldi90d2Vha3MvZXNzZW50aWFsLXR3ZWFrcy9lbmR0YXNrb250YXNrYmFyIgogIH0sCiAgIldQRlR3ZWFrc1N0b3JhZ2UiOiB7CiAgICAiQ29udGVudCI6ICLlrZjlgqjmhJ/nn6UgLSDnpoHnlKgiLAogICAgIkRlc2NyaXB0aW9uIjogIuWtmOWCqOaEn+efpeS8muiHquWKqOWIoOmZpOS4tOaXtuaWh+S7tuOAgiIsCiAgICAiY2F0ZWdvcnkiOiAi6auY57qn5LyY5YyWIC0g6LCo5oWO5pON5L2cIiwKICAgICJwYW5lbCI6ICIxIiwKICAgICJyZWdpc3RyeSI6IFsKICAgICAgewogICAgICAgICJQYXRoIjogIkhLQ1U6XFxTT0ZUV0FSRVxcTWljcm9zb2Z0XFxXaW5kb3dzXFxDdXJyZW50VmVyc2lvblxcU3RvcmFnZVNlbnNlXFxQYXJhbWV0ZXJzXFxTdG9yYWdlUG9saWN5IiwKICAgICAgICAiTmFtZSI6ICIwMSIsCiAgICAgICAgIlZhbHVlIjogIjAiLAogICAgICAgICJUeXBlIjogIkRXb3JkIiwKICAgICAgICAiT3JpZ2luYWxWYWx1ZSI6ICIxIgogICAgICB9CiAgICBdLAogICAgImxpbmsiOiAiaHR0cHM6Ly93aW51dGlsLmNocmlzdGl0dXMuY29tL2Rldi90d2Vha3Mvei0tYWR2YW5jZWQtdHdlYWtzLS0tY2F1dGlvbi9zdG9yYWdlIgogIH0sCiAgIldQRlR3ZWFrc1dpbmRvd3NBSSI6IHsKICAgICJDb250ZW50IjogIldpbmRvd3MgQUkgLSDnpoHnlKjlubbnp7vpmaQiLAogICAgIkRlc2NyaXB0aW9uIjogIuenu+mZpOW5tuemgeeUqOaJgOaciSBBSSDlip/og70v5YyF44CCIiwKICAgICJjYXRlZ29yeSI6ICLpq5jnuqfkvJjljJYgLSDosKjmhY7mk43kvZwiLAogICAgInBhbmVsIjogIjEiLAogICAgInJlZ2lzdHJ5IjogWwogICAgICB7CiAgICAgICAgIlBhdGgiOiAiSEtMTTpcXFNPRlRXQVJFXFxNaWNyb3NvZnRcXFdpbmRvd3NcXEN1cnJlbnRWZXJzaW9uXFxQb2xpY2llc1xcRXhwbG9yZXIiLAogICAgICAgICJOYW1lIjogIlNldHRpbmdzUGFnZVZpc2liaWxpdHkiLAogICAgICAgICJWYWx1ZSI6ICJoaWRlOmFpY29tcG9uZW50cyIsCiAgICAgICAgIlR5cGUiOiAiU3RyaW5nIiwKICAgICAgICAiT3JpZ2luYWxWYWx1ZSI6ICI8UmVtb3ZlRW50cnk+IgogICAgICB9LAogICAgICB7CiAgICAgICAgIlBhdGgiOiAiSEtMTTpcXFNPRlRXQVJFXFxQb2xpY2llc1xcV2luZG93c05vdGVwYWQiLAogICAgICAgICJOYW1lIjogIkRpc2FibGVBSUZlYXR1cmVzIiwKICAgICAgICAiVmFsdWUiOiAiMSIsCiAgICAgICAgIlR5cGUiOiAiRFdvcmQiLAogICAgICAgICJPcmlnaW5hbFZhbHVlIjogIjxSZW1vdmVFbnRyeT4iCiAgICAgIH0KICAgIF0sCiAgICAiSW52b2tlU2NyaXB0IjogWwogICAgICAiICAgICAgJEFwcHggPSAoR2V0LUFwcHhQYWNrYWdlIE1pY3Jvc29mdFdpbmRvd3MuQ2xpZW50LkNvcmVBSSkuUGFja2FnZUZ1bGxOYW1lICAgICAgJFNpZCA9IChHZXQtTG9jYWxVc2VyICRFbnY6VXNlck5hbWUpLlNpZC5WYWx1ZSAgICAgIE5ldy1JdGVtIFwiSEtMTTpcXFNPRlRXQVJFXFxNaWNyb3NvZnRcXFdpbmRvd3NcXEN1cnJlbnRWZXJzaW9uXFxBcHB4XFxBcHB4QWxsVXNlclN0b3JlXFxFbmRPZkxpZmVcXCRTaWRcXCRBcHB4XCIgLUZvcmNlICAgICAgR2V0LUFwcHhQYWNrYWdlIC1BbGxVc2VycyBcIipDb3BpbG90KlwiIHwgUmVtb3ZlLUFwcHhQYWNrYWdlIC1BbGxVc2VycyAgICAgIHdpbmdldCB1bmluc3RhbGwgLWUgLS1uYW1lIFwiQ29waWxvdFwiIC0tc2lsZW50IC0tZm9yY2UgLS1hY2NlcHQtc291cmNlLWFncmVlbWVudHMgMj4kbnVsbCAgICAgIEdldC1BcHB4UGFja2FnZSAtQWxsVXNlcnMgTWljcm9zb2Z0Lk1pY3Jvc29mdE9mZmljZUh1YiB8IFJlbW92ZS1BcHB4UGFja2FnZSAtQWxsVXNlcnMgICAgICBpZiAoJEFwcHgpIHsgICAgICAgICAgUmVtb3ZlLUFwcHhQYWNrYWdlICRBcHB4ICAgICAgfSAgICAgIFNldC1TZXJ2aWNlIC1OYW1lIFdTQUlGYWJyaWNTdmMgLVN0YXJ0dXBUeXBlIERpc2FibGVkICAgICAgRGlzYWJsZS1XaW5kb3dzT3B0aW9uYWxGZWF0dXJlIC1GZWF0dXJlTmFtZSBSZWNhbGwgLU9ubGluZSAtTm9SZXN0YXJ0ICAgICAgV3JpdGUtSG9zdCBcIldpbmRvd3MgQUkgRGlzYWJsZWRcIiAgICAgICIKICAgIF0sCiAgICAibGluayI6ICJodHRwczovL3dpbnV0aWwuY2hyaXN0aXR1cy5jb20vZGV2L3R3ZWFrcy96LS1hZHZhbmNlZC10d2Vha3MtLS1jYXV0aW9uL3dpbmRvd3NhaSIKICB9LAogICJXUEZUd2Vha3NXUEJUIjogewogICAgIkNvbnRlbnQiOiAiV2luZG93cyDlubPlj7Dkuozov5vliLbooaggKFdQQlQpIC0g56aB55SoIiwKICAgICJEZXNjcmlwdGlvbiI6ICLlpoLmnpzlkK/nlKjvvIxXUEJUIOWFgeiuuOiuoeeul+acuuS+m+W6lOWVhuWcqOWQr+WKqOaXtuaJp+ihjOeoi+W6j++8jOWtmOWcqOa9nOWcqOWuieWFqOmjjumZqeOAgiIsCiAgICAiY2F0ZWdvcnkiOiAi5Z+65pys5LyY5YyWIiwKICAgICJwYW5lbCI6ICIxIiwKICAgICJyZWdpc3RyeSI6IFsKICAgICAgewogICAgICAgICJQYXRoIjogIkhLTE06XFxTWVNURU1cXEN1cnJlbnRDb250cm9sU2V0XFxDb250cm9sXFxTZXNzaW9uIE1hbmFnZXIiLAogICAgICAgICJOYW1lIjogIkRpc2FibGVXcGJ0RXhlY3V0aW9uIiwKICAgICAgICAiVmFsdWUiOiAiMSIsCiAgICAgICAgIlR5cGUiOiAiRFdvcmQiLAogICAgICAgICJPcmlnaW5hbFZhbHVlIjogIjxSZW1vdmVFbnRyeT4iCiAgICAgIH0KICAgIF0sCiAgICAibGluayI6ICJodHRwczovL3dpbnV0aWwuY2hyaXN0aXR1cy5jb20vZGV2L3R3ZWFrcy9lc3NlbnRpYWwtdHdlYWtzL3dwYnQiCiAgfSwKICAiV1BGVHdlYWtzUHJldmVudERldmljZU1ldGFkYXRhRnJvbU5ldHdvcmsiOiB7CiAgICAiQ29udGVudCI6ICLpmLvmraLorr7lpIfphY3lpZflupTnlKgiLAogICAgIkRlc2NyaXB0aW9uIjogIumYsuatouaPkuWFpeiuvuWkh+aXtuWuieijhemineWklueahOi9r+S7tuOAguWtmOWcqOa9nOWcqOWuieWFqOmjjumZqeOAgiIsCiAgICAiY2F0ZWdvcnkiOiAi5Z+65pys5LyY5YyWIiwKICAgICJwYW5lbCI6ICIxIiwKICAgICJyZWdpc3RyeSI6IFsKICAgICAgewogICAgICAgICJQYXRoIjogIkhLTE06XFxTT0ZUV0FSRVxcUG9saWNpZXNcXE1pY3Jvc29mdFxcV2luZG93c1xcRGV2aWNlIE1ldGFkYXRhIiwKICAgICAgICAiTmFtZSI6ICJQcmV2ZW50RGV2aWNlTWV0YWRhdGFGcm9tTmV0d29yayIsCiAgICAgICAgIlZhbHVlIjogIjEiLAogICAgICAgICJUeXBlIjogIkRXb3JkIiwKICAgICAgICAiT3JpZ2luYWxWYWx1ZSI6ICI8UmVtb3ZlRW50cnk+IgogICAgICB9CiAgICBdLAogICAgImxpbmsiOiAiaHR0cHM6Ly93aW51dGlsLmNocmlzdGl0dXMuY29tL2Rldi90d2Vha3MvZXNzZW50aWFsLXR3ZWFrcy9wcmV2ZW50ZGV2aWNlbWV0YWRhdGFmcm9tbmV0d29yayIKICB9LAogICJXUEZUd2Vha3NSYXplckJsb2NrIjogewogICAgIkNvbnRlbnQiOiAi6Zu36JuH6L2v5Lu26Ieq5Yqo5a6J6KOFIC0g56aB55SoIiwKICAgICJEZXNjcmlwdGlvbiI6ICLpmLvmraLmiYDmnInpm7fom4fova/ku7bnmoTlronoo4XjgILnoazku7bml6DpnIDku7vkvZXova/ku7bljbPlj6/mraPluLjlt6XkvZzjgIIiLAogICAgImNhdGVnb3J5IjogIumrmOe6p+S8mOWMliAtIOiwqOaFjuaTjeS9nCIsCiAgICAicGFuZWwiOiAiMSIsCiAgICAicmVnaXN0cnkiOiBbCiAgICAgIHsKICAgICAgICAiUGF0aCI6ICJIS0xNOlxcU09GVFdBUkVcXE1pY3Jvc29mdFxcV2luZG93c1xcQ3VycmVudFZlcnNpb25cXERyaXZlclNlYXJjaGluZyIsCiAgICAgICAgIk5hbWUiOiAiU2VhcmNoT3JkZXJDb25maWciLAogICAgICAgICJWYWx1ZSI6ICIwIiwKICAgICAgICAiVHlwZSI6ICJEV29yZCIsCiAgICAgICAgIk9yaWdpbmFsVmFsdWUiOiAiMSIKICAgICAgfSwKICAgICAgewogICAgICAgICJQYXRoIjogIkhLTE06XFxTT0ZUV0FSRVxcTWljcm9zb2Z0XFxXaW5kb3dzXFxDdXJyZW50VmVyc2lvblxcRGV2aWNlIEluc3RhbGxlciIsCiAgICAgICAgIk5hbWUiOiAiRGlzYWJsZUNvSW5zdGFsbGVycyIsCiAgICAgICAgIlZhbHVlIjogIjEiLAogICAgICAgICJUeXBlIjogIkRXb3JkIiwKICAgICAgICAiT3JpZ2luYWxWYWx1ZSI6ICIwIgogICAgICB9CiAgICBdLAogICAgIkludm9rZVNjcmlwdCI6IFsKICAgICAgIiAgICAgICRSYXplclBhdGggPSBcIiRFbnY6U3lzdGVtUm9vdFxcSW5zdGFsbGVyXFxSYXplclwiICAgICAgaWYgKFRlc3QtUGF0aCAkUmF6ZXJQYXRoKSB7ICAgICAgICBSZW1vdmUtSXRlbSAkUmF6ZXJQYXRoXFwqIC1SZWN1cnNlIC1Gb3JjZSAgICAgIH0gZWxzZSB7ICAgICAgICBOZXctSXRlbSAtUGF0aCAkUmF6ZXJQYXRoIC1JdGVtVHlwZSBEaXJlY3RvcnkgICAgICB9ICAgICAgaWNhY2xzICRSYXplclBhdGggL2RlbnkgXCJFdmVyeW9uZTooVylcIiAgICAgICIKICAgIF0sCiAgICAiVW5kb1NjcmlwdCI6IFsKICAgICAgIiAgICAgIGljYWNscyBcIiRFbnY6U3lzdGVtUm9vdFxcSW5zdGFsbGVyXFxSYXplclwiIC9yZW1vdmU6ZCBFdmVyeW9uZSAgICAgICIKICAgIF0sCiAgICAibGluayI6ICJodHRwczovL3dpbnV0aWwuY2hyaXN0aXR1cy5jb20vZGV2L3R3ZWFrcy96LS1hZHZhbmNlZC10d2Vha3MtLS1jYXV0aW9uL3JhemVyYmxvY2siCiAgfSwKICAiV1BGVHdlYWtzRGlzYWJsZU5vdGlmaWNhdGlvbnMiOiB7CiAgICAiQ29udGVudCI6ICLns7vnu5/miZjnm5jpgJrnn6Xlkozml6XljoYgLSDnpoHnlKgiLAogICAgIkRlc2NyaXB0aW9uIjogIuemgeeUqOaJgOaciemAmuefpe+8jOWMheaLrOaXpeWOhuOAgiIsCiAgICAiY2F0ZWdvcnkiOiAi6auY57qn5LyY5YyWIC0g6LCo5oWO5pON5L2cIiwKICAgICJwYW5lbCI6ICIxIiwKICAgICJyZWdpc3RyeSI6IFsKICAgICAgewogICAgICAgICJQYXRoIjogIkhLQ1U6XFxTb2Z0d2FyZVxcUG9saWNpZXNcXE1pY3Jvc29mdFxcV2luZG93c1xcRXhwbG9yZXIiLAogICAgICAgICJOYW1lIjogIkRpc2FibGVOb3RpZmljYXRpb25DZW50ZXIiLAogICAgICAgICJWYWx1ZSI6ICIxIiwKICAgICAgICAiVHlwZSI6ICJEV29yZCIsCiAgICAgICAgIk9yaWdpbmFsVmFsdWUiOiAiPFJlbW92ZUVudHJ5PiIKICAgICAgfSwKICAgICAgewogICAgICAgICJQYXRoIjogIkhLQ1U6XFxTb2Z0d2FyZVxcTWljcm9zb2Z0XFxXaW5kb3dzXFxDdXJyZW50VmVyc2lvblxcUHVzaE5vdGlmaWNhdGlvbnMiLAogICAgICAgICJOYW1lIjogIlRvYXN0RW5hYmxlZCIsCiAgICAgICAgIlZhbHVlIjogIjAiLAogICAgICAgICJUeXBlIjogIkRXb3JkIiwKICAgICAgICAiT3JpZ2luYWxWYWx1ZSI6ICIxIgogICAgICB9CiAgICBdLAogICAgImxpbmsiOiAiaHR0cHM6Ly93aW51dGlsLmNocmlzdGl0dXMuY29tL2Rldi90d2Vha3Mvei0tYWR2YW5jZWQtdHdlYWtzLS0tY2F1dGlvbi9kaXNhYmxlbm90aWZpY2F0aW9ucyIKICB9LAogICJXUEZUd2Vha3NCbG9ja0Fkb2JlTmV0IjogewogICAgIkNvbnRlbnQiOiAiQWRvYmUgVVJMIOmYu+atouWIl+ihqCAtIOWQr+eUqCIsCiAgICAiRGVzY3JpcHRpb24iOiAi6YCa6L+H6YCJ5oup5oCn6Zi75q2iIEFkb2JlIOi/nuaOpeadpeWHj+WwkeS4jeW/heimgeeahOeUqOaIt+W5suaJsCIsCiAgICAiY2F0ZWdvcnkiOiAi6auY57qn5LyY5YyWIC0g6LCo5oWO5pON5L2cIiwKICAgICJwYW5lbCI6ICIxIiwKICAgICJJbnZva2VTY3JpcHQiOiBbCiAgICAgICIgICAgICAkaG9zdHNVcmwgPSBJbnZva2UtUmVzdE1ldGhvZCAtVXJpIGh0dHBzOi8vZ2l0aHViLmNvbS9SdWRkZXJuYXRpb24tRGVzaWducy9BZG9iZS1VUkwtQmxvY2stTGlzdC9yYXcvcmVmcy9oZWFkcy9tYXN0ZXIvaG9zdHMgICAgICBBZGQtQ29udGVudCAtUGF0aCBcIiRFbnY6U3lzdGVtUm9vdFxcU3lzdGVtMzJcXGRyaXZlcnNcXGV0Y1xcaG9zdHNcIiAtVmFsdWUgJGhvc3RzVXJsICAgICAgaXBjb25maWcgL2ZsdXNoZG5zICAgICAgV3JpdGUtSG9zdCAnQWRkZWQgQWRvYmUgdXJsIGJsb2NrIGxpc3QgZnJvbSBob3N0IGZpbGUnICAgICAgIgogICAgXSwKICAgICJVbmRvU2NyaXB0IjogWwogICAgICAiICAgICAgU2V0LUNvbnRlbnQgXCIkRW52OlN5c3RlbVJvb3RcXFN5c3RlbTMyXFxkcml2ZXJzXFxldGNcXGhvc3RzXCIgKCAgICAgICAgICAoR2V0LUNvbnRlbnQgXCIkRW52OlN5c3RlbVJvb3RcXFN5c3RlbTMyXFxkcml2ZXJzXFxldGNcXGhvc3RzXCIpIC1qb2luIFwiYG5cIiAtcmVwbGFjZSAnKD9zKSNOZXcgVmVyLionLCAnJyAgICAgICkgICAgICBpcGNvbmZpZyAvZmx1c2hkbnMgICAgICBXcml0ZS1Ib3N0ICdSZW1vdmVkIEFkb2JlIHVybCBibG9jayBsaXN0IGZyb20gaG9zdCBmaWxlJyAgICAgICIKICAgIF0sCiAgICAibGluayI6ICJodHRwczovL3dpbnV0aWwuY2hyaXN0aXR1cy5jb20vZGV2L3R3ZWFrcy96LS1hZHZhbmNlZC10d2Vha3MtLS1jYXV0aW9uL2Jsb2NrYWRvYmVuZXQiCiAgfSwKICAiV1BGVHdlYWtzUmlnaHRDbGlja01lbnUiOiB7CiAgICAiQ29udGVudCI6ICLlj7PplK7oj5zljZXml6fniYjluIPlsYAgLSDlkK/nlKgiLAogICAgIkRlc2NyaXB0aW9uIjogIuaBouWkjeaWh+S7tui1hOa6kOeuoeeQhuWZqOS4reWPs+mUruWNleWHu+aXtueahOe7j+WFuOWPs+mUruiPnOWNleOAgiIsCiAgICAiY2F0ZWdvcnkiOiAi6auY57qn5LyY5YyWIC0g6LCo5oWO5pON5L2cIiwKICAgICJwYW5lbCI6ICIxIiwKICAgICJJbnZva2VTY3JpcHQiOiBbCiAgICAgICIgICAgICBOZXctSXRlbSAtUGF0aCBcIkhLQ1U6XFxTb2Z0d2FyZVxcQ2xhc3Nlc1xcQ0xTSURcXHs4NmNhMWFhMC0zNGFhLTRlOGItYTUwOS01MGM5MDViYWUyYTJ9XCIgLU5hbWUgSW5wcm9jU2VydmVyMzIgLVZhbHVlIFwiXCIgLUZvcmNlICAgICAgU3RvcC1Qcm9jZXNzIC1OYW1lIGV4cGxvcmVyICAgICAgIgogICAgXSwKICAgICJVbmRvU2NyaXB0IjogWwogICAgICAiUmVtb3ZlLUl0ZW0gLVBhdGggXCJIS0NVOlxcU29mdHdhcmVcXENsYXNzZXNcXENMU0lEXFx7ODZjYTFhYTAtMzRhYS00ZThiLWE1MDktNTBjOTA1YmFlMmEyfVwiIC1SZWN1cnNlIgogICAgXSwKICAgICJsaW5rIjogImh0dHBzOi8vd2ludXRpbC5jaHJpc3RpdHVzLmNvbS9kZXYvdHdlYWtzL3otLWFkdmFuY2VkLXR3ZWFrcy0tLWNhdXRpb24vcmlnaHRjbGlja21lbnUiCiAgfSwKICAiV1BGVHdlYWtzRGlza0NsZWFudXAiOiB7CiAgICAiQ29udGVudCI6ICLno4Hnm5jmuIXnkIYgLSDov5DooYwiLAogICAgIkRlc2NyaXB0aW9uIjogIuWcqCBDIOebmOi/kOihjOejgeebmOa4heeQhuW5tuenu+mZpOaXp+eahCBXaW5kb3dzIOabtOaWsOOAgiIsCiAgICAiY2F0ZWdvcnkiOiAi5Z+65pys5LyY5YyWIiwKICAgICJwYW5lbCI6ICIxIiwKICAgICJJbnZva2VTY3JpcHQiOiBbCiAgICAgICIgICAgICBjbGVhbm1nci5leGUgL2QgQzogL1ZFUllMT1dESVNLICAgICAgRGlzbS5leGUgL29ubGluZSAvQ2xlYW51cC1JbWFnZSAvU3RhcnRDb21wb25lbnRDbGVhbnVwIC9SZXNldEJhc2UgICAgICAiCiAgICBdLAogICAgImxpbmsiOiAiaHR0cHM6Ly93aW51dGlsLmNocmlzdGl0dXMuY29tL2Rldi90d2Vha3MvZXNzZW50aWFsLXR3ZWFrcy9kaXNrY2xlYW51cCIKICB9LAogICJXUEZUd2Vha3NEZWxldGVUZW1wRmlsZXMiOiB7CiAgICAiQ29udGVudCI6ICLkuLTml7bmlofku7YgLSDnp7vpmaQiLAogICAgIkRlc2NyaXB0aW9uIjogIua4hemZpOS4tOaXtuaWh+S7tuWkueOAgiIsCiAgICAiY2F0ZWdvcnkiOiAi5Z+65pys5LyY5YyWIiwKICAgICJwYW5lbCI6ICIxIiwKICAgICJJbnZva2VTY3JpcHQiOiBbCiAgICAgICIgICAgICBSZW1vdmUtSXRlbSAtUGF0aCBcIiRFbnY6VGVtcFxcKlwiIC1SZWN1cnNlIC1Gb3JjZSAgICAgIFJlbW92ZS1JdGVtIC1QYXRoIFwiJEVudjpTeXN0ZW1Sb290XFxUZW1wXFwqXCIgLVJlY3Vyc2UgLUZvcmNlICAgICAgIgogICAgXSwKICAgICJsaW5rIjogImh0dHBzOi8vd2ludXRpbC5jaHJpc3RpdHVzLmNvbS9kZXYvdHdlYWtzL2Vzc2VudGlhbC10d2Vha3MvZGVsZXRldGVtcGZpbGVzIgogIH0sCiAgIldQRlR3ZWFrc0lQdjQ2IjogewogICAgIkNvbnRlbnQiOiAiSVB2NiAtIOiuvue9riBJUHY0IOS4uummlumAiSIsCiAgICAiRGVzY3JpcHRpb24iOiAi5Zyo5pyq6YWN572uIElQdjYg55qE56eB5pyJ572R57uc5LiK6K6+572uIElQdjQg6aaW6YCJ6aG55Y+v5bim5p2l5bu26L+f5ZKM5a6J5YWo5pa56Z2i55qE5aW95aSE44CCIiwKICAgICJjYXRlZ29yeSI6ICLpq5jnuqfkvJjljJYgLSDosKjmhY7mk43kvZwiLAogICAgInBhbmVsIjogIjEiLAogICAgInJlZ2lzdHJ5IjogWwogICAgICB7CiAgICAgICAgIlBhdGgiOiAiSEtMTTpcXFNZU1RFTVxcQ3VycmVudENvbnRyb2xTZXRcXFNlcnZpY2VzXFxUY3BpcDZcXFBhcmFtZXRlcnMiLAogICAgICAgICJOYW1lIjogIkRpc2FibGVkQ29tcG9uZW50cyIsCiAgICAgICAgIlZhbHVlIjogIjMyIiwKICAgICAgICAiVHlwZSI6ICJEV29yZCIsCiAgICAgICAgIk9yaWdpbmFsVmFsdWUiOiAiMCIKICAgICAgfQogICAgXSwKICAgICJsaW5rIjogImh0dHBzOi8vd2ludXRpbC5jaHJpc3RpdHVzLmNvbS9kZXYvdHdlYWtzL3otLWFkdmFuY2VkLXR3ZWFrcy0tLWNhdXRpb24vaXB2NDYiCiAgfSwKICAiV1BGVHdlYWtzVGVyZWRvIjogewogICAgIkNvbnRlbnQiOiAiVGVyZWRvIC0g56aB55SoIiwKICAgICJEZXNjcmlwdGlvbiI6ICJUZXJlZG8g572R57uc6Zqn6YGT5piv5LiA56eNIElQdjYg5Yqf6IO977yM5Y+v6IO95a+86Ie06aKd5aSW5bu26L+f44CCIiwKICAgICJjYXRlZ29yeSI6ICLpq5jnuqfkvJjljJYgLSDosKjmhY7mk43kvZwiLAogICAgInBhbmVsIjogIjEiLAogICAgInJlZ2lzdHJ5IjogWwogICAgICB7CiAgICAgICAgIlBhdGgiOiAiSEtMTTpcXFNZU1RFTVxcQ3VycmVudENvbnRyb2xTZXRcXFNlcnZpY2VzXFxUY3BpcDZcXFBhcmFtZXRlcnMiLAogICAgICAgICJOYW1lIjogIkRpc2FibGVkQ29tcG9uZW50cyIsCiAgICAgICAgIlZhbHVlIjogIjEiLAogICAgICAgICJUeXBlIjogIkRXb3JkIiwKICAgICAgICAiT3JpZ2luYWxWYWx1ZSI6ICIwIgogICAgICB9CiAgICBdLAogICAgIkludm9rZVNjcmlwdCI6IFsKICAgICAgIm5ldHNoIGludGVyZmFjZSB0ZXJlZG8gc2V0IHN0YXRlIGRpc2FibGVkIgogICAgXSwKICAgICJVbmRvU2NyaXB0IjogWwogICAgICAibmV0c2ggaW50ZXJmYWNlIHRlcmVkbyBzZXQgc3RhdGUgZGVmYXVsdCIKICAgIF0sCiAgICAibGluayI6ICJodHRwczovL3dpbnV0aWwuY2hyaXN0aXR1cy5jb20vZGV2L3R3ZWFrcy96LS1hZHZhbmNlZC10d2Vha3MtLS1jYXV0aW9uL3RlcmVkbyIKICB9LAogICJXUEZUd2Vha3NEaXNhYmxlSVB2NiI6IHsKICAgICJDb250ZW50IjogIklQdjYgLSDnpoHnlKgiLAogICAgIkRlc2NyaXB0aW9uIjogIuemgeeUqCBJUHY244CCIiwKICAgICJjYXRlZ29yeSI6ICLpq5jnuqfkvJjljJYgLSDosKjmhY7mk43kvZwiLAogICAgInBhbmVsIjogIjEiLAogICAgInJlZ2lzdHJ5IjogWwogICAgICB7CiAgICAgICAgIlBhdGgiOiAiSEtMTTpcXFNZU1RFTVxcQ3VycmVudENvbnRyb2xTZXRcXFNlcnZpY2VzXFxUY3BpcDZcXFBhcmFtZXRlcnMiLAogICAgICAgICJOYW1lIjogIkRpc2FibGVkQ29tcG9uZW50cyIsCiAgICAgICAgIlZhbHVlIjogIjI1NSIsCiAgICAgICAgIlR5cGUiOiAiRFdvcmQiLAogICAgICAgICJPcmlnaW5hbFZhbHVlIjogIjAiCiAgICAgIH0KICAgIF0sCiAgICAiSW52b2tlU2NyaXB0IjogWwogICAgICAiRGlzYWJsZS1OZXRBZGFwdGVyQmluZGluZyAtTmFtZSAqIC1Db21wb25lbnRJRCBtc190Y3BpcDYiCiAgICBdLAogICAgIlVuZG9TY3JpcHQiOiBbCiAgICAgICJFbmFibGUtTmV0QWRhcHRlckJpbmRpbmcgLU5hbWUgKiAtQ29tcG9uZW50SUQgbXNfdGNwaXA2IgogICAgXSwKICAgICJsaW5rIjogImh0dHBzOi8vd2ludXRpbC5jaHJpc3RpdHVzLmNvbS9kZXYvdHdlYWtzL3otLWFkdmFuY2VkLXR3ZWFrcy0tLWNhdXRpb24vZGlzYWJsZWlwdjYiCiAgfSwKICAiV1BGVHdlYWtzRGlzYWJsZUJHYXBwcyI6IHsKICAgICJDb250ZW50IjogIuWQjuWPsOW6lOeUqCAtIOemgeeUqCIsCiAgICAiRGVzY3JpcHRpb24iOiAi56aB55So5omA5pyJIE1pY3Jvc29mdCBTdG9yZSDlupTnlKjlnKjlkI7lj7Dov5DooYzjgIIiLAogICAgImNhdGVnb3J5IjogIumrmOe6p+S8mOWMliAtIOiwqOaFjuaTjeS9nCIsCiAgICAicGFuZWwiOiAiMSIsCiAgICAicmVnaXN0cnkiOiBbCiAgICAgIHsKICAgICAgICAiUGF0aCI6ICJIS0NVOlxcU29mdHdhcmVcXE1pY3Jvc29mdFxcV2luZG93c1xcQ3VycmVudFZlcnNpb25cXEJhY2tncm91bmRBY2Nlc3NBcHBsaWNhdGlvbnMiLAogICAgICAgICJOYW1lIjogIkdsb2JhbFVzZXJEaXNhYmxlZCIsCiAgICAgICAgIlZhbHVlIjogIjEiLAogICAgICAgICJUeXBlIjogIkRXb3JkIiwKICAgICAgICAiT3JpZ2luYWxWYWx1ZSI6ICIwIgogICAgICB9CiAgICBdLAogICAgImxpbmsiOiAiaHR0cHM6Ly93aW51dGlsLmNocmlzdGl0dXMuY29tL2Rldi90d2Vha3Mvei0tYWR2YW5jZWQtdHdlYWtzLS0tY2F1dGlvbi9kaXNhYmxlYmdhcHBzIgogIH0sCiAgIldQRlR3ZWFrc0Rpc2FibGVGU08iOiB7CiAgICAiQ29udGVudCI6ICLlhajlsY/kvJjljJYgLSDnpoHnlKgiLAogICAgIkRlc2NyaXB0aW9uIjogIuemgeeUqOaJgOacieW6lOeUqOeahOWFqOWxj+S8mOWMluOAguazqOaEj++8mui/meWwhuemgeeUqOeLrOWNoOWFqOWxj+eahOiJsuW9qeeuoeeQhuOAgiIsCiAgICAiY2F0ZWdvcnkiOiAi6auY57qn5LyY5YyWIC0g6LCo5oWO5pON5L2cIiwKICAgICJwYW5lbCI6ICIxIiwKICAgICJyZWdpc3RyeSI6IFsKICAgICAgewogICAgICAgICJQYXRoIjogIkhLQ1U6XFxTeXN0ZW1cXEdhbWVDb25maWdTdG9yZSIsCiAgICAgICAgIk5hbWUiOiAiR2FtZURWUl9EWEdJSG9ub3JGU0VXaW5kb3dzQ29tcGF0aWJsZSIsCiAgICAgICAgIlZhbHVlIjogIjEiLAogICAgICAgICJUeXBlIjogIkRXb3JkIiwKICAgICAgICAiT3JpZ2luYWxWYWx1ZSI6ICIwIgogICAgICB9CiAgICBdLAogICAgImxpbmsiOiAiaHR0cHM6Ly93aW51dGlsLmNocmlzdGl0dXMuY29tL2Rldi90d2Vha3Mvei0tYWR2YW5jZWQtdHdlYWtzLS0tY2F1dGlvbi9kaXNhYmxlZnNvIgogIH0sCiAgIldQRlR3ZWFrc0Rpc2FibGVFeHBsb3JlckF1dG9EaXNjb3ZlcnkiOiB7CiAgICAiQ29udGVudCI6ICLmlofku7botYTmupDnrqHnkIblmajoh6rliqjmlofku7blpLnlj5HnjrAgLSDnpoHnlKgiLAogICAgIkRlc2NyaXB0aW9uIjogIldpbmRvd3Mg6LWE5rqQ566h55CG5Zmo6Ieq5Yqo5qC55o2u5YaF5a6554yc5rWL5paH5Lu25aS557G75Z6L44CC6K2m5ZGK77yB5bCG56aB55So5paH5Lu26LWE5rqQ566h55CG5Zmo5YiG57uE44CCIiwKICAgICJjYXRlZ29yeSI6ICLln7rmnKzkvJjljJYiLAogICAgInBhbmVsIjogIjEiLAogICAgIkludm9rZVNjcmlwdCI6IFsKICAgICAgIiAgICAgICMgUHJldmlvdXNseSBkZXRlY3RlZCBmb2xkZXJzICAgICAgJGJhZ3MgPSBcIkhLQ1U6XFxTb2Z0d2FyZVxcQ2xhc3Nlc1xcTG9jYWwgU2V0dGluZ3NcXFNvZnR3YXJlXFxNaWNyb3NvZnRcXFdpbmRvd3NcXFNoZWxsXFxCYWdzXCIgICAgICAjIEZvbGRlciB0eXBlcyBsb29rdXAgdGFibGUgICAgICAkYmFnTVJVID0gXCJIS0NVOlxcU29mdHdhcmVcXENsYXNzZXNcXExvY2FsIFNldHRpbmdzXFxTb2Z0d2FyZVxcTWljcm9zb2Z0XFxXaW5kb3dzXFxTaGVsbFxcQmFnTVJVXCIgICAgICAjIEZsdXNoIEV4cGxvcmVyIHZpZXcgZGF0YWJhc2UgICAgICBSZW1vdmUtSXRlbSAtUGF0aCAkYmFncyAtUmVjdXJzZSAtRm9yY2UgICAgICBXcml0ZS1Ib3N0IFwiUmVtb3ZlZCAkYmFnc1wiICAgICAgUmVtb3ZlLUl0ZW0gLVBhdGggJGJhZ01SVSAtUmVjdXJzZSAtRm9yY2UgICAgICBXcml0ZS1Ib3N0IFwiUmVtb3ZlZCAkYmFnTVJVXCIgICAgICAjIEV2ZXJ5IGZvbGRlciAgICAgICRhbGxGb2xkZXJzID0gXCJIS0NVOlxcU29mdHdhcmVcXENsYXNzZXNcXExvY2FsIFNldHRpbmdzXFxTb2Z0d2FyZVxcTWljcm9zb2Z0XFxXaW5kb3dzXFxTaGVsbFxcQmFnc1xcQWxsRm9sZGVyc1xcU2hlbGxcIiAgICAgIGlmICghKFRlc3QtUGF0aCAkYWxsRm9sZGVycykpIHsgICAgICAgIE5ldy1JdGVtIC1QYXRoICRhbGxGb2xkZXJzIC1Gb3JjZSAgICAgICAgV3JpdGUtSG9zdCBcIkNyZWF0ZWQgJGFsbEZvbGRlcnNcIiAgICAgIH0gICAgICAjIEdlbmVyaWMgdmlldyAgICAgIE5ldy1JdGVtUHJvcGVydHkgLVBhdGggJGFsbEZvbGRlcnMgLU5hbWUgXCJGb2xkZXJUeXBlXCIgLVZhbHVlIFwiTm90U3BlY2lmaWVkXCIgLVByb3BlcnR5VHlwZSBTdHJpbmcgLUZvcmNlICAgICAgV3JpdGUtSG9zdCBcIlNldCBGb2xkZXJUeXBlIHRvIE5vdFNwZWNpZmllZFwiICAgICAgV3JpdGUtSG9zdCBQbGVhc2Ugc2lnbiBvdXQgYW5kIGJhY2sgaW4sIG9yIHJlc3RhcnQgeW91ciBjb21wdXRlciB0byBhcHBseSB0aGUgY2hhbmdlcyEgICAgICAiCiAgICBdLAogICAgIlVuZG9TY3JpcHQiOiBbCiAgICAgICIgICAgICAjIFByZXZpb3VzbHkgZGV0ZWN0ZWQgZm9sZGVycyAgICAgICRiYWdzID0gXCJIS0NVOlxcU29mdHdhcmVcXENsYXNzZXNcXExvY2FsIFNldHRpbmdzXFxTb2Z0d2FyZVxcTWljcm9zb2Z0XFxXaW5kb3dzXFxTaGVsbFxcQmFnc1wiICAgICAgIyBGb2xkZXIgdHlwZXMgbG9va3VwIHRhYmxlICAgICAgJGJhZ01SVSA9IFwiSEtDVTpcXFNvZnR3YXJlXFxDbGFzc2VzXFxMb2NhbCBTZXR0aW5nc1xcU29mdHdhcmVcXE1pY3Jvc29mdFxcV2luZG93c1xcU2hlbGxcXEJhZ01SVVwiICAgICAgIyBGbHVzaCBFeHBsb3JlciB2aWV3IGRhdGFiYXNlICAgICAgUmVtb3ZlLUl0ZW0gLVBhdGggJGJhZ3MgLVJlY3Vyc2UgLUZvcmNlICAgICAgV3JpdGUtSG9zdCBcIlJlbW92ZWQgJGJhZ3NcIiAgICAgIFJlbW92ZS1JdGVtIC1QYXRoICRiYWdNUlUgLVJlY3Vyc2UgLUZvcmNlICAgICAgV3JpdGUtSG9zdCBcIlJlbW92ZWQgJGJhZ01SVVwiICAgICAgV3JpdGUtSG9zdCBQbGVhc2Ugc2lnbiBvdXQgYW5kIGJhY2sgaW4sIG9yIHJlc3RhcnQgeW91ciBjb21wdXRlciB0byBhcHBseSB0aGUgY2hhbmdlcyEgICAgICAiCiAgICBdLAogICAgImxpbmsiOiAiaHR0cHM6Ly93aW51dGlsLmNocmlzdGl0dXMuY29tL2Rldi90d2Vha3MvZXNzZW50aWFsLXR3ZWFrcy9kaXNhYmxlZXhwbG9yZXJhdXRvZGlzY292ZXJ5IgogIH0sCiAgIldQRlRvZ2dsZURldGFpbGVkQlNvRCI6IHsKICAgICJDb250ZW50IjogIuiTneWxj+ivpue7huaooeW8jyIsCiAgICAiRGVzY3JpcHRpb24iOiAi6JOd5bGP5pe25o+Q5L6b5pu05aSa5L+h5oGv44CCIiwKICAgICJjYXRlZ29yeSI6ICLoh6rlrprkuYnlgY/lpb0iLAogICAgInBhbmVsIjogIjIiLAogICAgIlR5cGUiOiAiVG9nZ2xlIiwKICAgICJyZWdpc3RyeSI6IFsKICAgICAgewogICAgICAgICJQYXRoIjogIkhLTE06XFxTWVNURU1cXEN1cnJlbnRDb250cm9sU2V0XFxDb250cm9sXFxDcmFzaENvbnRyb2wiLAogICAgICAgICJOYW1lIjogIkRpc3BsYXlQYXJhbWV0ZXJzIiwKICAgICAgICAiVmFsdWUiOiAiMSIsCiAgICAgICAgIlR5cGUiOiAiRFdvcmQiLAogICAgICAgICJPcmlnaW5hbFZhbHVlIjogIjAiLAogICAgICAgICJEZWZhdWx0U3RhdGUiOiAiZmFsc2UiCiAgICAgIH0sCiAgICAgIHsKICAgICAgICAiUGF0aCI6ICJIS0xNOlxcU1lTVEVNXFxDdXJyZW50Q29udHJvbFNldFxcQ29udHJvbFxcQ3Jhc2hDb250cm9sIiwKICAgICAgICAiTmFtZSI6ICJEaXNhYmxlRW1vdGljb24iLAogICAgICAgICJWYWx1ZSI6ICIxIiwKICAgICAgICAiVHlwZSI6ICJEV29yZCIsCiAgICAgICAgIk9yaWdpbmFsVmFsdWUiOiAiMCIsCiAgICAgICAgIkRlZmF1bHRTdGF0ZSI6ICJmYWxzZSIKICAgICAgfQogICAgXSwKICAgICJsaW5rIjogImh0dHBzOi8vd2ludXRpbC5jaHJpc3RpdHVzLmNvbS9kZXYvdHdlYWtzL2N1c3RvbWl6ZS1wcmVmZXJlbmNlcy9kZXRhaWxlZGJzb2QiCiAgfSwKICAiV1BGVG9nZ2xlQmF0dGVyeVBlcmNlbnRhZ2UiOiB7CiAgICAiQ29udGVudCI6ICLns7vnu5/miZjnm5jnlLXmsaDnmb7liIbmr5QiLAogICAgIkRlc2NyaXB0aW9uIjogIuWcqOezu+e7n+aJmOebmOS4reeUteaxoOWbvuagh+aXgeaYvuekuuaVsOWtl+eUteaxoOeZvuWIhuavlOOAgiIsCiAgICAiY2F0ZWdvcnkiOiAi6Ieq5a6a5LmJ5YGP5aW9IiwKICAgICJwYW5lbCI6ICIyIiwKICAgICJUeXBlIjogIlRvZ2dsZSIsCiAgICAicmVnaXN0cnkiOiBbCiAgICAgIHsKICAgICAgICAiUGF0aCI6ICJIS0NVOlxcU29mdHdhcmVcXE1pY3Jvc29mdFxcV2luZG93c1xcQ3VycmVudFZlcnNpb25cXEV4cGxvcmVyXFxBZHZhbmNlZCIsCiAgICAgICAgIk5hbWUiOiAiSXNCYXR0ZXJ5UGVyY2VudGFnZUVuYWJsZWQiLAogICAgICAgICJWYWx1ZSI6ICIxIiwKICAgICAgICAiVHlwZSI6ICJEV29yZCIsCiAgICAgICAgIk9yaWdpbmFsVmFsdWUiOiAiPFJlbW92ZUVudHJ5PiIsCiAgICAgICAgIkRlZmF1bHRTdGF0ZSI6ICJmYWxzZSIKICAgICAgfQogICAgXSwKICAgICJsaW5rIjogImh0dHBzOi8vd2ludXRpbC5jaHJpc3RpdHVzLmNvbS9kZXYvdHdlYWtzL2N1c3RvbWl6ZS1wcmVmZXJlbmNlcy9iYXR0ZXJ5cGVyY2VudGFnZSIKICB9LAogICJXUEZUb2dnbGVEYXJrTW9kZSI6IHsKICAgICJDb250ZW50IjogIldpbmRvd3Mg5rex6Imy5Li76aKYIiwKICAgICJEZXNjcmlwdGlvbiI6ICLns7vnu5/lkozlupTnlKjnmoTmt7HoibLmqKHlvI/jgIIiLAogICAgImNhdGVnb3J5IjogIuiHquWumuS5ieWBj+WlvSIsCiAgICAicGFuZWwiOiAiMiIsCiAgICAiVHlwZSI6ICJUb2dnbGUiLAogICAgInJlZ2lzdHJ5IjogWwogICAgICB7CiAgICAgICAgIlBhdGgiOiAiSEtDVTpcXFNPRlRXQVJFXFxNaWNyb3NvZnRcXFdpbmRvd3NcXEN1cnJlbnRWZXJzaW9uXFxUaGVtZXNcXFBlcnNvbmFsaXplIiwKICAgICAgICAiTmFtZSI6ICJBcHBzVXNlTGlnaHRUaGVtZSIsCiAgICAgICAgIlZhbHVlIjogIjAiLAogICAgICAgICJUeXBlIjogIkRXb3JkIiwKICAgICAgICAiT3JpZ2luYWxWYWx1ZSI6ICIxIiwKICAgICAgICAiRGVmYXVsdFN0YXRlIjogImZhbHNlIgogICAgICB9LAogICAgICB7CiAgICAgICAgIlBhdGgiOiAiSEtDVTpcXFNPRlRXQVJFXFxNaWNyb3NvZnRcXFdpbmRvd3NcXEN1cnJlbnRWZXJzaW9uXFxUaGVtZXNcXFBlcnNvbmFsaXplIiwKICAgICAgICAiTmFtZSI6ICJTeXN0ZW1Vc2VzTGlnaHRUaGVtZSIsCiAgICAgICAgIlZhbHVlIjogIjAiLAogICAgICAgICJUeXBlIjogIkRXb3JkIiwKICAgICAgICAiT3JpZ2luYWxWYWx1ZSI6ICIxIiwKICAgICAgICAiRGVmYXVsdFN0YXRlIjogImZhbHNlIgogICAgICB9CiAgICBdLAogICAgIkludm9rZVNjcmlwdCI6IFsKICAgICAgIiAgICAgIEludm9rZS1XaW5VdGlsRXhwbG9yZXJVcGRhdGUgICAgICBpZiAoJHN5bmMuVGhlbWVCdXR0b24uQ29udGVudCAtZXEgW2NoYXJdMHhGMDhDKSB7ICAgICAgICBJbnZva2UtV2ludXRpbFRoZW1lQ2hhbmdlIC10aGVtZSBcIkF1dG9cIiAgICAgIH0gICAgICAiCiAgICBdLAogICAgIlVuZG9TY3JpcHQiOiBbCiAgICAgICIgICAgICBJbnZva2UtV2luVXRpbEV4cGxvcmVyVXBkYXRlICAgICAgaWYgKCRzeW5jLlRoZW1lQnV0dG9uLkNvbnRlbnQgLWVxIFtjaGFyXTB4RjA4QykgeyAgICAgICAgSW52b2tlLVdpbnV0aWxUaGVtZUNoYW5nZSAtdGhlbWUgXCJBdXRvXCIgICAgICB9ICAgICAgIgogICAgXSwKICAgICJsaW5rIjogImh0dHBzOi8vd2ludXRpbC5jaHJpc3RpdHVzLmNvbS9kZXYvdHdlYWtzL2N1c3RvbWl6ZS1wcmVmZXJlbmNlcy9kYXJrbW9kZSIKICB9LAogICJXUEZUb2dnbGVTaG93RXh0IjogewogICAgIkNvbnRlbnQiOiAi5paH5Lu26LWE5rqQ566h55CG5Zmo5paH5Lu25omp5bGV5ZCNIiwKICAgICJEZXNjcmlwdGlvbiI6ICLlnKjotYTmupDnrqHnkIblmajkuK3mmL7npLrmlofku7bmianlsZXlkI3vvIguZXhl44CBLnBuZyDnrYnvvInjgIIiLAogICAgImNhdGVnb3J5IjogIuiHquWumuS5ieWBj+WlvSIsCiAgICAicGFuZWwiOiAiMiIsCiAgICAiVHlwZSI6ICJUb2dnbGUiLAogICAgInJlZ2lzdHJ5IjogWwogICAgICB7CiAgICAgICAgIlBhdGgiOiAiSEtDVTpcXFNvZnR3YXJlXFxNaWNyb3NvZnRcXFdpbmRvd3NcXEN1cnJlbnRWZXJzaW9uXFxFeHBsb3JlclxcQWR2YW5jZWQiLAogICAgICAgICJOYW1lIjogIkhpZGVGaWxlRXh0IiwKICAgICAgICAiVmFsdWUiOiAiMCIsCiAgICAgICAgIlR5cGUiOiAiRFdvcmQiLAogICAgICAgICJPcmlnaW5hbFZhbHVlIjogIjEiLAogICAgICAgICJEZWZhdWx0U3RhdGUiOiAiZmFsc2UiCiAgICAgIH0KICAgIF0sCiAgICAiSW52b2tlU2NyaXB0IjogWwogICAgICAiICAgICAgSW52b2tlLVdpblV0aWxFeHBsb3JlclVwZGF0ZSAtYWN0aW9uIFwicmVzdGFydFwiICAgICAgIgogICAgXSwKICAgICJVbmRvU2NyaXB0IjogWwogICAgICAiICAgICAgSW52b2tlLVdpblV0aWxFeHBsb3JlclVwZGF0ZSAtYWN0aW9uIFwicmVzdGFydFwiICAgICAgIgogICAgXSwKICAgICJsaW5rIjogImh0dHBzOi8vd2ludXRpbC5jaHJpc3RpdHVzLmNvbS9kZXYvdHdlYWtzL2N1c3RvbWl6ZS1wcmVmZXJlbmNlcy9zaG93ZXh0IgogIH0sCiAgIldQRlRvZ2dsZUhpZGRlbkZpbGVzIjogewogICAgIkNvbnRlbnQiOiAi5paH5Lu26LWE5rqQ566h55CG5Zmo6ZqQ6JeP5paH5Lu2IiwKICAgICJEZXNjcmlwdGlvbiI6ICLlnKjotYTmupDnrqHnkIblmajkuK3mmL7npLrpmpDol4/mlofku7bjgIIiLAogICAgImNhdGVnb3J5IjogIuiHquWumuS5ieWBj+WlvSIsCiAgICAicGFuZWwiOiAiMiIsCiAgICAiVHlwZSI6ICJUb2dnbGUiLAogICAgInJlZ2lzdHJ5IjogWwogICAgICB7CiAgICAgICAgIlBhdGgiOiAiSEtDVTpcXFNvZnR3YXJlXFxNaWNyb3NvZnRcXFdpbmRvd3NcXEN1cnJlbnRWZXJzaW9uXFxFeHBsb3JlclxcQWR2YW5jZWQiLAogICAgICAgICJOYW1lIjogIkhpZGRlbiIsCiAgICAgICAgIlZhbHVlIjogIjEiLAogICAgICAgICJUeXBlIjogIkRXb3JkIiwKICAgICAgICAiT3JpZ2luYWxWYWx1ZSI6ICIwIiwKICAgICAgICAiRGVmYXVsdFN0YXRlIjogImZhbHNlIgogICAgICB9CiAgICBdLAogICAgIkludm9rZVNjcmlwdCI6IFsKICAgICAgIiAgICAgIEludm9rZS1XaW5VdGlsRXhwbG9yZXJVcGRhdGUgLWFjdGlvbiBcInJlc3RhcnRcIiAgICAgICIKICAgIF0sCiAgICAiVW5kb1NjcmlwdCI6IFsKICAgICAgIiAgICAgIEludm9rZS1XaW5VdGlsRXhwbG9yZXJVcGRhdGUgLWFjdGlvbiBcInJlc3RhcnRcIiAgICAgICIKICAgIF0sCiAgICAibGluayI6ICJodHRwczovL3dpbnV0aWwuY2hyaXN0aXR1cy5jb20vZGV2L3R3ZWFrcy9jdXN0b21pemUtcHJlZmVyZW5jZXMvaGlkZGVuZmlsZXMiCiAgfSwKICAiV1BGVG9nZ2xlVmVyYm9zZUxvZ29uIjogewogICAgIkNvbnRlbnQiOiAi55m75b2V6K+m57uG5qih5byPIiwKICAgICJEZXNjcmlwdGlvbiI6ICLlnKjlkK/liqgv5YWz5py65pe25pi+56S66K+m57uG5L+h5oGv44CCIiwKICAgICJjYXRlZ29yeSI6ICLoh6rlrprkuYnlgY/lpb0iLAogICAgInBhbmVsIjogIjIiLAogICAgIlR5cGUiOiAiVG9nZ2xlIiwKICAgICJyZWdpc3RyeSI6IFsKICAgICAgewogICAgICAgICJQYXRoIjogIkhLTE06XFxTT0ZUV0FSRVxcTWljcm9zb2Z0XFxXaW5kb3dzXFxDdXJyZW50VmVyc2lvblxcUG9saWNpZXNcXFN5c3RlbSIsCiAgICAgICAgIk5hbWUiOiAiVmVyYm9zZVN0YXR1cyIsCiAgICAgICAgIlZhbHVlIjogIjEiLAogICAgICAgICJUeXBlIjogIkRXb3JkIiwKICAgICAgICAiT3JpZ2luYWxWYWx1ZSI6ICIwIiwKICAgICAgICAiRGVmYXVsdFN0YXRlIjogImZhbHNlIgogICAgICB9CiAgICBdLAogICAgImxpbmsiOiAiaHR0cHM6Ly93aW51dGlsLmNocmlzdGl0dXMuY29tL2Rldi90d2Vha3MvY3VzdG9taXplLXByZWZlcmVuY2VzL3ZlcmJvc2Vsb2dvbiIKICB9LAogICJXUEZUb2dnbGVOZXdPdXRsb29rIjogewogICAgIkNvbnRlbnQiOiAiTWljcm9zb2Z0IE91dGxvb2sg5paw54mIIiwKICAgICJEZXNjcmlwdGlvbiI6ICLov5nlsIbnoa7kv53kvb/nlKjnu4/lhbggT3V0bG9vayDlupTnlKjnqIvluo/jgIIiLAogICAgImNhdGVnb3J5IjogIuiHquWumuS5ieWBj+WlvSIsCiAgICAicGFuZWwiOiAiMiIsCiAgICAiVHlwZSI6ICJUb2dnbGUiLAogICAgInJlZ2lzdHJ5IjogWwogICAgICB7CiAgICAgICAgIlBhdGgiOiAiSEtDVTpcXFNPRlRXQVJFXFxNaWNyb3NvZnRcXE9mZmljZVxcMTYuMFxcT3V0bG9va1xcUHJlZmVyZW5jZXMiLAogICAgICAgICJOYW1lIjogIlVzZU5ld091dGxvb2siLAogICAgICAgICJWYWx1ZSI6ICIxIiwKICAgICAgICAiVHlwZSI6ICJEV29yZCIsCiAgICAgICAgIk9yaWdpbmFsVmFsdWUiOiAiMCIsCiAgICAgICAgIkRlZmF1bHRTdGF0ZSI6ICJ0cnVlIgogICAgICB9LAogICAgICB7CiAgICAgICAgIlBhdGgiOiAiSEtDVTpcXFNvZnR3YXJlXFxNaWNyb3NvZnRcXE9mZmljZVxcMTYuMFxcT3V0bG9va1xcT3B0aW9uc1xcR2VuZXJhbCIsCiAgICAgICAgIk5hbWUiOiAiSGlkZU5ld091dGxvb2tUb2dnbGUiLAogICAgICAgICJWYWx1ZSI6ICIwIiwKICAgICAgICAiVHlwZSI6ICJEV29yZCIsCiAgICAgICAgIk9yaWdpbmFsVmFsdWUiOiAiMSIsCiAgICAgICAgIkRlZmF1bHRTdGF0ZSI6ICJ0cnVlIgogICAgICB9LAogICAgICB7CiAgICAgICAgIlBhdGgiOiAiSEtDVTpcXFNvZnR3YXJlXFxQb2xpY2llc1xcTWljcm9zb2Z0XFxPZmZpY2VcXDE2LjBcXE91dGxvb2tcXE9wdGlvbnNcXEdlbmVyYWwiLAogICAgICAgICJOYW1lIjogIkRvTmV3T3V0bG9va0F1dG9NaWdyYXRpb24iLAogICAgICAgICJWYWx1ZSI6ICIwIiwKICAgICAgICAiVHlwZSI6ICJEV29yZCIsCiAgICAgICAgIk9yaWdpbmFsVmFsdWUiOiAiMCIsCiAgICAgICAgIkRlZmF1bHRTdGF0ZSI6ICJmYWxzZSIKICAgICAgfSwKICAgICAgewogICAgICAgICJQYXRoIjogIkhLQ1U6XFxTb2Z0d2FyZVxcUG9saWNpZXNcXE1pY3Jvc29mdFxcT2ZmaWNlXFwxNi4wXFxPdXRsb29rXFxQcmVmZXJlbmNlcyIsCiAgICAgICAgIk5hbWUiOiAiTmV3T3V0bG9va01pZ3JhdGlvblVzZXJTZXR0aW5nIiwKICAgICAgICAiVmFsdWUiOiAiMCIsCiAgICAgICAgIlR5cGUiOiAiRFdvcmQiLAogICAgICAgICJPcmlnaW5hbFZhbHVlIjogIjxSZW1vdmVFbnRyeT4iLAogICAgICAgICJEZWZhdWx0U3RhdGUiOiAidHJ1ZSIKICAgICAgfQogICAgXSwKICAgICJsaW5rIjogImh0dHBzOi8vd2ludXRpbC5jaHJpc3RpdHVzLmNvbS9kZXYvdHdlYWtzL2N1c3RvbWl6ZS1wcmVmZXJlbmNlcy9uZXdvdXRsb29rIgogIH0sCiAgIldQRlRvZ2dsZVNjcm9sbGJhcnMiOiB7CiAgICAiQ29udGVudCI6ICLmu5rliqjmnaHlp4vnu4jlj6/op4EiLAogICAgIkRlc2NyaXB0aW9uIjogIuWmguaenOWQr+eUqO+8jOa7muWKqOadoeWwhuWni+e7iOWPr+ingeOAguWmguaenOemgeeUqO+8jFdpbmRvd3Mg5bCG6Ieq5Yqo6ZqQ6JeP5LiN5L2/55So55qE5rua5Yqo5p2h44CCIiwKICAgICJjYXRlZ29yeSI6ICLoh6rlrprkuYnlgY/lpb0iLAogICAgInBhbmVsIjogIjIiLAogICAgIlR5cGUiOiAiVG9nZ2xlIiwKICAgICJyZWdpc3RyeSI6IFsKICAgICAgewogICAgICAgICJQYXRoIjogIkhLQ1U6XFxDb250cm9sIFBhbmVsXFxBY2Nlc3NpYmlsaXR5IiwKICAgICAgICAiTmFtZSI6ICJEeW5hbWljU2Nyb2xsYmFycyIsCiAgICAgICAgIlZhbHVlIjogIjAiLAogICAgICAgICJUeXBlIjogIkRXb3JkIiwKICAgICAgICAiT3JpZ2luYWxWYWx1ZSI6ICIxIiwKICAgICAgICAiRGVmYXVsdFN0YXRlIjogImZhbHNlIiwKICAgICAgICAibGluayI6ICJodHRwczovL3dpbnV0aWwuY2hyaXN0aXR1cy5jb20vZGV2L3R3ZWFrcy9jdXN0b21pemUtcHJlZmVyZW5jZXMvc2Nyb2xsYmFycyIKICAgICAgfQogICAgXSwKICAgICJsaW5rIjogImh0dHBzOi8vd2ludXRpbC5jaHJpc3RpdHVzLmNvbS9kZXYvdHdlYWtzL2N1c3RvbWl6ZS1wcmVmZXJlbmNlcy9zY3JvbGxiYXJzIgogIH0sCiAgIldQRlRvZ2dsZU11bHRpcGxhbmVPdmVybGF5IjogewogICAgIkNvbnRlbnQiOiAi5aSa5bmz6Z2i6KaG55uWIiwKICAgICJEZXNjcmlwdGlvbiI6ICLlpJrlubPpnaLopobnm5blkIjmiJDlpJrkuKrlm77lg4/lsYLvvIzmnInml7blj6/og73lr7zoh7TmmL7ljaHpl67popjjgIIiLAogICAgImNhdGVnb3J5IjogIuiHquWumuS5ieWBj+WlvSIsCiAgICAicGFuZWwiOiAiMiIsCiAgICAiVHlwZSI6ICJUb2dnbGUiLAogICAgInJlZ2lzdHJ5IjogWwogICAgICB7CiAgICAgICAgIlBhdGgiOiAiSEtMTTpcXFNPRlRXQVJFXFxNaWNyb3NvZnRcXFdpbmRvd3NcXER3bSIsCiAgICAgICAgIk5hbWUiOiAiT3ZlcmxheVRlc3RNb2RlIiwKICAgICAgICAiVmFsdWUiOiAiMCIsCiAgICAgICAgIlR5cGUiOiAiRFdvcmQiLAogICAgICAgICJPcmlnaW5hbFZhbHVlIjogIjUiLAogICAgICAgICJEZWZhdWx0U3RhdGUiOiAidHJ1ZSIKICAgICAgfSwKICAgICAgewogICAgICAgICJQYXRoIjogIkhLTE06XFxTWVNURU1cXEN1cnJlbnRDb250cm9sU2V0XFxDb250cm9sXFxHcmFwaGljc0RyaXZlcnMiLAogICAgICAgICJOYW1lIjogIkRpc2FibGVPdmVybGF5cyIsCiAgICAgICAgIlZhbHVlIjogIjAiLAogICAgICAgICJUeXBlIjogIkRXb3JkIiwKICAgICAgICAiT3JpZ2luYWxWYWx1ZSI6ICIxIiwKICAgICAgICAiRGVmYXVsdFN0YXRlIjogInRydWUiCiAgICAgIH0KICAgIF0sCiAgICAibGluayI6ICJodHRwczovL3dpbnV0aWwuY2hyaXN0aXR1cy5jb20vZGV2L3R3ZWFrcy9jdXN0b21pemUtcHJlZmVyZW5jZXMvbXVsdGlwbGFuZW92ZXJsYXkiCiAgfSwKICAiV1BGVG9nZ2xlTW91c2VBY2NlbGVyYXRpb24iOiB7CiAgICAiQ29udGVudCI6ICLpvKDmoIfliqDpgJ8iLAogICAgIkRlc2NyaXB0aW9uIjogIuS9v+WFieagh+enu+WKqOWPl+eJqeeQhum8oOagh+enu+WKqOmAn+W6pueahOW9seWTjeOAgiIsCiAgICAiY2F0ZWdvcnkiOiAi6Ieq5a6a5LmJ5YGP5aW9IiwKICAgICJwYW5lbCI6ICIyIiwKICAgICJUeXBlIjogIlRvZ2dsZSIsCiAgICAicmVnaXN0cnkiOiBbCiAgICAgIHsKICAgICAgICAiUGF0aCI6ICJIS0NVOlxcQ29udHJvbCBQYW5lbFxcTW91c2UiLAogICAgICAgICJOYW1lIjogIk1vdXNlU3BlZWQiLAogICAgICAgICJWYWx1ZSI6ICIxIiwKICAgICAgICAiVHlwZSI6ICJEV29yZCIsCiAgICAgICAgIk9yaWdpbmFsVmFsdWUiOiAiMCIsCiAgICAgICAgIkRlZmF1bHRTdGF0ZSI6ICJ0cnVlIgogICAgICB9LAogICAgICB7CiAgICAgICAgIlBhdGgiOiAiSEtDVTpcXENvbnRyb2wgUGFuZWxcXE1vdXNlIiwKICAgICAgICAiTmFtZSI6ICJNb3VzZVRocmVzaG9sZDEiLAogICAgICAgICJWYWx1ZSI6ICI2IiwKICAgICAgICAiVHlwZSI6ICJEV29yZCIsCiAgICAgICAgIk9yaWdpbmFsVmFsdWUiOiAiMCIsCiAgICAgICAgIkRlZmF1bHRTdGF0ZSI6ICJ0cnVlIgogICAgICB9LAogICAgICB7CiAgICAgICAgIlBhdGgiOiAiSEtDVTpcXENvbnRyb2wgUGFuZWxcXE1vdXNlIiwKICAgICAgICAiTmFtZSI6ICJNb3VzZVRocmVzaG9sZDIiLAogICAgICAgICJWYWx1ZSI6ICIxMCIsCiAgICAgICAgIlR5cGUiOiAiRFdvcmQiLAogICAgICAgICJPcmlnaW5hbFZhbHVlIjogIjAiLAogICAgICAgICJEZWZhdWx0U3RhdGUiOiAidHJ1ZSIKICAgICAgfQogICAgXSwKICAgICJsaW5rIjogImh0dHBzOi8vd2ludXRpbC5jaHJpc3RpdHVzLmNvbS9kZXYvdHdlYWtzL2N1c3RvbWl6ZS1wcmVmZXJlbmNlcy9tb3VzZWFjY2VsZXJhdGlvbiIKICB9LAogICJXUEZUb2dnbGVOdW1Mb2NrIjogewogICAgIkNvbnRlbnQiOiAi5byA5py6IE51bSBMb2NrIOmUrueKtuaAgSIsCiAgICAiRGVzY3JpcHRpb24iOiAi5Zyo6K6h566X5py65ZCv5Yqo5pe25YiH5o2iIE51bSBMb2NrIOmUrueKtuaAgeOAgiIsCiAgICAiY2F0ZWdvcnkiOiAi6Ieq5a6a5LmJ5YGP5aW9IiwKICAgICJwYW5lbCI6ICIyIiwKICAgICJUeXBlIjogIlRvZ2dsZSIsCiAgICAicmVnaXN0cnkiOiBbCiAgICAgIHsKICAgICAgICAiUGF0aCI6ICJIS1U6XFwuRGVmYXVsdFxcQ29udHJvbCBQYW5lbFxcS2V5Ym9hcmQiLAogICAgICAgICJOYW1lIjogIkluaXRpYWxLZXlib2FyZEluZGljYXRvcnMiLAogICAgICAgICJWYWx1ZSI6ICIyIiwKICAgICAgICAiVHlwZSI6ICJTdHJpbmciLAogICAgICAgICJPcmlnaW5hbFZhbHVlIjogIjAiLAogICAgICAgICJEZWZhdWx0U3RhdGUiOiAiZmFsc2UiCiAgICAgIH0sCiAgICAgIHsKICAgICAgICAiUGF0aCI6ICJIS0NVOlxcQ29udHJvbCBQYW5lbFxcS2V5Ym9hcmQiLAogICAgICAgICJOYW1lIjogIkluaXRpYWxLZXlib2FyZEluZGljYXRvcnMiLAogICAgICAgICJWYWx1ZSI6ICIyIiwKICAgICAgICAiVHlwZSI6ICJTdHJpbmciLAogICAgICAgICJPcmlnaW5hbFZhbHVlIjogIjAiLAogICAgICAgICJEZWZhdWx0U3RhdGUiOiAiZmFsc2UiCiAgICAgIH0KICAgIF0sCiAgICAibGluayI6ICJodHRwczovL3dpbnV0aWwuY2hyaXN0aXR1cy5jb20vZGV2L3R3ZWFrcy9jdXN0b21pemUtcHJlZmVyZW5jZXMvbnVtbG9jayIKICB9LAogICJXUEZUb2dnbGVXaW5kb3dTbmFwcGluZyI6IHsKICAgICJDb250ZW50IjogIueql+WPo+i0tOmdoCIsCiAgICAiRGVzY3JpcHRpb24iOiAi5YiH5o2i5ouW5Yqo56qX5Y+j5pe255qE56qX5Y+j6LS06Z2g5Yqf6IO944CCIiwKICAgICJjYXRlZ29yeSI6ICLoh6rlrprkuYnlgY/lpb0iLAogICAgInBhbmVsIjogIjIiLAogICAgIlR5cGUiOiAiVG9nZ2xlIiwKICAgICJyZWdpc3RyeSI6IFsKICAgICAgewogICAgICAgICJQYXRoIjogIkhLQ1U6XFxDb250cm9sIFBhbmVsXFxEZXNrdG9wIiwKICAgICAgICAiTmFtZSI6ICJXaW5kb3dBcnJhbmdlbWVudEFjdGl2ZSIsCiAgICAgICAgIlZhbHVlIjogIjEiLAogICAgICAgICJUeXBlIjogIlN0cmluZyIsCiAgICAgICAgIk9yaWdpbmFsVmFsdWUiOiAiMCIsCiAgICAgICAgIkRlZmF1bHRTdGF0ZSI6ICJ0cnVlIgogICAgICB9CiAgICBdLAogICAgImxpbmsiOiAiaHR0cHM6Ly93aW51dGlsLmNocmlzdGl0dXMuY29tL2Rldi90d2Vha3MvY3VzdG9taXplLXByZWZlcmVuY2VzL3dpbmRvd3NuYXBwaW5nIgogIH0sCiAgIldQRlRvZ2dsZVN0YW5kYnlGaXgiOiB7CiAgICAiQ29udGVudCI6ICJTMCDnnaHnnKDnvZHnu5zov57mjqUiLAogICAgIkRlc2NyaXB0aW9uIjogIuWIh+aNoueOsOS7o+eslOiusOacrOeUteiEkeS9juWKn+iAl+epuumXsiAoUzAg552h55ygKSDmnJ/pl7TnmoTnvZHnu5zov57mjqXjgIIiLAogICAgImNhdGVnb3J5IjogIuiHquWumuS5ieWBj+WlvSIsCiAgICAicGFuZWwiOiAiMiIsCiAgICAiVHlwZSI6ICJUb2dnbGUiLAogICAgInJlZ2lzdHJ5IjogWwogICAgICB7CiAgICAgICAgIlBhdGgiOiAiSEtDVTpcXFNPRlRXQVJFXFxQb2xpY2llc1xcTWljcm9zb2Z0XFxQb3dlclxcUG93ZXJTZXR0aW5nc1xcZjE1NTc2ZTgtOThiNy00MTg2LWI5NDQtZWFmYTY2NDQwMmQ5IiwKICAgICAgICAiTmFtZSI6ICJBQ1NldHRpbmdJbmRleCIsCiAgICAgICAgIlZhbHVlIjogIjEiLAogICAgICAgICJUeXBlIjogIkRXb3JkIiwKICAgICAgICAiT3JpZ2luYWxWYWx1ZSI6ICIwIiwKICAgICAgICAiRGVmYXVsdFN0YXRlIjogInRydWUiCiAgICAgIH0KICAgIF0sCiAgICAibGluayI6ICJodHRwczovL3dpbnV0aWwuY2hyaXN0aXR1cy5jb20vZGV2L3R3ZWFrcy9jdXN0b21pemUtcHJlZmVyZW5jZXMvc3RhbmRieWZpeCIKICB9LAogICJXUEZUb2dnbGVTM1NsZWVwIjogewogICAgIkNvbnRlbnQiOiAiUzMg5LyR55ygIiwKICAgICJEZXNjcmlwdGlvbiI6ICLlnKjnjrDku6PlvoXmnLrlkowgUzMg5LyR55yg5LmL6Ze05YiH5o2i44CCIiwKICAgICJjYXRlZ29yeSI6ICLoh6rlrprkuYnlgY/lpb0iLAogICAgInBhbmVsIjogIjIiLAogICAgIlR5cGUiOiAiVG9nZ2xlIiwKICAgICJyZWdpc3RyeSI6IFsKICAgICAgewogICAgICAgICJQYXRoIjogIkhLTE06XFxTWVNURU1cXEN1cnJlbnRDb250cm9sU2V0XFxDb250cm9sXFxQb3dlciIsCiAgICAgICAgIk5hbWUiOiAiUGxhdGZvcm1Bb0FjT3ZlcnJpZGUiLAogICAgICAgICJWYWx1ZSI6ICIwIiwKICAgICAgICAiVHlwZSI6ICJEV29yZCIsCiAgICAgICAgIk9yaWdpbmFsVmFsdWUiOiAiPFJlbW92ZUVudHJ5PiIsCiAgICAgICAgIkRlZmF1bHRTdGF0ZSI6ICJmYWxzZSIKICAgICAgfQogICAgXSwKICAgICJsaW5rIjogImh0dHBzOi8vd2ludXRpbC5jaHJpc3RpdHVzLmNvbS9kZXYvdHdlYWtzL2N1c3RvbWl6ZS1wcmVmZXJlbmNlcy9zM3NsZWVwIgogIH0sCiAgIldQRlRvZ2dsZUhpZGVTZXR0aW5nc0hvbWUiOiB7CiAgICAiQ29udGVudCI6ICLorr7nva7kuLvpobUiLAogICAgIkRlc2NyaXB0aW9uIjogIuWIh+aNoiBXaW5kb3dzIOiuvue9ruW6lOeUqOS4reeahOS4u+mhteOAgiIsCiAgICAiY2F0ZWdvcnkiOiAi6Ieq5a6a5LmJ5YGP5aW9IiwKICAgICJwYW5lbCI6ICIyIiwKICAgICJUeXBlIjogIlRvZ2dsZSIsCiAgICAicmVnaXN0cnkiOiBbCiAgICAgIHsKICAgICAgICAiUGF0aCI6ICJIS0NVOlxcU29mdHdhcmVcXE1pY3Jvc29mdFxcV2luZG93c1xcQ3VycmVudFZlcnNpb25cXFBvbGljaWVzXFxFeHBsb3JlciIsCiAgICAgICAgIk5hbWUiOiAiU2V0dGluZ3NQYWdlVmlzaWJpbGl0eSIsCiAgICAgICAgIlZhbHVlIjogInNob3c6aG9tZSIsCiAgICAgICAgIlR5cGUiOiAiU3RyaW5nIiwKICAgICAgICAiT3JpZ2luYWxWYWx1ZSI6ICJoaWRlOmhvbWUiLAogICAgICAgICJEZWZhdWx0U3RhdGUiOiAidHJ1ZSIKICAgICAgfQogICAgXSwKICAgICJsaW5rIjogImh0dHBzOi8vd2ludXRpbC5jaHJpc3RpdHVzLmNvbS9kZXYvdHdlYWtzL2N1c3RvbWl6ZS1wcmVmZXJlbmNlcy9oaWRlc2V0dGluZ3Nob21lIgogIH0sCiAgIldQRlRvZ2dsZUJpbmdTZWFyY2giOiB7CiAgICAiQ29udGVudCI6ICLlvIDlp4voj5zljZXlv4XlupTmkJzntKIiLAogICAgIkRlc2NyaXB0aW9uIjogIuWIh+aNoiBXaW5kb3dzIOaQnOe0ouS4reeahOW/heW6lOe9kemhteaQnOe0oue7k+aenOOAgiIsCiAgICAiY2F0ZWdvcnkiOiAi6Ieq5a6a5LmJ5YGP5aW9IiwKICAgICJwYW5lbCI6ICIyIiwKICAgICJUeXBlIjogIlRvZ2dsZSIsCiAgICAicmVnaXN0cnkiOiBbCiAgICAgIHsKICAgICAgICAiUGF0aCI6ICJIS0NVOlxcU29mdHdhcmVcXE1pY3Jvc29mdFxcV2luZG93c1xcQ3VycmVudFZlcnNpb25cXFNlYXJjaCIsCiAgICAgICAgIk5hbWUiOiAiQmluZ1NlYXJjaEVuYWJsZWQiLAogICAgICAgICJWYWx1ZSI6ICIxIiwKICAgICAgICAiVHlwZSI6ICJEV29yZCIsCiAgICAgICAgIk9yaWdpbmFsVmFsdWUiOiAiMCIsCiAgICAgICAgIkRlZmF1bHRTdGF0ZSI6ICJ0cnVlIgogICAgICB9CiAgICBdLAogICAgImxpbmsiOiAiaHR0cHM6Ly93aW51dGlsLmNocmlzdGl0dXMuY29tL2Rldi90d2Vha3MvY3VzdG9taXplLXByZWZlcmVuY2VzL2JpbmdzZWFyY2giCiAgfSwKICAiV1BGVG9nZ2xlTG9naW5CbHVyIjogewogICAgIkNvbnRlbnQiOiAi55m75b2V5bGP5bmV5Lqa5YWL5Yqb5qih57OKIiwKICAgICJEZXNjcmlwdGlvbiI6ICLliIfmjaLnmbvlvZXlsY/luZXog4zmma/kuIrnmoTkuprlhYvlipvmqKHns4rmlYjmnpzjgIIiLAogICAgImNhdGVnb3J5IjogIuiHquWumuS5ieWBj+WlvSIsCiAgICAicGFuZWwiOiAiMiIsCiAgICAiVHlwZSI6ICJUb2dnbGUiLAogICAgInJlZ2lzdHJ5IjogWwogICAgICB7CiAgICAgICAgIlBhdGgiOiAiSEtMTTpcXFNPRlRXQVJFXFxQb2xpY2llc1xcTWljcm9zb2Z0XFxXaW5kb3dzXFxTeXN0ZW0iLAogICAgICAgICJOYW1lIjogIkRpc2FibGVBY3J5bGljQmFja2dyb3VuZE9uTG9nb24iLAogICAgICAgICJWYWx1ZSI6ICIwIiwKICAgICAgICAiVHlwZSI6ICJEV29yZCIsCiAgICAgICAgIk9yaWdpbmFsVmFsdWUiOiAiMSIsCiAgICAgICAgIkRlZmF1bHRTdGF0ZSI6ICJ0cnVlIgogICAgICB9CiAgICBdLAogICAgImxpbmsiOiAiaHR0cHM6Ly93aW51dGlsLmNocmlzdGl0dXMuY29tL2Rldi90d2Vha3MvY3VzdG9taXplLXByZWZlcmVuY2VzL2xvZ2luYmx1ciIKICB9LAogICJXUEZUd2Vha3NEaXNhYmxlTG9ja3NjcmVlbiI6IHsKICAgICJDb250ZW50IjogIumUgeWumuWxj+W5lSAtIOemgeeUqCIsCiAgICAiRGVzY3JpcHRpb24iOiAi5a6M5YWo6Lez6L+H6ZSB5a6a5bGP5bmV77yM5Zyo5ZCv5Yqo5ZKM5ZSk6YaS5pe255u05o6l6L+b5YWl55m75b2V5bGP5bmV44CCIiwKICAgICJjYXRlZ29yeSI6ICLoh6rlrprkuYnlgY/lpb0iLAogICAgInBhbmVsIjogIjIiLAogICAgIlR5cGUiOiAiVG9nZ2xlIiwKICAgICJyZWdpc3RyeSI6IFsKICAgICAgewogICAgICAgICJQYXRoIjogIkhLTE06XFxTT0ZUV0FSRVxcUG9saWNpZXNcXE1pY3Jvc29mdFxcV2luZG93c1xcUGVyc29uYWxpemF0aW9uIiwKICAgICAgICAiTmFtZSI6ICJOb0xvY2tTY3JlZW4iLAogICAgICAgICJWYWx1ZSI6ICIxIiwKICAgICAgICAiVHlwZSI6ICJEV29yZCIsCiAgICAgICAgIk9yaWdpbmFsVmFsdWUiOiAiPFJlbW92ZUVudHJ5PiIKICAgICAgfQogICAgXSwKICAgICJsaW5rIjogImh0dHBzOi8vd2ludXRpbC5jaHJpc3RpdHVzLmNvbS9kZXYvdHdlYWtzL2N1c3RvbWl6ZS1wcmVmZXJlbmNlcy9kaXNhYmxlbG9ja3NjcmVlbiIKICB9LAogICJXUEZUb2dnbGVTdGFydE1lbnVSZWNvbW1lbmRhdGlvbnMiOiB7CiAgICAiQ29udGVudCI6ICLlvIDlp4voj5zljZXmjqjojZAiLAogICAgIkRlc2NyaXB0aW9uIjogIuWIh+aNouW8gOWni+iPnOWNleS4reeahOaOqOiNkOmDqOWIhuOAguitpuWRiu+8mui/meS5n+S8muWQjOaXtuemgeeUqOmUgeWxj+S4iueahCBXaW5kb3dzIOiBmueEpuOAgiIsCiAgICAiY2F0ZWdvcnkiOiAi6Ieq5a6a5LmJ5YGP5aW9IiwKICAgICJwYW5lbCI6ICIyIiwKICAgICJUeXBlIjogIlRvZ2dsZSIsCiAgICAicmVnaXN0cnkiOiBbCiAgICAgIHsKICAgICAgICAiUGF0aCI6ICJIS0xNOlxcU09GVFdBUkVcXE1pY3Jvc29mdFxcUG9saWN5TWFuYWdlclxcY3VycmVudFxcZGV2aWNlXFxTdGFydCIsCiAgICAgICAgIk5hbWUiOiAiSGlkZVJlY29tbWVuZGVkU2VjdGlvbiIsCiAgICAgICAgIlZhbHVlIjogIjAiLAogICAgICAgICJUeXBlIjogIkRXb3JkIiwKICAgICAgICAiT3JpZ2luYWxWYWx1ZSI6ICIxIiwKICAgICAgICAiRGVmYXVsdFN0YXRlIjogInRydWUiCiAgICAgIH0sCiAgICAgIHsKICAgICAgICAiUGF0aCI6ICJIS0xNOlxcU09GVFdBUkVcXE1pY3Jvc29mdFxcUG9saWN5TWFuYWdlclxcY3VycmVudFxcZGV2aWNlXFxFZHVjYXRpb24iLAogICAgICAgICJOYW1lIjogIklzRWR1Y2F0aW9uRW52aXJvbm1lbnQiLAogICAgICAgICJWYWx1ZSI6ICIwIiwKICAgICAgICAiVHlwZSI6ICJEV29yZCIsCiAgICAgICAgIk9yaWdpbmFsVmFsdWUiOiAiMSIsCiAgICAgICAgIkRlZmF1bHRTdGF0ZSI6ICJ0cnVlIgogICAgICB9LAogICAgICB7CiAgICAgICAgIlBhdGgiOiAiSEtMTTpcXFNPRlRXQVJFXFxQb2xpY2llc1xcTWljcm9zb2Z0XFxXaW5kb3dzXFxFeHBsb3JlciIsCiAgICAgICAgIk5hbWUiOiAiSGlkZVJlY29tbWVuZGVkU2VjdGlvbiIsCiAgICAgICAgIlZhbHVlIjogIjAiLAogICAgICAgICJUeXBlIjogIkRXb3JkIiwKICAgICAgICAiT3JpZ2luYWxWYWx1ZSI6ICIxIiwKICAgICAgICAiRGVmYXVsdFN0YXRlIjogInRydWUiCiAgICAgIH0KICAgIF0sCiAgICAiSW52b2tlU2NyaXB0IjogWwogICAgICAiICAgICAgSW52b2tlLVdpblV0aWxFeHBsb3JlclVwZGF0ZSAtYWN0aW9uIFwicmVzdGFydFwiICAgICAgIgogICAgXSwKICAgICJVbmRvU2NyaXB0IjogWwogICAgICAiICAgICAgSW52b2tlLVdpblV0aWxFeHBsb3JlclVwZGF0ZSAtYWN0aW9uIFwicmVzdGFydFwiICAgICAgIgogICAgXSwKICAgICJsaW5rIjogImh0dHBzOi8vd2ludXRpbC5jaHJpc3RpdHVzLmNvbS9kZXYvdHdlYWtzL2N1c3RvbWl6ZS1wcmVmZXJlbmNlcy9zdGFydG1lbnVyZWNvbW1lbmRhdGlvbnMiCiAgfSwKICAiV1BGVG9nZ2xlU3RpY2t5S2V5cyI6IHsKICAgICJDb250ZW50IjogIueymOa7numUriIsCiAgICAiRGVzY3JpcHRpb24iOiAi5YiH5o2i57KY5rue6ZSu5Yqf6IO977yM6K+l5Yqf6IO95Zyo5b+r6YCf54K55Ye7IFNoaWZ0IOmUruaXtua/gOa0u+OAgiIsCiAgICAiY2F0ZWdvcnkiOiAi6Ieq5a6a5LmJ5YGP5aW9IiwKICAgICJwYW5lbCI6ICIyIiwKICAgICJUeXBlIjogIlRvZ2dsZSIsCiAgICAicmVnaXN0cnkiOiBbCiAgICAgIHsKICAgICAgICAiUGF0aCI6ICJIS0NVOlxcQ29udHJvbCBQYW5lbFxcQWNjZXNzaWJpbGl0eVxcU3RpY2t5S2V5cyIsCiAgICAgICAgIk5hbWUiOiAiRmxhZ3MiLAogICAgICAgICJWYWx1ZSI6ICI1MDYiLAogICAgICAgICJUeXBlIjogIkRXb3JkIiwKICAgICAgICAiT3JpZ2luYWxWYWx1ZSI6ICI1OCIsCiAgICAgICAgIkRlZmF1bHRTdGF0ZSI6ICJ0cnVlIgogICAgICB9CiAgICBdLAogICAgImxpbmsiOiAiaHR0cHM6Ly93aW51dGlsLmNocmlzdGl0dXMuY29tL2Rldi90d2Vha3MvY3VzdG9taXplLXByZWZlcmVuY2VzL3N0aWNreWtleXMiCiAgfSwKICAiV1BGVG9nZ2xlVGFza2JhckFsaWdubWVudCI6IHsKICAgICJDb250ZW50IjogIuS7u+WKoeagj+WxheS4reWbvuaghyIsCiAgICAiRGVzY3JpcHRpb24iOiAi5YiH5o2i5Lu75Yqh5qCP5Zu+5qCH5bem5a+56b2Q5oiW5bGF5Lit44CCIiwKICAgICJjYXRlZ29yeSI6ICLoh6rlrprkuYnlgY/lpb0iLAogICAgInBhbmVsIjogIjIiLAogICAgIlR5cGUiOiAiVG9nZ2xlIiwKICAgICJyZWdpc3RyeSI6IFsKICAgICAgewogICAgICAgICJQYXRoIjogIkhLQ1U6XFxTb2Z0d2FyZVxcTWljcm9zb2Z0XFxXaW5kb3dzXFxDdXJyZW50VmVyc2lvblxcRXhwbG9yZXJcXEFkdmFuY2VkIiwKICAgICAgICAiTmFtZSI6ICJUYXNrYmFyQWwiLAogICAgICAgICJWYWx1ZSI6ICIxIiwKICAgICAgICAiVHlwZSI6ICJEV29yZCIsCiAgICAgICAgIk9yaWdpbmFsVmFsdWUiOiAiMCIsCiAgICAgICAgIkRlZmF1bHRTdGF0ZSI6ICJ0cnVlIgogICAgICB9CiAgICBdLAogICAgIkludm9rZVNjcmlwdCI6IFsKICAgICAgIiAgICAgIEludm9rZS1XaW5VdGlsRXhwbG9yZXJVcGRhdGUgLWFjdGlvbiBcInJlc3RhcnRcIiAgICAgICIKICAgIF0sCiAgICAiVW5kb1NjcmlwdCI6IFsKICAgICAgIiAgICAgIEludm9rZS1XaW5VdGlsRXhwbG9yZXJVcGRhdGUgLWFjdGlvbiBcInJlc3RhcnRcIiAgICAgICIKICAgIF0sCiAgICAibGluayI6ICJodHRwczovL3dpbnV0aWwuY2hyaXN0aXR1cy5jb20vZGV2L3R3ZWFrcy9jdXN0b21pemUtcHJlZmVyZW5jZXMvdGFza2JhcmFsaWdubWVudCIKICB9LAogICJXUEZUb2dnbGVUYXNrYmFyU2VhcmNoIjogewogICAgIkNvbnRlbnQiOiAi5Lu75Yqh5qCP5pCc57Si5Zu+5qCHIiwKICAgICJEZXNjcmlwdGlvbiI6ICLliIfmjaLku7vliqHmoI/kuIrnmoTmkJzntKLmjInpkq7jgIIiLAogICAgImNhdGVnb3J5IjogIuiHquWumuS5ieWBj+WlvSIsCiAgICAicGFuZWwiOiAiMiIsCiAgICAiVHlwZSI6ICJUb2dnbGUiLAogICAgInJlZ2lzdHJ5IjogWwogICAgICB7CiAgICAgICAgIlBhdGgiOiAiSEtDVTpcXFNvZnR3YXJlXFxNaWNyb3NvZnRcXFdpbmRvd3NcXEN1cnJlbnRWZXJzaW9uXFxTZWFyY2giLAogICAgICAgICJOYW1lIjogIlNlYXJjaGJveFRhc2tiYXJNb2RlIiwKICAgICAgICAiVmFsdWUiOiAiMSIsCiAgICAgICAgIlR5cGUiOiAiRFdvcmQiLAogICAgICAgICJPcmlnaW5hbFZhbHVlIjogIjAiLAogICAgICAgICJEZWZhdWx0U3RhdGUiOiAidHJ1ZSIKICAgICAgfQogICAgXSwKICAgICJsaW5rIjogImh0dHBzOi8vd2ludXRpbC5jaHJpc3RpdHVzLmNvbS9kZXYvdHdlYWtzL2N1c3RvbWl6ZS1wcmVmZXJlbmNlcy90YXNrYmFyc2VhcmNoIgogIH0sCiAgIldQRlRvZ2dsZVRhc2tWaWV3IjogewogICAgIkNvbnRlbnQiOiAi5Lu75Yqh5qCP5Lu75Yqh6KeG5Zu+5Zu+5qCHIiwKICAgICJEZXNjcmlwdGlvbiI6ICLliIfmjaLku7vliqHmoI/kuK3nmoTku7vliqHop4blm77mjInpkq7jgIIiLAogICAgImNhdGVnb3J5IjogIuiHquWumuS5ieWBj+WlvSIsCiAgICAicGFuZWwiOiAiMiIsCiAgICAiVHlwZSI6ICJUb2dnbGUiLAogICAgInJlZ2lzdHJ5IjogWwogICAgICB7CiAgICAgICAgIlBhdGgiOiAiSEtDVTpcXFNvZnR3YXJlXFxNaWNyb3NvZnRcXFdpbmRvd3NcXEN1cnJlbnRWZXJzaW9uXFxFeHBsb3JlclxcQWR2YW5jZWQiLAogICAgICAgICJOYW1lIjogIlNob3dUYXNrVmlld0J1dHRvbiIsCiAgICAgICAgIlZhbHVlIjogIjEiLAogICAgICAgICJUeXBlIjogIkRXb3JkIiwKICAgICAgICAiT3JpZ2luYWxWYWx1ZSI6ICIwIiwKICAgICAgICAiRGVmYXVsdFN0YXRlIjogInRydWUiCiAgICAgIH0KICAgIF0sCiAgICAibGluayI6ICJodHRwczovL3dpbnV0aWwuY2hyaXN0aXR1cy5jb20vZGV2L3R3ZWFrcy9jdXN0b21pemUtcHJlZmVyZW5jZXMvdGFza3ZpZXciCiAgfSwKICAiV1BGVG9nZ2xlR2FtZU1vZGUiOiB7CiAgICAiQ29udGVudCI6ICLmuLjmiI/mqKHlvI8iLAogICAgIkRlc2NyaXB0aW9uIjogIuWIh+aNoiBXaW5kb3dzIOmAmui/h+WIhumFjeezu+e7n+i1hOa6kOe7mea4uOaIj+adpeS8mOWFiOiAg+iZkea4uOaIj+aAp+iDveOAgiIsCiAgICAiY2F0ZWdvcnkiOiAi6Ieq5a6a5LmJ5YGP5aW9IiwKICAgICJwYW5lbCI6ICIyIiwKICAgICJUeXBlIjogIlRvZ2dsZSIsCiAgICAicmVnaXN0cnkiOiBbCiAgICAgIHsKICAgICAgICAiUGF0aCI6ICJIS0NVOlxcU29mdHdhcmVcXE1pY3Jvc29mdFxcR2FtZUJhciIsCiAgICAgICAgIk5hbWUiOiAiQWxsb3dBdXRvR2FtZU1vZGUiLAogICAgICAgICJWYWx1ZSI6ICIxIiwKICAgICAgICAiVHlwZSI6ICJEV29yZCIsCiAgICAgICAgIk9yaWdpbmFsVmFsdWUiOiAiMCIsCiAgICAgICAgIkRlZmF1bHRTdGF0ZSI6ICJ0cnVlIgogICAgICB9LAogICAgICB7CiAgICAgICAgIlBhdGgiOiAiSEtDVTpcXFNvZnR3YXJlXFxNaWNyb3NvZnRcXEdhbWVCYXIiLAogICAgICAgICJOYW1lIjogIkF1dG9HYW1lTW9kZUVuYWJsZWQiLAogICAgICAgICJWYWx1ZSI6ICIxIiwKICAgICAgICAiVHlwZSI6ICJEV29yZCIsCiAgICAgICAgIk9yaWdpbmFsVmFsdWUiOiAiMCIsCiAgICAgICAgIkRlZmF1bHRTdGF0ZSI6ICJ0cnVlIgogICAgICB9CiAgICBdLAogICAgImxpbmsiOiAiaHR0cHM6Ly93aW51dGlsLmNocmlzdGl0dXMuY29tL2Rldi90d2Vha3MvY3VzdG9taXplLXByZWZlcmVuY2VzL2dhbWVtb2RlIgogIH0sCiAgIldQRlRvZ2dsZUxvbmdQYXRocyI6IHsKICAgICJDb250ZW50IjogIuWQr+eUqOmVv+i3r+W+hCIsCiAgICAiRGVzY3JpcHRpb24iOiAi5YiH5o2i6LWE5rqQ566h55CG5Zmo5Lit6LaF6L+HIDI2MCDkuKrlrZfnrKbnmoTmlofku7bot6/lvoTmlK/mjIHjgIIiLAogICAgImNhdGVnb3J5IjogIuiHquWumuS5ieWBj+WlvSIsCiAgICAicGFuZWwiOiAiMiIsCiAgICAiVHlwZSI6ICJUb2dnbGUiLAogICAgInJlZ2lzdHJ5IjogWwogICAgICB7CiAgICAgICAgIlBhdGgiOiAiSEtMTTpcXFNZU1RFTVxcQ3VycmVudENvbnRyb2xTZXRcXENvbnRyb2xcXEZpbGVTeXN0ZW0iLAogICAgICAgICJOYW1lIjogIkxvbmdQYXRoc0VuYWJsZWQiLAogICAgICAgICJWYWx1ZSI6ICIxIiwKICAgICAgICAiVHlwZSI6ICJEV29yZCIsCiAgICAgICAgIk9yaWdpbmFsVmFsdWUiOiAiMCIsCiAgICAgICAgIkRlZmF1bHRTdGF0ZSI6ICJmYWxzZSIKICAgICAgfQogICAgXSwKICAgICJsaW5rIjogImh0dHBzOi8vd2ludXRpbC5jaHJpc3RpdHVzLmNvbS9kZXYvdHdlYWtzL2N1c3RvbWl6ZS1wcmVmZXJlbmNlcy9sb25ncGF0aHMiCiAgfSwKICAiV1BGT09TVWJ1dHRvbiI6IHsKICAgICJDb250ZW50IjogIk8mTyBTaHV0VXAxMCsrIC0g6L+Q6KGMIiwKICAgICJjYXRlZ29yeSI6ICLpq5jnuqfkvJjljJYgLSDosKjmhY7mk43kvZwiLAogICAgInBhbmVsIjogIjEiLAogICAgIlR5cGUiOiAiQnV0dG9uIiwKICAgICJsaW5rIjogImh0dHBzOi8vd2ludXRpbC5jaHJpc3RpdHVzLmNvbS9kZXYvdHdlYWtzL3otLWFkdmFuY2VkLXR3ZWFrcy0tLWNhdXRpb24vb29zdWJ1dHRvbiIKICB9LAogICJXUEZjaGFuZ2VkbnMiOiB7CiAgICAiQ29udGVudCI6ICJETlMgLSDorr7nva7kuLrvvJoiLAogICAgImNhdGVnb3J5IjogIumrmOe6p+S8mOWMliAtIOiwqOaFjuaTjeS9nCIsCiAgICAicGFuZWwiOiAiMSIsCiAgICAiVHlwZSI6ICJDb21ib2JveCIsCiAgICAiQ29tYm9JdGVtcyI6ICJEZWZhdWx0IERIQ1AgR29vZ2xlIENsb3VkZmxhcmUgQ2xvdWRmbGFyZV9NYWx3YXJlIENsb3VkZmxhcmVfTWFsd2FyZV9BZHVsdCBPcGVuX0ROUyBRdWFkOSBBZEd1YXJkX0Fkc19UcmFja2VycyBBZEd1YXJkX0Fkc19UcmFja2Vyc19NYWx3YXJlX0FkdWx0IiwKICAgICJsaW5rIjogImh0dHBzOi8vd2ludXRpbC5jaHJpc3RpdHVzLmNvbS9kZXYvdHdlYWtzL3otLWFkdmFuY2VkLXR3ZWFrcy0tLWNhdXRpb24vY2hhbmdlZG5zIgogIH0sCiAgIldQRkFkZFVsdFBlcmYiOiB7CiAgICAiQ29udGVudCI6ICLljZPotormgKfog73mlrnmoYggLSDlkK/nlKgiLAogICAgImNhdGVnb3J5IjogIuaAp+iDveiuoeWIkiAtIOS4jemAgueUqOS6jueslOiusOacrOeUteiEkSIsCiAgICAicGFuZWwiOiAiMiIsCiAgICAiVHlwZSI6ICJCdXR0b24iLAogICAgIkJ1dHRvbldpZHRoIjogIjMwMCIsCiAgICAibGluayI6ICJodHRwczovL3dpbnV0aWwuY2hyaXN0aXR1cy5jb20vZGV2L3R3ZWFrcy9wZXJmb3JtYW5jZS1wbGFucy0tLW5vdC1mb3ItbGFwdG9wcy9hZGR1bHRwZXJmIgogIH0sCiAgIldQRlJlbW92ZVVsdFBlcmYiOiB7CiAgICAiQ29udGVudCI6ICLljZPotormgKfog73mlrnmoYggLSDnpoHnlKgiLAogICAgImNhdGVnb3J5IjogIuaAp+iDveiuoeWIkiAtIOS4jemAgueUqOS6jueslOiusOacrOeUteiEkSIsCiAgICAicGFuZWwiOiAiMiIsCiAgICAiVHlwZSI6ICJCdXR0b24iLAogICAgIkJ1dHRvbldpZHRoIjogIjMwMCIsCiAgICAibGluayI6ICJodHRwczovL3dpbnV0aWwuY2hyaXN0aXR1cy5jb20vZGV2L3R3ZWFrcy9wZXJmb3JtYW5jZS1wbGFucy0tLW5vdC1mb3ItbGFwdG9wcy9yZW1vdmV1bHRwZXJmIgogIH0KfQ==')) | ConvertFrom-Json
 
-
-$sync.configs.feature = @'
-{
-  "WPFFeaturesdotnet": {
-    "Content": ".NET Framework (2、3、4 版) - 启用",
-    "Description": ".NET 和 .NET Framework 是一个开发者平台，由工具、编程语言和库组成。",
-    "category": "功能",
-    "panel": "1",
-    "feature": [
-      "NetFx4-AdvSrvs",
-      "NetFx3"
-    ],
-    "InvokeScript": [],
-    "link": "https://winutil.christitus.com/dev/features/features/dotnet"
-  },
-  "WPFFixesNTPPool": {
-    "Content": "NTP 服务器 - 启用",
-    "Description": "将默认 Windows NTP 服务器替换为 pool.ntp.org，以提高时间同步的准确性和可靠性。",
-    "category": "修复",
-    "panel": "1",
-    "Type": "Button",
-    "ButtonWidth": "300",
-    "function": "Invoke-WPFFixesNTPPool",
-    "link": "https://winutil.christitus.com/dev/features/fixes/ntppool"
-  },
-  "WPFFeatureshyperv": {
-    "Content": "Hyper-V - 启用",
-    "Description": "Hyper-V 是 Microsoft 开发的硬件虚拟化产品，允许用户创建和管理虚拟机。",
-    "category": "功能",
-    "panel": "1",
-    "feature": [
-      "Microsoft-Hyper-V-All"
-    ],
-    "link": "https://winutil.christitus.com/dev/features/features/hyperv"
-  },
-  "WPFFeatureslegacymedia": {
-    "Content": "旧版媒体组件 (WMP、DirectPlay) - 启用",
-    "Description": "启用来自旧版 Windows 的旧版程序。",
-    "category": "功能",
-    "panel": "1",
-    "feature": [
-      "WindowsMediaPlayer",
-      "MediaPlayback",
-      "DirectPlay",
-      "LegacyComponents"
-    ],
-    "InvokeScript": [],
-    "link": "https://winutil.christitus.com/dev/features/features/legacymedia"
-  },
-  "WPFFeaturewsl": {
-    "Content": "Windows Linux 子系统 (WSL) - 启用",
-    "Description": "Windows Linux 子系统是 Windows 的可选功能，允许 Linux 程序在 Windows 上原生运行。",
-    "category": "功能",
-    "panel": "1",
-    "feature": [
-      "VirtualMachinePlatform",
-      "Microsoft-Windows-Subsystem-Linux"
-    ],
-    "InvokeScript": [],
-    "link": "https://winutil.christitus.com/dev/features/features/wsl"
-  },
-  "WPFFeaturenfs": {
-    "Content": "网络文件系统 (NFS) - 启用",
-    "Description": "网络文件系统 (NFS) 是一种在网络中存储文件的机制。",
-    "category": "功能",
-    "panel": "1",
-    "feature": [
-      "ServicesForNFS-ClientOnly",
-      "ClientForNFS-Infrastructure",
-      "NFS-Administration"
-    ],
-    "InvokeScript": [
-      "nfsadmin client stop",
-      "Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\ClientForNFS\\CurrentVersion\\Default' -Name 'AnonymousUID' -Type DWord -Value 0",
-      "Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\ClientForNFS\\CurrentVersion\\Default' -Name 'AnonymousGID' -Type DWord -Value 0",
-      "nfsadmin client start",
-      "nfsadmin client localhost config fileaccess=755 SecFlavors=+sys -krb5 -krb5i"
-    ],
-    "link": "https://winutil.christitus.com/dev/features/features/nfs"
-  },
-  "WPFFeatureRegBackup": {
-    "Content": "注册表备份 (每日凌晨 12:30 任务) - 启用",
-    "Description": "启用每日注册表备份，此功能在 Windows 10 1803 中被 Microsoft 禁用。",
-    "category": "功能",
-    "panel": "1",
-    "feature": [],
-    "InvokeScript": [
-      "      New-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Configuration Manager' -Name 'EnablePeriodicBackup' -Type DWord -Value 1 -Force      New-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Configuration Manager' -Name 'BackupCount' -Type DWord -Value 2 -Force      $action = New-ScheduledTaskAction -Execute 'schtasks' -Argument '/run /i /tn \"\\Microsoft\\Windows\\Registry\\RegIdleBackup\"'      $trigger = New-ScheduledTaskTrigger -Daily -At 00:30      Register-ScheduledTask -Action $action -Trigger $trigger -TaskName 'AutoRegBackup' -Description 'Create System Registry Backups' -User 'System'      "
-    ],
-    "link": "https://winutil.christitus.com/dev/features/features/regbackup"
-  },
-  "WPFFeatureEnableLegacyRecovery": {
-    "Content": "旧版 F8 启动恢复 - 启用",
-    "Description": "启用高级启动选项屏幕，让您使用高级故障排除模式启动 Windows。",
-    "category": "功能",
-    "panel": "1",
-    "feature": [],
-    "InvokeScript": [
-      "bcdedit /set bootmenupolicy legacy"
-    ],
-    "link": "https://winutil.christitus.com/dev/features/features/enablelegacyrecovery"
-  },
-  "WPFFeatureDisableLegacyRecovery": {
-    "Content": "旧版 F8 启动恢复 - 禁用",
-    "Description": "禁用允许您使用高级故障排除模式启动 Windows 的高级启动选项屏幕。",
-    "category": "功能",
-    "panel": "1",
-    "feature": [],
-    "InvokeScript": [
-      "bcdedit /set bootmenupolicy standard"
-    ],
-    "link": "https://winutil.christitus.com/dev/features/features/disablelegacyrecovery"
-  },
-  "WPFFeaturesSandbox": {
-    "Content": "Windows 沙盒 - 启用",
-    "Description": "Windows 沙盒是一个轻量级虚拟机，提供临时的桌面环境以安全隔离地运行应用程序。",
-    "category": "功能",
-    "panel": "1",
-    "feature": [
-      "Containers-DisposableClientVM"
-    ],
-    "link": "https://winutil.christitus.com/dev/features/features/sandbox"
-  },
-  "WPFFeatureInstall": {
-    "Content": "安装功能",
-    "category": "功能",
-    "panel": "1",
-    "Type": "Button",
-    "ButtonWidth": "300",
-    "function": "Invoke-WPFFeatureInstall",
-    "link": "https://winutil.christitus.com/dev/features/features/install"
-  },
-  "WPFPanelAutologin": {
-    "Content": "自动登录 - 运行",
-    "category": "修复",
-    "panel": "1",
-    "Type": "Button",
-    "ButtonWidth": "300",
-    "function": "Invoke-WPFPanelAutologin",
-    "link": "https://winutil.christitus.com/dev/features/fixes/autologin"
-  },
-  "WPFFixesUpdate": {
-    "Content": "Windows 更新 - 重置",
-    "category": "修复",
-    "panel": "1",
-    "Type": "Button",
-    "ButtonWidth": "300",
-    "function": "Invoke-WPFFixesUpdate",
-    "link": "https://winutil.christitus.com/dev/features/fixes/update"
-  },
-  "WPFFixesNetwork": {
-    "Content": "网络 - 重置",
-    "category": "修复",
-    "panel": "1",
-    "Type": "Button",
-    "ButtonWidth": "300",
-    "function": "Invoke-WPFFixesNetwork",
-    "link": "https://winutil.christitus.com/dev/features/fixes/network"
-  },
-  "WPFPanelDISM": {
-    "Content": "系统损坏扫描 - 运行",
-    "category": "修复",
-    "panel": "1",
-    "Type": "Button",
-    "ButtonWidth": "300",
-    "function": "Invoke-WPFSystemRepair",
-    "link": "https://winutil.christitus.com/dev/features/fixes/dism"
-  },
-  "WPFFixesWinget": {
-    "Content": "WinGet - 重新安装",
-    "category": "修复",
-    "panel": "1",
-    "Type": "Button",
-    "ButtonWidth": "300",
-    "function": "Invoke-WPFFixesWinget",
-    "link": "https://winutil.christitus.com/dev/features/fixes/winget"
-  },
-  "WPFPanelComputer": {
-    "Content": "计算机管理",
-    "category": "传统 Windows 面板",
-    "panel": "2",
-    "Type": "Button",
-    "ButtonWidth": "300",
-    "InvokeScript": [
-      "compmgmt.msc"
-    ],
-    "link": "https://winutil.christitus.com/dev/features/legacy-windows-panels/computer"
-  },
-  "WPFPanelControl": {
-    "Content": "控制面板",
-    "category": "传统 Windows 面板",
-    "panel": "2",
-    "Type": "Button",
-    "ButtonWidth": "300",
-    "InvokeScript": [
-      "control"
-    ],
-    "link": "https://winutil.christitus.com/dev/features/legacy-windows-panels/control"
-  },
-  "WPFPanelMouse": {
-    "Content": "鼠标属性",
-    "category": "传统 Windows 面板",
-    "panel": "2",
-    "Type": "Button",
-    "ButtonWidth": "300",
-    "InvokeScript": [
-      "main.cpl"
-    ],
-    "link": "https://winutil.christitus.com/dev/features/legacy-windows-panels/mouse"
-  },
-  "WPFPanelNetwork": {
-    "Content": "网络连接",
-    "category": "传统 Windows 面板",
-    "panel": "2",
-    "Type": "Button",
-    "ButtonWidth": "300",
-    "InvokeScript": [
-      "ncpa.cpl"
-    ],
-    "link": "https://winutil.christitus.com/dev/features/legacy-windows-panels/network"
-  },
-  "WPFPanelPower": {
-    "Content": "电源设置",
-    "category": "传统 Windows 面板",
-    "panel": "2",
-    "Type": "Button",
-    "ButtonWidth": "300",
-    "InvokeScript": [
-      "powercfg.cpl"
-    ],
-    "link": "https://winutil.christitus.com/dev/features/legacy-windows-panels/power"
-  },
-  "WPFPanelPrinter": {
-    "Content": "打印机设置",
-    "category": "传统 Windows 面板",
-    "panel": "2",
-    "Type": "Button",
-    "ButtonWidth": "300",
-    "InvokeScript": [
-      "Start-Process 'shell:::{A8A91A66-3A7D-4424-8D24-04E180695C7A}'"
-    ],
-    "link": "https://winutil.christitus.com/dev/features/legacy-windows-panels/printer"
-  },
-  "WPFPanelPrograms": {
-    "Content": "程序和功能",
-    "category": "传统 Windows 面板",
-    "panel": "2",
-    "Type": "Button",
-    "ButtonWidth": "300",
-    "InvokeScript": [
-      "appwiz.cpl"
-    ],
-    "link": "https://winutil.christitus.com/dev/features/legacy-windows-panels/programs"
-  },
-  "WPFPanelRegion": {
-    "Content": "区域",
-    "category": "传统 Windows 面板",
-    "panel": "2",
-    "Type": "Button",
-    "ButtonWidth": "300",
-    "InvokeScript": [
-      "intl.cpl"
-    ],
-    "link": "https://winutil.christitus.com/dev/features/legacy-windows-panels/region"
-  },
-  "WPFPanelSecurity": {
-    "Content": "安全和维护",
-    "category": "传统 Windows 面板",
-    "panel": "2",
-    "Type": "Button",
-    "ButtonWidth": "300",
-    "InvokeScript": [
-      "wscui.cpl"
-    ],
-    "link": "https://winutil.christitus.com/dev/features/legacy-windows-panels/security"
-  },
-  "WPFPanelSound": {
-    "Content": "声音设置",
-    "category": "传统 Windows 面板",
-    "panel": "2",
-    "Type": "Button",
-    "ButtonWidth": "300",
-    "InvokeScript": [
-      "mmsys.cpl"
-    ],
-    "link": "https://winutil.christitus.com/dev/features/legacy-windows-panels/sound"
-  },
-  "WPFPanelSystem": {
-    "Content": "系统属性",
-    "category": "传统 Windows 面板",
-    "panel": "2",
-    "Type": "Button",
-    "ButtonWidth": "300",
-    "InvokeScript": [
-      "sysdm.cpl"
-    ],
-    "link": "https://winutil.christitus.com/dev/features/legacy-windows-panels/system"
-  },
-  "WPFPanelTimedate": {
-    "Content": "时间和日期",
-    "category": "传统 Windows 面板",
-    "panel": "2",
-    "Type": "Button",
-    "ButtonWidth": "300",
-    "InvokeScript": [
-      "timedate.cpl"
-    ],
-    "link": "https://winutil.christitus.com/dev/features/legacy-windows-panels/timedate"
-  },
-  "WPFPanelFirewall": {
-    "Content": "Windows Defender 防火墙",
-    "category": "传统 Windows 面板",
-    "panel": "2",
-    "Type": "Button",
-    "ButtonWidth": "300",
-    "InvokeScript": [
-      "firewall.cpl"
-    ],
-    "link": "https://winutil.christitus.com/dev/features/legacy-windows-panels/firewall"
-  },
-  "WPFPanelRestore": {
-    "Content": "Windows 还原",
-    "category": "传统 Windows 面板",
-    "panel": "2",
-    "Type": "Button",
-    "ButtonWidth": "300",
-    "InvokeScript": [
-      "rstrui.exe"
-    ],
-    "link": "https://winutil.christitus.com/dev/features/legacy-windows-panels/restore"
-  },
-  "WPFWinUtilInstallPSProfile": {
-    "Content": "PowerShell 是微软的自动化任务框架和脚本语言",
-    "category": "PowerShell 配置文件 (仅 PowerShell 7+)",
-    "panel": "2",
-    "Type": "Button",
-    "ButtonWidth": "300",
-    "function": "Invoke-WinUtilInstallPSProfile",
-    "link": "https://winutil.christitus.com/dev/features/powershell-profile-powershell-7--only/installpsprofile"
-  },
-  "WPFWinUtilUninstallPSProfile": {
-    "Content": "PowerShell 是微软的自动化任务框架和脚本语言",
-    "category": "PowerShell 配置文件 (仅 PowerShell 7+)",
-    "panel": "2",
-    "Type": "Button",
-    "ButtonWidth": "300",
-    "function": "Invoke-WinUtilUninstallPSProfile",
-    "link": "https://winutil.christitus.com/dev/features/powershell-profile-powershell-7--only/uninstallpsprofile"
-  },
-  "WPFWinUtilSSHServer": {
-    "Content": "OpenSSH 服务器 - 启用",
-    "category": "远程访问",
-    "panel": "2",
-    "Type": "Button",
-    "ButtonWidth": "300",
-    "function": "Invoke-WPFSSHServer",
-    "link": "https://winutil.christitus.com/dev/features/remote-access/sshserver"
-  }
-}
-'@ | ConvertFrom-Json
-
-
-$sync.configs.preset = @'
-{
-  "Standard": [
-    "WPFTweaksActivity",
-    "WPFTweaksConsumerFeatures",
-    "WPFTweaksDisableExplorerAutoDiscovery",
-    "WPFTweaksWPBT",
-    "WPFTweaksLocation",
-    "WPFTweaksServices",
-    "WPFTweaksTelemetry",
-    "WPFTweaksDeliveryOptimization",
-    "WPFTweaksDiskCleanup",
-    "WPFTweaksDeleteTempFiles",
-    "WPFTweaksEndTaskOnTaskbar",
-    "WPFTweaksRestorePoint"
-  ],
-  "Minimal": [
-    "WPFTweaksConsumerFeatures",
-    "WPFTweaksWPBT",
-    "WPFTweaksServices",
-    "WPFTweaksTelemetry"
-  ],
-  "Advanced": [
-    "WPFTweaksRestorePoint",
-    "WPFTweaksActivity",
-    "WPFTweaksConsumerFeatures",
-    "WPFTweaksDisableExplorerAutoDiscovery",
-    "WPFTweaksWPBT",
-    "WPFTweaksLocation",
-    "WPFTweaksServices",
-    "WPFTweaksTelemetry",
-    "WPFTweaksDeliveryOptimization",
-    "WPFTweaksDeleteTempFiles",
-    "WPFTweaksEndTaskOnTaskbar",
-    "WPFTweaksDisableStoreSearch",
-    "WPFTweaksRevertStartMenu",
-    "WPFTweaksWidget",
-    "WPFTweaksRemoveOneDrive",
-    "WPFTweaksWindowsAI",
-    "WPFTweaksRightClickMenu"
-  ],
-  "AppxDefault": [
-    "WPFAppxMicrosoft_WindowsFeedbackHub",
-    "WPFAppxMicrosoft_GetHelp",
-    "WPFAppxMicrosoft_MicrosoftOfficeHub",
-    "WPFAppxMicrosoft_WindowsCalculator",
-    "WPFAppxClipchamp_Clipchamp",
-    "WPFAppxMicrosoft_WindowsAlarms",
-    "WPFAppxMicrosoftCorporationII_QuickAssist",
-    "WPFAppxMicrosoft_WindowsSoundRecorder",
-    "WPFAppxMicrosoft_MicrosoftStickyNotes",
-    "WPFAppxMicrosoft_Todos",
-    "WPFAppxMicrosoft_MicrosoftSolitaireCollection",
-    "WPFAppxMicrosoft_PowerAutomateDesktop",
-    "WPFAppxMicrosoft_WindowsDevHome",
-    "WPFAppxMicrosoft_BingWeather",
-    "WPFAppxMicrosoft_StartExperiencesApp",
-    "WPFAppxMicrosoft_BingNews",
-    "WPFAppxMicrosoft_Copilot",
-    "WPFAppxMicrosoft_BingSearch"
-  ]
-}
-'@ | ConvertFrom-Json
-
-
-$sync.configs.themes = @'
-{
-  "shared": {
-    "AppEntryWidth": "220",
-    "AppEntryFontSize": "13.2",
-    "AppEntryIconSize": "28",
-    "AppEntryMargin": "3",
-    "AppEntryBorderThickness": "1",
-    "CustomDialogFontSize": "12",
-    "CustomDialogFontSizeHeader": "14",
-    "CustomDialogLogoSize": "25",
-    "CustomDialogWidth": "400",
-    "CustomDialogHeight": "200",
-    "FontSize": "12",
-    "FontFamily": "Arial",
-    "HeaderFontSize": "16",
-    "HeaderFontFamily": "Consolas, Monaco",
-    "CheckBoxBulletDecoratorSize": "14",
-    "CheckBoxMargin": "15,0,0,2",
-    "TabContentMargin": "5",
-    "TabButtonFontSize": "14",
-    "TabButtonWidth": "110",
-    "TabButtonHeight": "26",
-    "TabRowHeightInPixels": "50",
-    "ToolTipWidth": "300",
-    "IconFontSize": "14",
-    "IconButtonSize": "35",
-    "SettingsIconFontSize": "18",
-    "CloseIconFontSize": "12",
-    "GroupBorderBackgroundColor": "#232629",
-    "ButtonFontSize": "12",
-    "ButtonFontFamily": "Arial",
-    "ButtonWidth": "200",
-    "ButtonHeight": "25",
-    "ConfigTabButtonFontSize": "14",
-    "ConfigUpdateButtonFontSize": "14",
-    "SearchBarWidth": "200",
-    "SearchBarHeight": "26",
-    "SearchBarTextBoxFontSize": "12",
-    "SearchBarClearButtonFontSize": "14",
-    "CheckboxMouseOverColor": "#999999",
-    "ButtonBorderThickness": "1",
-    "ButtonMargin": "1",
-    "ButtonCornerRadius": "2"
-  },
-  "Light": {
-    "AppInstallUnselectedColor": "#F7F7F7",
-    "AppInstallHighlightedColor": "#CFCFCF",
-    "AppInstallSelectedColor": "#C2C2C2",
-    "ComboBoxForegroundColor": "#232629",
-    "ComboBoxBackgroundColor": "#F7F7F7",
-    "LabelboxForegroundColor": "#232629",
-    "MainForegroundColor": "#232629",
-    "MainBackgroundColor": "#F7F7F7",
-    "LabelBackgroundColor": "#F7F7F7",
-    "LinkForegroundColor": "#484848",
-    "LinkHoverForegroundColor": "#232629",
-    "ScrollBarBackgroundColor": "#4A4D52",
-    "ScrollBarHoverColor": "#5A5D62",
-    "ScrollBarDraggingColor": "#6A6D72",
-    "ProgressBarForegroundColor": "#2E77FF",
-    "ProgressBarBackgroundColor": "Transparent",
-    "ButtonInstallBackgroundColor": "#F7F7F7",
-    "ButtonTweaksBackgroundColor": "#F7F7F7",
-    "ButtonConfigBackgroundColor": "#F7F7F7",
-    "ButtonUpdatesBackgroundColor": "#F7F7F7",
-    "ButtonWin11ISOBackgroundColor": "#F7F7F7",
-    "ButtonAppxBackgroundColor": "#F7F7F7",
-    "ButtonInstallForegroundColor": "#232629",
-    "ButtonTweaksForegroundColor": "#232629",
-    "ButtonConfigForegroundColor": "#232629",
-    "ButtonUpdatesForegroundColor": "#232629",
-    "ButtonWin11ISOForegroundColor": "#232629",
-    "ButtonAppxForegroundColor": "#232629",
-    "ButtonBackgroundColor": "#F5F5F5",
-    "ButtonBackgroundPressedColor": "#1A1A1A",
-    "ButtonBackgroundMouseoverColor": "#C2C2C2",
-    "ButtonBackgroundSelectedColor": "#F0F0F0",
-    "ButtonForegroundColor": "#232629",
-    "ToggleButtonOnColor": "#2E77FF",
-    "ToggleButtonOffColor": "#707070",
-    "ToolTipBackgroundColor": "#F7F7F7",
-    "BorderColor": "#232629",
-    "BorderOpacity": "0.2"
-  },
-  "Dark": {
-    "AppInstallUnselectedColor": "#232629",
-    "AppInstallHighlightedColor": "#3C3C3C",
-    "AppInstallSelectedColor": "#4C4C4C",
-    "ComboBoxForegroundColor": "#F7F7F7",
-    "ComboBoxBackgroundColor": "#1E3747",
-    "LabelboxForegroundColor": "#5BDCFF",
-    "MainForegroundColor": "#F7F7F7",
-    "MainBackgroundColor": "#232629",
-    "LabelBackgroundColor": "#232629",
-    "LinkForegroundColor": "#ADD8E6",
-    "LinkHoverForegroundColor": "#F7F7F7",
-    "ScrollBarBackgroundColor": "#2E3135",
-    "ScrollBarHoverColor": "#3B4252",
-    "ScrollBarDraggingColor": "#5E81AC",
-    "ProgressBarForegroundColor": "#6EFF72",
-    "ProgressBarBackgroundColor": "Transparent",
-    "ButtonInstallBackgroundColor": "#222222",
-    "ButtonTweaksBackgroundColor": "#333333",
-    "ButtonConfigBackgroundColor": "#444444",
-    "ButtonUpdatesBackgroundColor": "#555555",
-    "ButtonWin11ISOBackgroundColor": "#666666",
-    "ButtonAppxBackgroundColor": "#777777",
-    "ButtonInstallForegroundColor": "#F7F7F7",
-    "ButtonTweaksForegroundColor": "#F7F7F7",
-    "ButtonConfigForegroundColor": "#F7F7F7",
-    "ButtonUpdatesForegroundColor": "#F7F7F7",
-    "ButtonWin11ISOForegroundColor": "#F7F7F7",
-    "ButtonAppxForegroundColor": "#F7F7F7",
-    "ButtonBackgroundColor": "#1E3747",
-    "ButtonBackgroundPressedColor": "#F7F7F7",
-    "ButtonBackgroundMouseoverColor": "#3B4252",
-    "ButtonBackgroundSelectedColor": "#5E81AC",
-    "ButtonForegroundColor": "#F7F7F7",
-    "ToggleButtonOnColor": "#2E77FF",
-    "ToggleButtonOffColor": "#707070",
-    "ToolTipBackgroundColor": "#2F373D",
-    "BorderColor": "#2F373D",
-    "BorderOpacity": "0.2"
-  }
-}
-'@ | ConvertFrom-Json
-
-
-$sync.configs.tweaks = @'
-{
-  "WPFTweaksActivity": {
-    "Content": "活动历史记录 - 禁用",
-    "Description": "清除最近的文档、剪贴板和运行历史记录。",
-    "category": "基本优化",
-    "panel": "1",
-    "registry": [
-      {
-        "Path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\System",
-        "Name": "EnableActivityFeed",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "<RemoveEntry>"
-      },
-      {
-        "Path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\System",
-        "Name": "PublishUserActivities",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "<RemoveEntry>"
-      },
-      {
-        "Path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\System",
-        "Name": "UploadUserActivities",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "<RemoveEntry>"
-      }
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/essential-tweaks/activity"
-  },
-  "WPFTweaksHiber": {
-    "Content": "休眠功能 - 禁用",
-    "Description": "休眠功能适用于笔记本电脑，在关机前保存内存内容。通常不推荐使用。",
-    "category": "基本优化",
-    "panel": "1",
-    "registry": [
-      {
-        "Path": "HKLM:\\System\\CurrentControlSet\\Control\\Session Manager\\Power",
-        "Name": "HibernateEnabled",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "1"
-      },
-      {
-        "Path": "HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\FlyoutMenuSettings",
-        "Name": "ShowHibernateOption",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "1"
-      }
-    ],
-    "InvokeScript": [
-      "powercfg.exe /hibernate off"
-    ],
-    "UndoScript": [
-      "powercfg.exe /hibernate on"
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/essential-tweaks/hiber"
-  },
-  "WPFTweaksWidget": {
-    "Content": "小组件 - 移除",
-    "Description": "移除任务栏左下角的烦人小组件。",
-    "category": "基本优化",
-    "panel": "1",
-    "InvokeScript": [
-      "      # Sometimes if you dont stop the Widgets process the removal may fail      Get-Process *Widget* | Stop-Process      Get-AppxPackage Microsoft.WidgetsPlatformRuntime -AllUsers | Remove-AppxPackage -AllUsers      Get-AppxPackage MicrosoftWindows.Client.WebExperience -AllUsers | Remove-AppxPackage -AllUsers      Invoke-WinUtilExplorerUpdate -action \"restart\"      Write-Host \"Removed widgets\"      "
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/essential-tweaks/widget"
-  },
-  "WPFTweaksRevertStartMenu": {
-    "Content": "开始菜单旧版布局 - 启用",
-    "Description": "恢复 25H2 新版本之前的旧开始菜单布局。在更新的 Windows 版本上此调整将不起作用。",
-    "category": "基本优化",
-    "panel": "1",
-    "registry": [
-      {
-        "Path": "HKLM:\\SYSTEM\\ControlSet001\\Control\\FeatureManagement\\Overrides\\8\\3036241548",
-        "Name": "EnabledState",
-        "Value": "1",
-        "Type": "DWord",
-        "OriginalValue": "<RemoveEntry>"
-      }
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/essential-tweaks/revertstartmenu"
-  },
-  "WPFTweaksDisableStoreSearch": {
-    "Content": "Microsoft Store 推荐搜索结果 - 禁用",
-    "Description": "在开始菜单搜索应用时将不显示推荐的 Microsoft Store 应用。",
-    "category": "基本优化",
-    "panel": "1",
-    "InvokeScript": [
-      "icacls \"$Env:LocalAppData\\Packages\\Microsoft.WindowsStore_8wekyb3d8bbwe\\LocalState\\store.db\" /deny Everyone:F"
-    ],
-    "UndoScript": [
-      "icacls \"$Env:LocalAppData\\Packages\\Microsoft.WindowsStore_8wekyb3d8bbwe\\LocalState\\store.db\" /grant Everyone:F"
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/essential-tweaks/disablestoresearch"
-  },
-  "WPFTweaksLocation": {
-    "Content": "位置跟踪 - 禁用",
-    "Description": "禁用位置跟踪。",
-    "category": "基本优化",
-    "panel": "1",
-    "service": [
-      {
-        "Name": "lfsvc",
-        "StartupType": "Disable",
-        "OriginalType": "Manual"
-      }
-    ],
-    "registry": [
-      {
-        "Path": "HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\CapabilityAccessManager\\ConsentStore\\location",
-        "Name": "Value",
-        "Value": "Deny",
-        "Type": "String",
-        "OriginalValue": "Allow"
-      },
-      {
-        "Path": "HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Sensor\\Overrides\\{BFA794E4-F964-4FDB-90F6-51056BFE4B44}",
-        "Name": "SensorPermissionState",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "1"
-      },
-      {
-        "Path": "HKLM:\\SYSTEM\\Maps",
-        "Name": "AutoUpdateEnabled",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "1"
-      }
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/essential-tweaks/location"
-  },
-  "WPFTweaksServices": {
-    "Content": "服务 - 设为手动",
-    "Description": "将某些服务设为手动启动并调整注册表值以匹配系统内存，可显著减少 svchost.exe 进程数量。",
-    "category": "基本优化",
-    "panel": "1",
-    "service": [
-      {
-        "Name": "CscService",
-        "StartupType": "Disabled",
-        "OriginalType": "Manual"
-      },
-      {
-        "Name": "DiagTrack",
-        "StartupType": "Disabled",
-        "OriginalType": "Automatic"
-      },
-      {
-        "Name": "MapsBroker",
-        "StartupType": "Manual",
-        "OriginalType": "Automatic"
-      },
-      {
-        "Name": "StorSvc",
-        "StartupType": "Manual",
-        "OriginalType": "Automatic"
-      },
-      {
-        "Name": "SharedAccess",
-        "StartupType": "Disabled",
-        "OriginalType": "Automatic"
-      }
-    ],
-    "InvokeScript": [
-      "      $Memory = (Get-CimInstance Win32_PhysicalMemory | Measure-Object Capacity -Sum).Sum / 1KB      Set-ItemProperty -Path \"HKLM:\\SYSTEM\\CurrentControlSet\\Control\" -Name SvcHostSplitThresholdInKB -Value $Memory      "
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/essential-tweaks/services"
-  },
-  "WPFTweaksBraveDebloat": {
-    "Content": "Brave 浏览器 - 精简",
-    "Description": "禁用各种烦人功能，如 Brave Rewards、Leo AI、加密钱包和 VPN。",
-    "category": "高级优化 - 谨慎操作",
-    "panel": "1",
-    "registry": [
-      {
-        "Path": "HKLM:\\SOFTWARE\\Policies\\BraveSoftware\\Brave",
-        "Name": "BraveRewardsDisabled",
-        "Value": "1",
-        "Type": "DWord",
-        "OriginalValue": "<RemoveEntry>"
-      },
-      {
-        "Path": "HKLM:\\SOFTWARE\\Policies\\BraveSoftware\\Brave",
-        "Name": "BraveWalletDisabled",
-        "Value": "1",
-        "Type": "DWord",
-        "OriginalValue": "<RemoveEntry>"
-      },
-      {
-        "Path": "HKLM:\\SOFTWARE\\Policies\\BraveSoftware\\Brave",
-        "Name": "BraveVPNDisabled",
-        "Value": "1",
-        "Type": "DWord",
-        "OriginalValue": "<RemoveEntry>"
-      },
-      {
-        "Path": "HKLM:\\SOFTWARE\\Policies\\BraveSoftware\\Brave",
-        "Name": "BraveAIChatEnabled",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "<RemoveEntry>"
-      },
-      {
-        "Path": "HKLM:\\SOFTWARE\\Policies\\BraveSoftware\\Brave",
-        "Name": "BraveStatsPingEnabled",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "<RemoveEntry>"
-      },
-      {
-        "Path": "HKLM:\\SOFTWARE\\Policies\\BraveSoftware\\Brave",
-        "Name": "BraveNewsDisabled",
-        "Value": "1",
-        "Type": "DWord",
-        "OriginalValue": "<RemoveEntry>"
-      },
-      {
-        "Path": "HKLM:\\SOFTWARE\\Policies\\BraveSoftware\\Brave",
-        "Name": "BraveTalkDisabled",
-        "Value": "1",
-        "Type": "DWord",
-        "OriginalValue": "<RemoveEntry>"
-      },
-      {
-        "Path": "HKLM:\\SOFTWARE\\Policies\\BraveSoftware\\Brave",
-        "Name": "TorDisabled",
-        "Value": "1",
-        "Type": "DWord",
-        "OriginalValue": "<RemoveEntry>"
-      },
-      {
-        "Path": "HKLM:\\SOFTWARE\\Policies\\BraveSoftware\\Brave",
-        "Name": "BraveP3AEnabled",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "<RemoveEntry>"
-      },
-      {
-        "Path": "HKLM:\\SOFTWARE\\Policies\\BraveSoftware\\Brave",
-        "Name": "UrlKeyedAnonymizedDataCollectionEnabled",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "<RemoveEntry>"
-      },
-      {
-        "Path": "HKLM:\\SOFTWARE\\Policies\\BraveSoftware\\Brave",
-        "Name": "SafeBrowsingExtendedReportingEnabled",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "<RemoveEntry>"
-      },
-      {
-        "Path": "HKLM:\\SOFTWARE\\Policies\\BraveSoftware\\Brave",
-        "Name": "MetricsReportingEnabled",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "<RemoveEntry>"
-      }
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/z--advanced-tweaks---caution/bravedebloat"
-  },
-  "WPFTweaksDisableWarningForUnsignedRdp": {
-    "Content": "RDP 未签名文件警告 - 禁用",
-    "Description": "禁用启动未签名 RDP 文件时显示的警告。",
-    "category": "高级优化 - 谨慎操作",
-    "panel": "1",
-    "registry": [
-      {
-        "Path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows NT\\Terminal Services\\Client",
-        "Name": "RedirectionWarningDialogVersion",
-        "Value": "1",
-        "Type": "DWord",
-        "OriginalValue": "<RemoveEntry>"
-      },
-      {
-        "Path": "HKCU:\\SOFTWARE\\Microsoft\\Terminal Server Client",
-        "Name": "RdpLaunchConsentAccepted",
-        "Value": "1",
-        "Type": "DWord",
-        "OriginalValue": "<RemoveEntry>"
-      }
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/z--advanced-tweaks---caution/disablewarningforunsignedrdp"
-  },
-  "WPFTweaksEdgeDebloat": {
-    "Content": "Microsoft Edge - 精简",
-    "Description": "禁用 Edge 中的各种遥测选项、弹窗和其他烦人功能。",
-    "category": "高级优化 - 谨慎操作",
-    "panel": "1",
-    "registry": [
-      {
-        "Path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\EdgeUpdate",
-        "Name": "CreateDesktopShortcutDefault",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "<RemoveEntry>"
-      },
-      {
-        "Path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Edge",
-        "Name": "PersonalizationReportingEnabled",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "<RemoveEntry>"
-      },
-      {
-        "Path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Edge\\ExtensionInstallBlocklist",
-        "Name": "1",
-        "Value": "ofefcgjbeghpigppfmkologfjadafddi",
-        "Type": "String",
-        "OriginalValue": "<RemoveEntry>"
-      },
-      {
-        "Path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Edge",
-        "Name": "ShowRecommendationsEnabled",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "<RemoveEntry>"
-      },
-      {
-        "Path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Edge",
-        "Name": "HideFirstRunExperience",
-        "Value": "1",
-        "Type": "DWord",
-        "OriginalValue": "<RemoveEntry>"
-      },
-      {
-        "Path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Edge",
-        "Name": "UserFeedbackAllowed",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "<RemoveEntry>"
-      },
-      {
-        "Path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Edge",
-        "Name": "ConfigureDoNotTrack",
-        "Value": "1",
-        "Type": "DWord",
-        "OriginalValue": "<RemoveEntry>"
-      },
-      {
-        "Path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Edge",
-        "Name": "AlternateErrorPagesEnabled",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "<RemoveEntry>"
-      },
-      {
-        "Path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Edge",
-        "Name": "EdgeCollectionsEnabled",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "<RemoveEntry>"
-      },
-      {
-        "Path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Edge",
-        "Name": "EdgeShoppingAssistantEnabled",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "<RemoveEntry>"
-      },
-      {
-        "Path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Edge",
-        "Name": "MicrosoftEdgeInsiderPromotionEnabled",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "<RemoveEntry>"
-      },
-      {
-        "Path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Edge",
-        "Name": "ShowMicrosoftRewards",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "<RemoveEntry>"
-      },
-      {
-        "Path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Edge",
-        "Name": "WebWidgetAllowed",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "<RemoveEntry>"
-      },
-      {
-        "Path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Edge",
-        "Name": "DiagnosticData",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "<RemoveEntry>"
-      },
-      {
-        "Path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Edge",
-        "Name": "EdgeAssetDeliveryServiceEnabled",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "<RemoveEntry>"
-      },
-      {
-        "Path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Edge",
-        "Name": "WalletDonationEnabled",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "<RemoveEntry>"
-      },
-      {
-        "Path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Edge",
-        "Name": "DefaultBrowserSettingsCampaignEnabled",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "<RemoveEntry>"
-      }
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/z--advanced-tweaks---caution/edgedebloat"
-  },
-  "WPFTweaksConsumerFeatures": {
-    "Content": "消费者功能 - 禁用",
-    "Description": "停止推广应用安装并减少 Microsoft Store 内容的应用建议。",
-    "category": "基本优化",
-    "panel": "1",
-    "registry": [
-      {
-        "Path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\CloudContent",
-        "Name": "DisableWindowsConsumerFeatures",
-        "Value": "1",
-        "Type": "DWord",
-        "OriginalValue": "<RemoveEntry>"
-      }
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/essential-tweaks/consumerfeatures"
-  },
-  "WPFTweaksTelemetry": {
-    "Content": "遥测 - 禁用",
-    "Description": "禁用 Microsoft 遥测。",
-    "category": "基本优化",
-    "panel": "1",
-    "registry": [
-      {
-        "Path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\AdvertisingInfo",
-        "Name": "Enabled",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "<RemoveEntry>"
-      },
-      {
-        "Path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Privacy",
-        "Name": "TailoredExperiencesWithDiagnosticDataEnabled",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "<RemoveEntry>"
-      },
-      {
-        "Path": "HKCU:\\Software\\Microsoft\\Speech_OneCore\\Settings\\OnlineSpeechPrivacy",
-        "Name": "HasAccepted",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "<RemoveEntry>"
-      },
-      {
-        "Path": "HKCU:\\Software\\Microsoft\\Input\\TIPC",
-        "Name": "Enabled",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "<RemoveEntry>"
-      },
-      {
-        "Path": "HKCU:\\Software\\Microsoft\\InputPersonalization",
-        "Name": "RestrictImplicitInkCollection",
-        "Value": "1",
-        "Type": "DWord",
-        "OriginalValue": "<RemoveEntry>"
-      },
-      {
-        "Path": "HKCU:\\Software\\Microsoft\\InputPersonalization",
-        "Name": "RestrictImplicitTextCollection",
-        "Value": "1",
-        "Type": "DWord",
-        "OriginalValue": "<RemoveEntry>"
-      },
-      {
-        "Path": "HKCU:\\Software\\Microsoft\\InputPersonalization\\TrainedDataStore",
-        "Name": "HarvestContacts",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "<RemoveEntry>"
-      },
-      {
-        "Path": "HKCU:\\Software\\Microsoft\\Personalization\\Settings",
-        "Name": "AcceptedPrivacyPolicy",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "<RemoveEntry>"
-      },
-      {
-        "Path": "HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\DataCollection",
-        "Name": "AllowTelemetry",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "<RemoveEntry>"
-      },
-      {
-        "Path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
-        "Name": "Start_TrackProgs",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "<RemoveEntry>"
-      },
-      {
-        "Path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\System",
-        "Name": "PublishUserActivities",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "<RemoveEntry>"
-      },
-      {
-        "Path": "HKCU:\\Software\\Microsoft\\Siuf\\Rules",
-        "Name": "NumberOfSIUFInPeriod",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "<RemoveEntry>"
-      }
-    ],
-    "InvokeScript": [
-      "      # Disable Defender Auto Sample Submission      Set-MpPreference -SubmitSamplesConsent 2      # Disable (Connected User Experiences and Telemetry) Service      Set-Service -Name diagtrack -StartupType Disabled      # Disable (Windows Error Reporting Manager) Service      Set-Service -Name wermgr -StartupType Disabled      # Disable PowerShell 7 telemetry      [Environment]::SetEnvironmentVariable('POWERSHELL_TELEMETRY_OPTOUT', '1', 'Machine')      Remove-ItemProperty -Path \"HKCU:\\Software\\Microsoft\\Siuf\\Rules\" -Name PeriodInNanoSeconds      "
-    ],
-    "UndoScript": [
-      "      # Enable Defender Auto Sample Submission      Set-MpPreference -SubmitSamplesConsent 1      # Enable (Connected User Experiences and Telemetry) Service      Set-Service -Name diagtrack -StartupType Automatic      # Enable (Windows Error Reporting Manager) Service      Set-Service -Name wermgr -StartupType Automatic      # Enable PowerShell 7 telemetry      [Environment]::SetEnvironmentVariable('POWERSHELL_TELEMETRY_OPTOUT', '', 'Machine')      "
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/essential-tweaks/telemetry"
-  },
-  "WPFTweaksDeliveryOptimization": {
-    "Content": "传递优化 - 禁用",
-    "Description": "阻止 Windows 使用您的带宽向其他电脑上传更新。",
-    "category": "基本优化",
-    "panel": "1",
-    "registry": [
-      {
-        "Path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\DeliveryOptimization",
-        "Name": "DODownloadMode",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "<RemoveEntry>"
-      }
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/essential-tweaks/deliveryoptimization"
-  },
-  "WPFTweaksRemoveEdge": {
-    "Content": "Microsoft Edge - 移除",
-    "Description": "通过创建虚拟 MicrosoftEdge.exe 文件解锁官方卸载程序，实现系统级移除 Microsoft Edge",
-    "category": "高级优化 - 谨慎操作",
-    "panel": "1",
-    "InvokeScript": [
-      "      $Path = Resolve-Path -Path \"$Env:ProgramFiles (x86)\\Microsoft\\Edge\\Application\\*\\Installer\\setup.exe\" | Select-Object -Last 1      if (Test-Path $Path) {          New-Item -Path \"$Env:SystemRoot\\SystemApps\\Microsoft.MicrosoftEdge_8wekyb3d8bbwe\\MicrosoftEdge.exe\" -Force          Start-Process -FilePath $Path -ArgumentList \"--uninstall --system-level --force-uninstall --delete-profile\" -Wait          Write-Host \"Microsoft Edge was removed\"      } else {          Write-Host \"Microsoft Edge is not installed\"      }      "
-    ],
-    "UndoScript": [
-      "      Write-Host \"Installing Microsoft Edge...\"      winget install Microsoft.Edge --source winget      "
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/z--advanced-tweaks---caution/removeedge"
-  },
-  "WPFTweaksDisableBitLocker": {
-    "Content": "BitLocker - 禁用",
-    "Description": "禁用 BitLocker。",
-    "category": "基本优化",
-    "panel": "1",
-    "InvokeScript": [
-      "Disable-BitLocker -MountPoint $Env:SystemDrive"
-    ],
-    "UndoScript": [
-      "Enable-BitLocker -MountPoint $Env:SystemDrive"
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/essential-tweaks/disablebitlocker"
-  },
-  "WPFTweaksUTC": {
-    "Content": "日期和时间 - 设置为 UTC",
-    "Description": "对双系统启动的计算机至关重要，修复与 Linux 系统的时间同步问题。",
-    "category": "高级优化 - 谨慎操作",
-    "panel": "1",
-    "registry": [
-      {
-        "Path": "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\TimeZoneInformation",
-        "Name": "RealTimeIsUniversal",
-        "Value": "1",
-        "Type": "QWord",
-        "OriginalValue": "0"
-      }
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/z--advanced-tweaks---caution/utc"
-  },
-  "WPFTweaksRemoveOneDrive": {
-    "Content": "Microsoft OneDrive - 移除",
-    "Description": "拒绝删除 OneDrive 用户文件的权限，卸载后恢复原始权限。",
-    "category": "高级优化 - 谨慎操作",
-    "panel": "1",
-    "InvokeScript": [
-      "      # Deny permission to remove OneDrive folder      icacls $Env:OneDrive /deny \"Administrators:(D,DC)\"      Write-Host \"Uninstalling OneDrive...\"      Start-Process -FilePath (Join-Path $Env:SystemRoot \"System32\\OneDriveSetup.exe\") -ArgumentList '/uninstall' -Wait      # Some of OneDrive files use explorer, and OneDrive uses FileCoAuth      Write-Host \"Removing leftover OneDrive Files...\"      Stop-Process -Name FileCoAuth,Explorer      Remove-Item \"$Env:LocalAppData\\Microsoft\\OneDrive\" -Recurse -Force      Remove-Item \"$Env:ProgramData\\Microsoft OneDrive\" -Recurse -Force      # Grant back permission to access OneDrive folder      icacls $Env:OneDrive /grant \"Administrators:(D,DC)\"      if (-not (Get-ChildItem -Path $Env:OneDrive)) {          Remove-Item -Path $Env:OneDrive -Recurse          [Environment]::SetEnvironmentVariable('OneDrive', $null, 'User')      }      # Disable OneSyncSvc      Set-Service -Name OneSyncSvc -StartupType Disabled      "
-    ],
-    "UndoScript": [
-      "      Write-Host \"Installing OneDrive\"      winget install Microsoft.Onedrive --source winget      # Enabled OneSyncSvc      Set-Service -Name OneSyncSvc -StartupType Automatic      "
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/z--advanced-tweaks---caution/removeonedrive"
-  },
-  "WPFTweaksRemoveHomeAndGallery": {
-    "Content": "文件资源管理器主页和图库 - 禁用",
-    "Description": "从资源管理器中移除主页和图库，并将此电脑设为默认。",
-    "category": "高级优化 - 谨慎操作",
-    "panel": "1",
-    "registry": [
-      {
-        "Path": "HKCU:\\Software\\Classes\\CLSID\\{f874310e-b6b7-47dc-bc84-b9e6b38f5903}",
-        "Name": "System.IsPinnedToNameSpaceTree",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "<RemoveEntry>"
-      },
-      {
-        "Path": "HKCU:\\Software\\Classes\\CLSID\\{e88865ea-0e1c-4e20-9aa6-edcd0212c87c}",
-        "Name": "System.IsPinnedToNameSpaceTree",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "<RemoveEntry>"
-      },
-      {
-        "Path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
-        "Name": "LaunchTo",
-        "Value": "1",
-        "Type": "DWord",
-        "OriginalValue": "<RemoveEntry>"
-      }
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/z--advanced-tweaks---caution/removehomeandgallery"
-  },
-  "WPFTweaksDisplay": {
-    "Content": "视觉效果 - 设置为最佳性能",
-    "Description": "将系统偏好设置为性能模式。",
-    "category": "高级优化 - 谨慎操作",
-    "panel": "1",
-    "registry": [
-      {
-        "Path": "HKCU:\\Control Panel\\Desktop",
-        "Name": "DragFullWindows",
-        "Value": "0",
-        "Type": "String",
-        "OriginalValue": "1"
-      },
-      {
-        "Path": "HKCU:\\Control Panel\\Desktop",
-        "Name": "MenuShowDelay",
-        "Value": "200",
-        "Type": "String",
-        "OriginalValue": "400"
-      },
-      {
-        "Path": "HKCU:\\Control Panel\\Desktop\\WindowMetrics",
-        "Name": "MinAnimate",
-        "Value": "0",
-        "Type": "String",
-        "OriginalValue": "1"
-      },
-      {
-        "Path": "HKCU:\\Control Panel\\Keyboard",
-        "Name": "KeyboardDelay",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "1"
-      },
-      {
-        "Path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
-        "Name": "ListviewAlphaSelect",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "1"
-      },
-      {
-        "Path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
-        "Name": "ListviewShadow",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "1"
-      },
-      {
-        "Path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
-        "Name": "TaskbarAnimations",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "1"
-      },
-      {
-        "Path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\VisualEffects",
-        "Name": "VisualFXSetting",
-        "Value": "3",
-        "Type": "DWord",
-        "OriginalValue": "1"
-      },
-      {
-        "Path": "HKCU:\\Software\\Microsoft\\Windows\\DWM",
-        "Name": "EnableAeroPeek",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "1"
-      },
-      {
-        "Path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
-        "Name": "TaskbarMn",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "1"
-      },
-      {
-        "Path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
-        "Name": "ShowTaskViewButton",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "1"
-      },
-      {
-        "Path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Search",
-        "Name": "SearchboxTaskbarMode",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "1"
-      }
-    ],
-    "InvokeScript": [
-      "Set-ItemProperty -Path \"HKCU:\\Control Panel\\Desktop\" -Name \"UserPreferencesMask\" -Type Binary -Value ([byte[]](144,18,3,128,16,0,0,0))"
-    ],
-    "UndoScript": [
-      "Remove-ItemProperty -Path \"HKCU:\\Control Panel\\Desktop\" -Name \"UserPreferencesMask\""
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/z--advanced-tweaks---caution/display"
-  },
-  "WPFTweaksReservedStorage": {
-    "Content": "禁用预留存储",
-    "Description": "禁用 Windows 预留存储（约 7-10 GB 用于更新和临时文件）。仅建议小容量硬盘使用",
-    "category": "高级优化 - 谨慎操作",
-    "panel": "1",
-    "InvokeScript": [
-      "DISM /Online /Set-ReservedStorageState /State:Disabled"
-    ],
-    "UndoScript": [
-      "DISM /Online /Set-ReservedStorageState /State:Enabled"
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/z--advanced-tweaks---caution/reservedstorage"
-  },
-  "WPFTweaksRestorePoint": {
-    "Content": "还原点 - 创建",
-    "Description": "在运行时创建还原点，以便在需要时恢复 WinUtil 的修改。",
-    "category": "基本优化",
-    "panel": "1",
-    "Checked": "False",
-    "registry": [
-      {
-        "Path": "HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\SystemRestore",
-        "Name": "SystemRestorePointCreationFrequency",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "1440"
-      }
-    ],
-    "InvokeScript": [
-      "      if (-not (Get-ComputerRestorePoint)) {          Enable-ComputerRestore -Drive $Env:SystemDrive      }      Checkpoint-Computer -Description \"System Restore Point created by WinUtil\" -RestorePointType MODIFY_SETTINGS      Write-Host \"System Restore Point Created Successfully\" -ForegroundColor Green      "
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/essential-tweaks/restorepoint"
-  },
-  "WPFTweaksEndTaskOnTaskbar": {
-    "Content": "右键结束任务 - 启用",
-    "Description": "启用右键单击任务栏程序时结束任务的选项。",
-    "category": "基本优化",
-    "panel": "1",
-    "registry": [
-      {
-        "Path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced\\TaskbarDeveloperSettings",
-        "Name": "TaskbarEndTask",
-        "Value": "1",
-        "Type": "DWord",
-        "OriginalValue": "<RemoveEntry>"
-      }
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/essential-tweaks/endtaskontaskbar"
-  },
-  "WPFTweaksStorage": {
-    "Content": "存储感知 - 禁用",
-    "Description": "存储感知会自动删除临时文件。",
-    "category": "高级优化 - 谨慎操作",
-    "panel": "1",
-    "registry": [
-      {
-        "Path": "HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\StorageSense\\Parameters\\StoragePolicy",
-        "Name": "01",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "1"
-      }
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/z--advanced-tweaks---caution/storage"
-  },
-  "WPFTweaksWindowsAI": {
-    "Content": "Windows AI - 禁用并移除",
-    "Description": "移除并禁用所有 AI 功能/包。",
-    "category": "高级优化 - 谨慎操作",
-    "panel": "1",
-    "registry": [
-      {
-        "Path": "HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer",
-        "Name": "SettingsPageVisibility",
-        "Value": "hide:aicomponents",
-        "Type": "String",
-        "OriginalValue": "<RemoveEntry>"
-      },
-      {
-        "Path": "HKLM:\\SOFTWARE\\Policies\\WindowsNotepad",
-        "Name": "DisableAIFeatures",
-        "Value": "1",
-        "Type": "DWord",
-        "OriginalValue": "<RemoveEntry>"
-      }
-    ],
-    "InvokeScript": [
-      "      $Appx = (Get-AppxPackage MicrosoftWindows.Client.CoreAI).PackageFullName      $Sid = (Get-LocalUser $Env:UserName).Sid.Value      New-Item \"HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Appx\\AppxAllUserStore\\EndOfLife\\$Sid\\$Appx\" -Force      Get-AppxPackage -AllUsers \"*Copilot*\" | Remove-AppxPackage -AllUsers      winget uninstall -e --name \"Copilot\" --silent --force --accept-source-agreements 2>$null      Get-AppxPackage -AllUsers Microsoft.MicrosoftOfficeHub | Remove-AppxPackage -AllUsers      if ($Appx) {          Remove-AppxPackage $Appx      }      Set-Service -Name WSAIFabricSvc -StartupType Disabled      Disable-WindowsOptionalFeature -FeatureName Recall -Online -NoRestart      Write-Host \"Windows AI Disabled\"      "
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/z--advanced-tweaks---caution/windowsai"
-  },
-  "WPFTweaksWPBT": {
-    "Content": "Windows 平台二进制表 (WPBT) - 禁用",
-    "Description": "如果启用，WPBT 允许计算机供应商在启动时执行程序，存在潜在安全风险。",
-    "category": "基本优化",
-    "panel": "1",
-    "registry": [
-      {
-        "Path": "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager",
-        "Name": "DisableWpbtExecution",
-        "Value": "1",
-        "Type": "DWord",
-        "OriginalValue": "<RemoveEntry>"
-      }
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/essential-tweaks/wpbt"
-  },
-  "WPFTweaksPreventDeviceMetadataFromNetwork": {
-    "Content": "阻止设备配套应用",
-    "Description": "防止插入设备时安装额外的软件。存在潜在安全风险。",
-    "category": "基本优化",
-    "panel": "1",
-    "registry": [
-      {
-        "Path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\Device Metadata",
-        "Name": "PreventDeviceMetadataFromNetwork",
-        "Value": "1",
-        "Type": "DWord",
-        "OriginalValue": "<RemoveEntry>"
-      }
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/essential-tweaks/preventdevicemetadatafromnetwork"
-  },
-  "WPFTweaksRazerBlock": {
-    "Content": "雷蛇软件自动安装 - 禁用",
-    "Description": "阻止所有雷蛇软件的安装。硬件无需任何软件即可正常工作。",
-    "category": "高级优化 - 谨慎操作",
-    "panel": "1",
-    "registry": [
-      {
-        "Path": "HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\DriverSearching",
-        "Name": "SearchOrderConfig",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "1"
-      },
-      {
-        "Path": "HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Device Installer",
-        "Name": "DisableCoInstallers",
-        "Value": "1",
-        "Type": "DWord",
-        "OriginalValue": "0"
-      }
-    ],
-    "InvokeScript": [
-      "      $RazerPath = \"$Env:SystemRoot\\Installer\\Razer\"      if (Test-Path $RazerPath) {        Remove-Item $RazerPath\\* -Recurse -Force      } else {        New-Item -Path $RazerPath -ItemType Directory      }      icacls $RazerPath /deny \"Everyone:(W)\"      "
-    ],
-    "UndoScript": [
-      "      icacls \"$Env:SystemRoot\\Installer\\Razer\" /remove:d Everyone      "
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/z--advanced-tweaks---caution/razerblock"
-  },
-  "WPFTweaksDisableNotifications": {
-    "Content": "系统托盘通知和日历 - 禁用",
-    "Description": "禁用所有通知，包括日历。",
-    "category": "高级优化 - 谨慎操作",
-    "panel": "1",
-    "registry": [
-      {
-        "Path": "HKCU:\\Software\\Policies\\Microsoft\\Windows\\Explorer",
-        "Name": "DisableNotificationCenter",
-        "Value": "1",
-        "Type": "DWord",
-        "OriginalValue": "<RemoveEntry>"
-      },
-      {
-        "Path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\PushNotifications",
-        "Name": "ToastEnabled",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "1"
-      }
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/z--advanced-tweaks---caution/disablenotifications"
-  },
-  "WPFTweaksBlockAdobeNet": {
-    "Content": "Adobe URL 阻止列表 - 启用",
-    "Description": "通过选择性阻止 Adobe 连接来减少不必要的用户干扰",
-    "category": "高级优化 - 谨慎操作",
-    "panel": "1",
-    "InvokeScript": [
-      "      $hostsUrl = Invoke-RestMethod -Uri https://github.com/Ruddernation-Designs/Adobe-URL-Block-List/raw/refs/heads/master/hosts      Add-Content -Path \"$Env:SystemRoot\\System32\\drivers\\etc\\hosts\" -Value $hostsUrl      ipconfig /flushdns      Write-Host 'Added Adobe url block list from host file'      "
-    ],
-    "UndoScript": [
-      "      Set-Content \"$Env:SystemRoot\\System32\\drivers\\etc\\hosts\" (          (Get-Content \"$Env:SystemRoot\\System32\\drivers\\etc\\hosts\") -join \"`n\" -replace '(?s)#New Ver.*', ''      )      ipconfig /flushdns      Write-Host 'Removed Adobe url block list from host file'      "
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/z--advanced-tweaks---caution/blockadobenet"
-  },
-  "WPFTweaksRightClickMenu": {
-    "Content": "右键菜单旧版布局 - 启用",
-    "Description": "恢复文件资源管理器中右键单击时的经典右键菜单。",
-    "category": "高级优化 - 谨慎操作",
-    "panel": "1",
-    "InvokeScript": [
-      "      New-Item -Path \"HKCU:\\Software\\Classes\\CLSID\\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}\" -Name InprocServer32 -Value \"\" -Force      Stop-Process -Name explorer      "
-    ],
-    "UndoScript": [
-      "Remove-Item -Path \"HKCU:\\Software\\Classes\\CLSID\\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}\" -Recurse"
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/z--advanced-tweaks---caution/rightclickmenu"
-  },
-  "WPFTweaksDiskCleanup": {
-    "Content": "磁盘清理 - 运行",
-    "Description": "在 C 盘运行磁盘清理并移除旧的 Windows 更新。",
-    "category": "基本优化",
-    "panel": "1",
-    "InvokeScript": [
-      "      cleanmgr.exe /d C: /VERYLOWDISK      Dism.exe /online /Cleanup-Image /StartComponentCleanup /ResetBase      "
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/essential-tweaks/diskcleanup"
-  },
-  "WPFTweaksDeleteTempFiles": {
-    "Content": "临时文件 - 移除",
-    "Description": "清除临时文件夹。",
-    "category": "基本优化",
-    "panel": "1",
-    "InvokeScript": [
-      "      Remove-Item -Path \"$Env:Temp\\*\" -Recurse -Force      Remove-Item -Path \"$Env:SystemRoot\\Temp\\*\" -Recurse -Force      "
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/essential-tweaks/deletetempfiles"
-  },
-  "WPFTweaksIPv46": {
-    "Content": "IPv6 - 设置 IPv4 为首选",
-    "Description": "在未配置 IPv6 的私有网络上设置 IPv4 首选项可带来延迟和安全方面的好处。",
-    "category": "高级优化 - 谨慎操作",
-    "panel": "1",
-    "registry": [
-      {
-        "Path": "HKLM:\\SYSTEM\\CurrentControlSet\\Services\\Tcpip6\\Parameters",
-        "Name": "DisabledComponents",
-        "Value": "32",
-        "Type": "DWord",
-        "OriginalValue": "0"
-      }
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/z--advanced-tweaks---caution/ipv46"
-  },
-  "WPFTweaksTeredo": {
-    "Content": "Teredo - 禁用",
-    "Description": "Teredo 网络隧道是一种 IPv6 功能，可能导致额外延迟。",
-    "category": "高级优化 - 谨慎操作",
-    "panel": "1",
-    "registry": [
-      {
-        "Path": "HKLM:\\SYSTEM\\CurrentControlSet\\Services\\Tcpip6\\Parameters",
-        "Name": "DisabledComponents",
-        "Value": "1",
-        "Type": "DWord",
-        "OriginalValue": "0"
-      }
-    ],
-    "InvokeScript": [
-      "netsh interface teredo set state disabled"
-    ],
-    "UndoScript": [
-      "netsh interface teredo set state default"
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/z--advanced-tweaks---caution/teredo"
-  },
-  "WPFTweaksDisableIPv6": {
-    "Content": "IPv6 - 禁用",
-    "Description": "禁用 IPv6。",
-    "category": "高级优化 - 谨慎操作",
-    "panel": "1",
-    "registry": [
-      {
-        "Path": "HKLM:\\SYSTEM\\CurrentControlSet\\Services\\Tcpip6\\Parameters",
-        "Name": "DisabledComponents",
-        "Value": "255",
-        "Type": "DWord",
-        "OriginalValue": "0"
-      }
-    ],
-    "InvokeScript": [
-      "Disable-NetAdapterBinding -Name * -ComponentID ms_tcpip6"
-    ],
-    "UndoScript": [
-      "Enable-NetAdapterBinding -Name * -ComponentID ms_tcpip6"
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/z--advanced-tweaks---caution/disableipv6"
-  },
-  "WPFTweaksDisableBGapps": {
-    "Content": "后台应用 - 禁用",
-    "Description": "禁用所有 Microsoft Store 应用在后台运行。",
-    "category": "高级优化 - 谨慎操作",
-    "panel": "1",
-    "registry": [
-      {
-        "Path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\BackgroundAccessApplications",
-        "Name": "GlobalUserDisabled",
-        "Value": "1",
-        "Type": "DWord",
-        "OriginalValue": "0"
-      }
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/z--advanced-tweaks---caution/disablebgapps"
-  },
-  "WPFTweaksDisableFSO": {
-    "Content": "全屏优化 - 禁用",
-    "Description": "禁用所有应用的全屏优化。注意：这将禁用独占全屏的色彩管理。",
-    "category": "高级优化 - 谨慎操作",
-    "panel": "1",
-    "registry": [
-      {
-        "Path": "HKCU:\\System\\GameConfigStore",
-        "Name": "GameDVR_DXGIHonorFSEWindowsCompatible",
-        "Value": "1",
-        "Type": "DWord",
-        "OriginalValue": "0"
-      }
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/z--advanced-tweaks---caution/disablefso"
-  },
-  "WPFTweaksDisableExplorerAutoDiscovery": {
-    "Content": "文件资源管理器自动文件夹发现 - 禁用",
-    "Description": "Windows 资源管理器自动根据内容猜测文件夹类型。警告！将禁用文件资源管理器分组。",
-    "category": "基本优化",
-    "panel": "1",
-    "InvokeScript": [
-      "      # Previously detected folders      $bags = \"HKCU:\\Software\\Classes\\Local Settings\\Software\\Microsoft\\Windows\\Shell\\Bags\"      # Folder types lookup table      $bagMRU = \"HKCU:\\Software\\Classes\\Local Settings\\Software\\Microsoft\\Windows\\Shell\\BagMRU\"      # Flush Explorer view database      Remove-Item -Path $bags -Recurse -Force      Write-Host \"Removed $bags\"      Remove-Item -Path $bagMRU -Recurse -Force      Write-Host \"Removed $bagMRU\"      # Every folder      $allFolders = \"HKCU:\\Software\\Classes\\Local Settings\\Software\\Microsoft\\Windows\\Shell\\Bags\\AllFolders\\Shell\"      if (!(Test-Path $allFolders)) {        New-Item -Path $allFolders -Force        Write-Host \"Created $allFolders\"      }      # Generic view      New-ItemProperty -Path $allFolders -Name \"FolderType\" -Value \"NotSpecified\" -PropertyType String -Force      Write-Host \"Set FolderType to NotSpecified\"      Write-Host Please sign out and back in, or restart your computer to apply the changes!      "
-    ],
-    "UndoScript": [
-      "      # Previously detected folders      $bags = \"HKCU:\\Software\\Classes\\Local Settings\\Software\\Microsoft\\Windows\\Shell\\Bags\"      # Folder types lookup table      $bagMRU = \"HKCU:\\Software\\Classes\\Local Settings\\Software\\Microsoft\\Windows\\Shell\\BagMRU\"      # Flush Explorer view database      Remove-Item -Path $bags -Recurse -Force      Write-Host \"Removed $bags\"      Remove-Item -Path $bagMRU -Recurse -Force      Write-Host \"Removed $bagMRU\"      Write-Host Please sign out and back in, or restart your computer to apply the changes!      "
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/essential-tweaks/disableexplorerautodiscovery"
-  },
-  "WPFToggleDetailedBSoD": {
-    "Content": "蓝屏详细模式",
-    "Description": "蓝屏时提供更多信息。",
-    "category": "自定义偏好",
-    "panel": "2",
-    "Type": "Toggle",
-    "registry": [
-      {
-        "Path": "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\CrashControl",
-        "Name": "DisplayParameters",
-        "Value": "1",
-        "Type": "DWord",
-        "OriginalValue": "0",
-        "DefaultState": "false"
-      },
-      {
-        "Path": "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\CrashControl",
-        "Name": "DisableEmoticon",
-        "Value": "1",
-        "Type": "DWord",
-        "OriginalValue": "0",
-        "DefaultState": "false"
-      }
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/customize-preferences/detailedbsod"
-  },
-  "WPFToggleBatteryPercentage": {
-    "Content": "系统托盘电池百分比",
-    "Description": "在系统托盘中电池图标旁显示数字电池百分比。",
-    "category": "自定义偏好",
-    "panel": "2",
-    "Type": "Toggle",
-    "registry": [
-      {
-        "Path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
-        "Name": "IsBatteryPercentageEnabled",
-        "Value": "1",
-        "Type": "DWord",
-        "OriginalValue": "<RemoveEntry>",
-        "DefaultState": "false"
-      }
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/customize-preferences/batterypercentage"
-  },
-  "WPFToggleDarkMode": {
-    "Content": "Windows 深色主题",
-    "Description": "系统和应用的深色模式。",
-    "category": "自定义偏好",
-    "panel": "2",
-    "Type": "Toggle",
-    "registry": [
-      {
-        "Path": "HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
-        "Name": "AppsUseLightTheme",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "1",
-        "DefaultState": "false"
-      },
-      {
-        "Path": "HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
-        "Name": "SystemUsesLightTheme",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "1",
-        "DefaultState": "false"
-      }
-    ],
-    "InvokeScript": [
-      "      Invoke-WinUtilExplorerUpdate      if ($sync.ThemeButton.Content -eq [char]0xF08C) {        Invoke-WinutilThemeChange -theme \"Auto\"      }      "
-    ],
-    "UndoScript": [
-      "      Invoke-WinUtilExplorerUpdate      if ($sync.ThemeButton.Content -eq [char]0xF08C) {        Invoke-WinutilThemeChange -theme \"Auto\"      }      "
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/customize-preferences/darkmode"
-  },
-  "WPFToggleShowExt": {
-    "Content": "文件资源管理器文件扩展名",
-    "Description": "在资源管理器中显示文件扩展名（.exe、.png 等）。",
-    "category": "自定义偏好",
-    "panel": "2",
-    "Type": "Toggle",
-    "registry": [
-      {
-        "Path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
-        "Name": "HideFileExt",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "1",
-        "DefaultState": "false"
-      }
-    ],
-    "InvokeScript": [
-      "      Invoke-WinUtilExplorerUpdate -action \"restart\"      "
-    ],
-    "UndoScript": [
-      "      Invoke-WinUtilExplorerUpdate -action \"restart\"      "
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/customize-preferences/showext"
-  },
-  "WPFToggleHiddenFiles": {
-    "Content": "文件资源管理器隐藏文件",
-    "Description": "在资源管理器中显示隐藏文件。",
-    "category": "自定义偏好",
-    "panel": "2",
-    "Type": "Toggle",
-    "registry": [
-      {
-        "Path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
-        "Name": "Hidden",
-        "Value": "1",
-        "Type": "DWord",
-        "OriginalValue": "0",
-        "DefaultState": "false"
-      }
-    ],
-    "InvokeScript": [
-      "      Invoke-WinUtilExplorerUpdate -action \"restart\"      "
-    ],
-    "UndoScript": [
-      "      Invoke-WinUtilExplorerUpdate -action \"restart\"      "
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/customize-preferences/hiddenfiles"
-  },
-  "WPFToggleVerboseLogon": {
-    "Content": "登录详细模式",
-    "Description": "在启动/关机时显示详细信息。",
-    "category": "自定义偏好",
-    "panel": "2",
-    "Type": "Toggle",
-    "registry": [
-      {
-        "Path": "HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System",
-        "Name": "VerboseStatus",
-        "Value": "1",
-        "Type": "DWord",
-        "OriginalValue": "0",
-        "DefaultState": "false"
-      }
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/customize-preferences/verboselogon"
-  },
-  "WPFToggleNewOutlook": {
-    "Content": "Microsoft Outlook 新版",
-    "Description": "这将确保使用经典 Outlook 应用程序。",
-    "category": "自定义偏好",
-    "panel": "2",
-    "Type": "Toggle",
-    "registry": [
-      {
-        "Path": "HKCU:\\SOFTWARE\\Microsoft\\Office\\16.0\\Outlook\\Preferences",
-        "Name": "UseNewOutlook",
-        "Value": "1",
-        "Type": "DWord",
-        "OriginalValue": "0",
-        "DefaultState": "true"
-      },
-      {
-        "Path": "HKCU:\\Software\\Microsoft\\Office\\16.0\\Outlook\\Options\\General",
-        "Name": "HideNewOutlookToggle",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "1",
-        "DefaultState": "true"
-      },
-      {
-        "Path": "HKCU:\\Software\\Policies\\Microsoft\\Office\\16.0\\Outlook\\Options\\General",
-        "Name": "DoNewOutlookAutoMigration",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "0",
-        "DefaultState": "false"
-      },
-      {
-        "Path": "HKCU:\\Software\\Policies\\Microsoft\\Office\\16.0\\Outlook\\Preferences",
-        "Name": "NewOutlookMigrationUserSetting",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "<RemoveEntry>",
-        "DefaultState": "true"
-      }
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/customize-preferences/newoutlook"
-  },
-  "WPFToggleScrollbars": {
-    "Content": "滚动条始终可见",
-    "Description": "如果启用，滚动条将始终可见。如果禁用，Windows 将自动隐藏不使用的滚动条。",
-    "category": "自定义偏好",
-    "panel": "2",
-    "Type": "Toggle",
-    "registry": [
-      {
-        "Path": "HKCU:\\Control Panel\\Accessibility",
-        "Name": "DynamicScrollbars",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "1",
-        "DefaultState": "false",
-        "link": "https://winutil.christitus.com/dev/tweaks/customize-preferences/scrollbars"
-      }
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/customize-preferences/scrollbars"
-  },
-  "WPFToggleMultiplaneOverlay": {
-    "Content": "多平面覆盖",
-    "Description": "多平面覆盖合成多个图像层，有时可能导致显卡问题。",
-    "category": "自定义偏好",
-    "panel": "2",
-    "Type": "Toggle",
-    "registry": [
-      {
-        "Path": "HKLM:\\SOFTWARE\\Microsoft\\Windows\\Dwm",
-        "Name": "OverlayTestMode",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "5",
-        "DefaultState": "true"
-      },
-      {
-        "Path": "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers",
-        "Name": "DisableOverlays",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "1",
-        "DefaultState": "true"
-      }
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/customize-preferences/multiplaneoverlay"
-  },
-  "WPFToggleMouseAcceleration": {
-    "Content": "鼠标加速",
-    "Description": "使光标移动受物理鼠标移动速度的影响。",
-    "category": "自定义偏好",
-    "panel": "2",
-    "Type": "Toggle",
-    "registry": [
-      {
-        "Path": "HKCU:\\Control Panel\\Mouse",
-        "Name": "MouseSpeed",
-        "Value": "1",
-        "Type": "DWord",
-        "OriginalValue": "0",
-        "DefaultState": "true"
-      },
-      {
-        "Path": "HKCU:\\Control Panel\\Mouse",
-        "Name": "MouseThreshold1",
-        "Value": "6",
-        "Type": "DWord",
-        "OriginalValue": "0",
-        "DefaultState": "true"
-      },
-      {
-        "Path": "HKCU:\\Control Panel\\Mouse",
-        "Name": "MouseThreshold2",
-        "Value": "10",
-        "Type": "DWord",
-        "OriginalValue": "0",
-        "DefaultState": "true"
-      }
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/customize-preferences/mouseacceleration"
-  },
-  "WPFToggleNumLock": {
-    "Content": "开机 Num Lock 键状态",
-    "Description": "在计算机启动时切换 Num Lock 键状态。",
-    "category": "自定义偏好",
-    "panel": "2",
-    "Type": "Toggle",
-    "registry": [
-      {
-        "Path": "HKU:\\.Default\\Control Panel\\Keyboard",
-        "Name": "InitialKeyboardIndicators",
-        "Value": "2",
-        "Type": "String",
-        "OriginalValue": "0",
-        "DefaultState": "false"
-      },
-      {
-        "Path": "HKCU:\\Control Panel\\Keyboard",
-        "Name": "InitialKeyboardIndicators",
-        "Value": "2",
-        "Type": "String",
-        "OriginalValue": "0",
-        "DefaultState": "false"
-      }
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/customize-preferences/numlock"
-  },
-  "WPFToggleWindowSnapping": {
-    "Content": "窗口贴靠",
-    "Description": "切换拖动窗口时的窗口贴靠功能。",
-    "category": "自定义偏好",
-    "panel": "2",
-    "Type": "Toggle",
-    "registry": [
-      {
-        "Path": "HKCU:\\Control Panel\\Desktop",
-        "Name": "WindowArrangementActive",
-        "Value": "1",
-        "Type": "String",
-        "OriginalValue": "0",
-        "DefaultState": "true"
-      }
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/customize-preferences/windowsnapping"
-  },
-  "WPFToggleStandbyFix": {
-    "Content": "S0 睡眠网络连接",
-    "Description": "切换现代笔记本电脑低功耗空闲 (S0 睡眠) 期间的网络连接。",
-    "category": "自定义偏好",
-    "panel": "2",
-    "Type": "Toggle",
-    "registry": [
-      {
-        "Path": "HKCU:\\SOFTWARE\\Policies\\Microsoft\\Power\\PowerSettings\\f15576e8-98b7-4186-b944-eafa664402d9",
-        "Name": "ACSettingIndex",
-        "Value": "1",
-        "Type": "DWord",
-        "OriginalValue": "0",
-        "DefaultState": "true"
-      }
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/customize-preferences/standbyfix"
-  },
-  "WPFToggleS3Sleep": {
-    "Content": "S3 休眠",
-    "Description": "在现代待机和 S3 休眠之间切换。",
-    "category": "自定义偏好",
-    "panel": "2",
-    "Type": "Toggle",
-    "registry": [
-      {
-        "Path": "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Power",
-        "Name": "PlatformAoAcOverride",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "<RemoveEntry>",
-        "DefaultState": "false"
-      }
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/customize-preferences/s3sleep"
-  },
-  "WPFToggleHideSettingsHome": {
-    "Content": "设置主页",
-    "Description": "切换 Windows 设置应用中的主页。",
-    "category": "自定义偏好",
-    "panel": "2",
-    "Type": "Toggle",
-    "registry": [
-      {
-        "Path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer",
-        "Name": "SettingsPageVisibility",
-        "Value": "show:home",
-        "Type": "String",
-        "OriginalValue": "hide:home",
-        "DefaultState": "true"
-      }
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/customize-preferences/hidesettingshome"
-  },
-  "WPFToggleBingSearch": {
-    "Content": "开始菜单必应搜索",
-    "Description": "切换 Windows 搜索中的必应网页搜索结果。",
-    "category": "自定义偏好",
-    "panel": "2",
-    "Type": "Toggle",
-    "registry": [
-      {
-        "Path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Search",
-        "Name": "BingSearchEnabled",
-        "Value": "1",
-        "Type": "DWord",
-        "OriginalValue": "0",
-        "DefaultState": "true"
-      }
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/customize-preferences/bingsearch"
-  },
-  "WPFToggleLoginBlur": {
-    "Content": "登录屏幕亚克力模糊",
-    "Description": "切换登录屏幕背景上的亚克力模糊效果。",
-    "category": "自定义偏好",
-    "panel": "2",
-    "Type": "Toggle",
-    "registry": [
-      {
-        "Path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\System",
-        "Name": "DisableAcrylicBackgroundOnLogon",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "1",
-        "DefaultState": "true"
-      }
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/customize-preferences/loginblur"
-  },
-  "WPFTweaksDisableLockscreen": {
-    "Content": "锁定屏幕 - 禁用",
-    "Description": "完全跳过锁定屏幕，在启动和唤醒时直接进入登录屏幕。",
-    "category": "自定义偏好",
-    "panel": "2",
-    "Type": "Toggle",
-    "registry": [
-      {
-        "Path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\Personalization",
-        "Name": "NoLockScreen",
-        "Value": "1",
-        "Type": "DWord",
-        "OriginalValue": "<RemoveEntry>"
-      }
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/customize-preferences/disablelockscreen"
-  },
-  "WPFToggleStartMenuRecommendations": {
-    "Content": "开始菜单推荐",
-    "Description": "切换开始菜单中的推荐部分。警告：这也会同时禁用锁屏上的 Windows 聚焦。",
-    "category": "自定义偏好",
-    "panel": "2",
-    "Type": "Toggle",
-    "registry": [
-      {
-        "Path": "HKLM:\\SOFTWARE\\Microsoft\\PolicyManager\\current\\device\\Start",
-        "Name": "HideRecommendedSection",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "1",
-        "DefaultState": "true"
-      },
-      {
-        "Path": "HKLM:\\SOFTWARE\\Microsoft\\PolicyManager\\current\\device\\Education",
-        "Name": "IsEducationEnvironment",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "1",
-        "DefaultState": "true"
-      },
-      {
-        "Path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\Explorer",
-        "Name": "HideRecommendedSection",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "1",
-        "DefaultState": "true"
-      }
-    ],
-    "InvokeScript": [
-      "      Invoke-WinUtilExplorerUpdate -action \"restart\"      "
-    ],
-    "UndoScript": [
-      "      Invoke-WinUtilExplorerUpdate -action \"restart\"      "
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/customize-preferences/startmenurecommendations"
-  },
-  "WPFToggleStickyKeys": {
-    "Content": "粘滞键",
-    "Description": "切换粘滞键功能，该功能在快速点击 Shift 键时激活。",
-    "category": "自定义偏好",
-    "panel": "2",
-    "Type": "Toggle",
-    "registry": [
-      {
-        "Path": "HKCU:\\Control Panel\\Accessibility\\StickyKeys",
-        "Name": "Flags",
-        "Value": "506",
-        "Type": "DWord",
-        "OriginalValue": "58",
-        "DefaultState": "true"
-      }
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/customize-preferences/stickykeys"
-  },
-  "WPFToggleTaskbarAlignment": {
-    "Content": "任务栏居中图标",
-    "Description": "切换任务栏图标左对齐或居中。",
-    "category": "自定义偏好",
-    "panel": "2",
-    "Type": "Toggle",
-    "registry": [
-      {
-        "Path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
-        "Name": "TaskbarAl",
-        "Value": "1",
-        "Type": "DWord",
-        "OriginalValue": "0",
-        "DefaultState": "true"
-      }
-    ],
-    "InvokeScript": [
-      "      Invoke-WinUtilExplorerUpdate -action \"restart\"      "
-    ],
-    "UndoScript": [
-      "      Invoke-WinUtilExplorerUpdate -action \"restart\"      "
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/customize-preferences/taskbaralignment"
-  },
-  "WPFToggleTaskbarSearch": {
-    "Content": "任务栏搜索图标",
-    "Description": "切换任务栏上的搜索按钮。",
-    "category": "自定义偏好",
-    "panel": "2",
-    "Type": "Toggle",
-    "registry": [
-      {
-        "Path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Search",
-        "Name": "SearchboxTaskbarMode",
-        "Value": "1",
-        "Type": "DWord",
-        "OriginalValue": "0",
-        "DefaultState": "true"
-      }
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/customize-preferences/taskbarsearch"
-  },
-  "WPFToggleTaskView": {
-    "Content": "任务栏任务视图图标",
-    "Description": "切换任务栏中的任务视图按钮。",
-    "category": "自定义偏好",
-    "panel": "2",
-    "Type": "Toggle",
-    "registry": [
-      {
-        "Path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
-        "Name": "ShowTaskViewButton",
-        "Value": "1",
-        "Type": "DWord",
-        "OriginalValue": "0",
-        "DefaultState": "true"
-      }
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/customize-preferences/taskview"
-  },
-  "WPFToggleGameMode": {
-    "Content": "游戏模式",
-    "Description": "切换 Windows 通过分配系统资源给游戏来优先考虑游戏性能。",
-    "category": "自定义偏好",
-    "panel": "2",
-    "Type": "Toggle",
-    "registry": [
-      {
-        "Path": "HKCU:\\Software\\Microsoft\\GameBar",
-        "Name": "AllowAutoGameMode",
-        "Value": "1",
-        "Type": "DWord",
-        "OriginalValue": "0",
-        "DefaultState": "true"
-      },
-      {
-        "Path": "HKCU:\\Software\\Microsoft\\GameBar",
-        "Name": "AutoGameModeEnabled",
-        "Value": "1",
-        "Type": "DWord",
-        "OriginalValue": "0",
-        "DefaultState": "true"
-      }
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/customize-preferences/gamemode"
-  },
-  "WPFToggleLongPaths": {
-    "Content": "启用长路径",
-    "Description": "切换资源管理器中超过 260 个字符的文件路径支持。",
-    "category": "自定义偏好",
-    "panel": "2",
-    "Type": "Toggle",
-    "registry": [
-      {
-        "Path": "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\FileSystem",
-        "Name": "LongPathsEnabled",
-        "Value": "1",
-        "Type": "DWord",
-        "OriginalValue": "0",
-        "DefaultState": "false"
-      }
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/customize-preferences/longpaths"
-  },
-  "WPFOOSUbutton": {
-    "Content": "O&O ShutUp10++ - 运行",
-    "category": "高级优化 - 谨慎操作",
-    "panel": "1",
-    "Type": "Button",
-    "link": "https://winutil.christitus.com/dev/tweaks/z--advanced-tweaks---caution/oosubutton"
-  },
-  "WPFchangedns": {
-    "Content": "DNS - 设置为：",
-    "category": "高级优化 - 谨慎操作",
-    "panel": "1",
-    "Type": "Combobox",
-    "ComboItems": "Default DHCP Google Cloudflare Cloudflare_Malware Cloudflare_Malware_Adult Open_DNS Quad9 AdGuard_Ads_Trackers AdGuard_Ads_Trackers_Malware_Adult",
-    "link": "https://winutil.christitus.com/dev/tweaks/z--advanced-tweaks---caution/changedns"
-  },
-  "WPFAddUltPerf": {
-    "Content": "卓越性能方案 - 启用",
-    "category": "性能计划 - 不适用于笔记本电脑",
-    "panel": "2",
-    "Type": "Button",
-    "ButtonWidth": "300",
-    "link": "https://winutil.christitus.com/dev/tweaks/performance-plans---not-for-laptops/addultperf"
-  },
-  "WPFRemoveUltPerf": {
-    "Content": "卓越性能方案 - 禁用",
-    "category": "性能计划 - 不适用于笔记本电脑",
-    "panel": "2",
-    "Type": "Button",
-    "ButtonWidth": "300",
-    "link": "https://winutil.christitus.com/dev/tweaks/performance-plans---not-for-laptops/removeultperf"
-  }
-}
-'@ | ConvertFrom-Json
-
-
-$inputXML = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String('PFdpbmRvdwogICAgICAgIHhtbG5zPSJodHRwOi8vc2NoZW1hcy5taWNyb3NvZnQuY29tL3dpbmZ4LzIwMDYveGFtbC9wcmVzZW50YXRpb24iCiAgICAgICAgeG1sbnM6eD0iaHR0cDovL3NjaGVtYXMubWljcm9zb2Z0LmNvbS93aW5meC8yMDA2L3hhbWwiCiAgICAgICAgeG1sbnM6ZD0iaHR0cDovL3NjaGVtYXMubWljcm9zb2Z0LmNvbS9leHByZXNzaW9uL2JsZW5kLzIwMDgiCiAgICAgICAgeG1sbnM6bWM9Imh0dHA6Ly9zY2hlbWFzLm9wZW54bWxmb3JtYXRzLm9yZy9tYXJrdXAtY29tcGF0aWJpbGl0eS8yMDA2IgogICAgICAgIHhtbG5zOmxvY2FsPSJjbHItbmFtZXNwYWNlOldpblV0aWxpdHkiCiAgICAgICAgV2luZG93U3RhcnR1cExvY2F0aW9uPSJDZW50ZXJTY3JlZW4iCiAgICAgICAgVXNlTGF5b3V0Um91bmRpbmc9IlRydWUiCiAgICAgICAgV2luZG93U3R5bGU9IlNpbmdsZUJvcmRlcldpbmRvdyIKICAgICAgICBXaWR0aD0iQXV0byIKICAgICAgICBIZWlnaHQ9IkF1dG8iCiAgICAgICAgTWluV2lkdGg9IjgwMCIKICAgICAgICBNaW5IZWlnaHQ9IjYwMCIKICAgICAgICBUaXRsZT0iV2luVXRpbCI+CiAgICA8V2luZG93Q2hyb21lLldpbmRvd0Nocm9tZT4KICAgICAgICA8V2luZG93Q2hyb21lIENhcHRpb25IZWlnaHQ9IjAiIENvcm5lclJhZGl1cz0iMTAiLz4KICAgIDwvV2luZG93Q2hyb21lLldpbmRvd0Nocm9tZT4KICAgIDxXaW5kb3cuUmVzb3VyY2VzPgogICAgPFN0eWxlIFRhcmdldFR5cGU9IlRvb2xUaXAiPgogICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IkJhY2tncm91bmQiIFZhbHVlPSJ7RHluYW1pY1Jlc291cmNlIFRvb2xUaXBCYWNrZ3JvdW5kQ29sb3J9Ii8+CiAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iRm9yZWdyb3VuZCIgVmFsdWU9IntEeW5hbWljUmVzb3VyY2UgTWFpbkZvcmVncm91bmRDb2xvcn0iLz4KICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJCb3JkZXJCcnVzaCIgVmFsdWU9IntEeW5hbWljUmVzb3VyY2UgQm9yZGVyQ29sb3J9Ii8+CiAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iTWF4V2lkdGgiIFZhbHVlPSJ7RHluYW1pY1Jlc291cmNlIFRvb2xUaXBXaWR0aH0iLz4KICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJCb3JkZXJUaGlja25lc3MiIFZhbHVlPSIxIi8+CiAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iUGFkZGluZyIgVmFsdWU9IjIiLz4KICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJGb250U2l6ZSIgVmFsdWU9IntEeW5hbWljUmVzb3VyY2UgRm9udFNpemV9Ii8+CiAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iRm9udEZhbWlseSIgVmFsdWU9IntEeW5hbWljUmVzb3VyY2UgRm9udEZhbWlseX0iLz4KICAgICAgICA8IS0tIFRoaXMgQ29udGVudFRlbXBsYXRlIGVuc3VyZXMgdGhhdCB0aGUgY29udGVudCBvZiB0aGUgVG9vbFRpcCB3cmFwcyB0ZXh0IHByb3Blcmx5IGZvciBiZXR0ZXIgcmVhZGFiaWxpdHkgLS0+CiAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iQ29udGVudFRlbXBsYXRlIj4KICAgICAgICAgICAgPFNldHRlci5WYWx1ZT4KICAgICAgICAgICAgICAgIDxEYXRhVGVtcGxhdGU+CiAgICAgICAgICAgICAgICAgICAgPENvbnRlbnRQcmVzZW50ZXIgQ29udGVudD0ie1RlbXBsYXRlQmluZGluZyBDb250ZW50fSI+CiAgICAgICAgICAgICAgICAgICAgICAgIDxDb250ZW50UHJlc2VudGVyLlJlc291cmNlcz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxTdHlsZSBUYXJnZXRUeXBlPSJUZXh0QmxvY2siPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IlRleHRXcmFwcGluZyIgVmFsdWU9IldyYXAiLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvU3R5bGU+CiAgICAgICAgICAgICAgICAgICAgICAgIDwvQ29udGVudFByZXNlbnRlci5SZXNvdXJjZXM+CiAgICAgICAgICAgICAgICAgICAgPC9Db250ZW50UHJlc2VudGVyPgogICAgICAgICAgICAgICAgPC9EYXRhVGVtcGxhdGU+CiAgICAgICAgICAgIDwvU2V0dGVyLlZhbHVlPgogICAgICAgIDwvU2V0dGVyPgogICAgPC9TdHlsZT4KCiAgICA8U3R5bGUgVGFyZ2V0VHlwZT0ie3g6VHlwZSBNZW51SXRlbX0iPgogICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IkJhY2tncm91bmQiIFZhbHVlPSJ7RHluYW1pY1Jlc291cmNlIE1haW5CYWNrZ3JvdW5kQ29sb3J9Ii8+CiAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iRm9yZWdyb3VuZCIgVmFsdWU9IntEeW5hbWljUmVzb3VyY2UgTWFpbkZvcmVncm91bmRDb2xvcn0iLz4KICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJGb250U2l6ZSIgVmFsdWU9IntEeW5hbWljUmVzb3VyY2UgRm9udFNpemV9Ii8+CiAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iRm9udEZhbWlseSIgVmFsdWU9IntEeW5hbWljUmVzb3VyY2UgRm9udEZhbWlseX0iLz4KICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJQYWRkaW5nIiBWYWx1ZT0iNSwyLDUsMiIvPgogICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IkJvcmRlclRoaWNrbmVzcyIgVmFsdWU9IjAiLz4KICAgIDwvU3R5bGU+CgogICAgPCEtLVNjcm9sbGJhciBUaHVtYnMtLT4KICAgIDxTdHlsZSB4OktleT0iU2Nyb2xsVGh1bWJzIiBUYXJnZXRUeXBlPSJ7eDpUeXBlIFRodW1ifSI+CiAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iVGVtcGxhdGUiPgogICAgICAgICAgICA8U2V0dGVyLlZhbHVlPgogICAgICAgICAgICAgICAgPENvbnRyb2xUZW1wbGF0ZSBUYXJnZXRUeXBlPSJ7eDpUeXBlIFRodW1ifSI+CiAgICAgICAgICAgICAgICAgICAgPEdyaWQgTmFtZT0iR3JpZCI+CiAgICAgICAgICAgICAgICAgICAgICAgIDxSZWN0YW5nbGUgSG9yaXpvbnRhbEFsaWdubWVudD0iU3RyZXRjaCIgVmVydGljYWxBbGlnbm1lbnQ9IlN0cmV0Y2giIFdpZHRoPSJBdXRvIiBIZWlnaHQ9IkF1dG8iIEZpbGw9IlRyYW5zcGFyZW50IiAvPgogICAgICAgICAgICAgICAgICAgICAgICA8Qm9yZGVyIE5hbWU9IlJlY3RhbmdsZTEiIENvcm5lclJhZGl1cz0iNSIgSG9yaXpvbnRhbEFsaWdubWVudD0iU3RyZXRjaCIgVmVydGljYWxBbGlnbm1lbnQ9IlN0cmV0Y2giIFdpZHRoPSJBdXRvIiBIZWlnaHQ9IkF1dG8iICBCYWNrZ3JvdW5kPSJ7VGVtcGxhdGVCaW5kaW5nIEJhY2tncm91bmR9IiAvPgogICAgICAgICAgICAgICAgICAgIDwvR3JpZD4KICAgICAgICAgICAgICAgICAgICA8Q29udHJvbFRlbXBsYXRlLlRyaWdnZXJzPgogICAgICAgICAgICAgICAgICAgICAgICA8VHJpZ2dlciBQcm9wZXJ0eT0iVGFnIiBWYWx1ZT0iSG9yaXpvbnRhbCI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8U2V0dGVyIFRhcmdldE5hbWU9IlJlY3RhbmdsZTEiIFByb3BlcnR5PSJXaWR0aCIgVmFsdWU9IkF1dG8iIC8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8U2V0dGVyIFRhcmdldE5hbWU9IlJlY3RhbmdsZTEiIFByb3BlcnR5PSJIZWlnaHQiIFZhbHVlPSI3IiAvPgogICAgICAgICAgICAgICAgICAgICAgICA8L1RyaWdnZXI+CiAgICAgICAgICAgICAgICAgICAgPC9Db250cm9sVGVtcGxhdGUuVHJpZ2dlcnM+CiAgICAgICAgICAgICAgICA8L0NvbnRyb2xUZW1wbGF0ZT4KICAgICAgICAgICAgPC9TZXR0ZXIuVmFsdWU+CiAgICAgICAgPC9TZXR0ZXI+CiAgICA8L1N0eWxlPgoKICAgIDxTdHlsZSBUYXJnZXRUeXBlPSJUZXh0QmxvY2siIHg6S2V5PSJIb3ZlclRleHRCbG9ja1N0eWxlIj4KICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJGb3JlZ3JvdW5kIiBWYWx1ZT0ie0R5bmFtaWNSZXNvdXJjZSBMaW5rRm9yZWdyb3VuZENvbG9yfSIgLz4KICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJUZXh0RGVjb3JhdGlvbnMiIFZhbHVlPSJVbmRlcmxpbmUiIC8+CiAgICAgICAgPFN0eWxlLlRyaWdnZXJzPgogICAgICAgICAgICA8VHJpZ2dlciBQcm9wZXJ0eT0iSXNNb3VzZU92ZXIiIFZhbHVlPSJUcnVlIj4KICAgICAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IkZvcmVncm91bmQiIFZhbHVlPSJ7RHluYW1pY1Jlc291cmNlIExpbmtIb3ZlckZvcmVncm91bmRDb2xvcn0iIC8+CiAgICAgICAgICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJUZXh0RGVjb3JhdGlvbnMiIFZhbHVlPSJVbmRlcmxpbmUiIC8+CiAgICAgICAgICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJDdXJzb3IiIFZhbHVlPSJIYW5kIiAvPgogICAgICAgICAgICA8L1RyaWdnZXI+CiAgICAgICAgPC9TdHlsZS5UcmlnZ2Vycz4KICAgIDwvU3R5bGU+CiAgICA8U3R5bGUgeDpLZXk9IkFwcEVudHJ5Qm9yZGVyU3R5bGUiIFRhcmdldFR5cGU9IkJvcmRlciI+CiAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iQm9yZGVyQnJ1c2giIFZhbHVlPSJHcmF5Ii8+CiAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iQm9yZGVyVGhpY2tuZXNzIiBWYWx1ZT0ie0R5bmFtaWNSZXNvdXJjZSBBcHBFbnRyeUJvcmRlclRoaWNrbmVzc30iLz4KICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJDb3JuZXJSYWRpdXMiIFZhbHVlPSI1Ii8+CiAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iUGFkZGluZyIgVmFsdWU9IjYsNCIvPgogICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IldpZHRoIiBWYWx1ZT0ie0R5bmFtaWNSZXNvdXJjZSBBcHBFbnRyeVdpZHRofSIvPgogICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IlZlcnRpY2FsQWxpZ25tZW50IiBWYWx1ZT0iVG9wIi8+CiAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iTWFyZ2luIiBWYWx1ZT0ie0R5bmFtaWNSZXNvdXJjZSBBcHBFbnRyeU1hcmdpbn0iLz4KICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJDdXJzb3IiIFZhbHVlPSJIYW5kIi8+CiAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iQmFja2dyb3VuZCIgVmFsdWU9IntEeW5hbWljUmVzb3VyY2UgQXBwSW5zdGFsbFVuc2VsZWN0ZWRDb2xvcn0iLz4KICAgIDwvU3R5bGU+CiAgICA8U3R5bGUgeDpLZXk9IkFwcEVudHJ5Q2hlY2tib3hTdHlsZSIgVGFyZ2V0VHlwZT0iQ2hlY2tCb3giPgogICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IkJhY2tncm91bmQiIFZhbHVlPSJUcmFuc3BhcmVudCIvPgogICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9Ikhvcml6b250YWxBbGlnbm1lbnQiIFZhbHVlPSJMZWZ0Ii8+CiAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iVmVydGljYWxBbGlnbm1lbnQiIFZhbHVlPSJDZW50ZXIiLz4KICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJNYXJnaW4iIFZhbHVlPSJ7RHluYW1pY1Jlc291cmNlIEFwcEVudHJ5TWFyZ2lufSIvPgogICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IlRlbXBsYXRlIj4KICAgICAgICAgICAgPFNldHRlci5WYWx1ZT4KICAgICAgICAgICAgICAgIDxDb250cm9sVGVtcGxhdGUgVGFyZ2V0VHlwZT0iQ2hlY2tCb3giPgogICAgICAgICAgICAgICAgICAgIDxDb250ZW50UHJlc2VudGVyIENvbnRlbnQ9IntUZW1wbGF0ZUJpbmRpbmcgQ29udGVudH0iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgVmVydGljYWxBbGlnbm1lbnQ9IkNlbnRlciIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBIb3Jpem9udGFsQWxpZ25tZW50PSJMZWZ0Ii8+CiAgICAgICAgICAgICAgICA8L0NvbnRyb2xUZW1wbGF0ZT4KICAgICAgICAgICAgPC9TZXR0ZXIuVmFsdWU+CiAgICAgICAgPC9TZXR0ZXI+CiAgICA8L1N0eWxlPgogICAgPFN0eWxlIHg6S2V5PSJBcHBFbnRyeU5hbWVTdHlsZSIgVGFyZ2V0VHlwZT0iVGV4dEJsb2NrIj4KICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJGb250U2l6ZSIgVmFsdWU9IntEeW5hbWljUmVzb3VyY2UgQXBwRW50cnlGb250U2l6ZX0iLz4KICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJGb250V2VpZ2h0IiBWYWx1ZT0iQm9sZCIvPgogICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IkZvcmVncm91bmQiIFZhbHVlPSJ7RHluYW1pY1Jlc291cmNlIE1haW5Gb3JlZ3JvdW5kQ29sb3J9Ii8+CiAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iVmVydGljYWxBbGlnbm1lbnQiIFZhbHVlPSJDZW50ZXIiLz4KICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJNYXJnaW4iIFZhbHVlPSJ7RHluYW1pY1Jlc291cmNlIEFwcEVudHJ5TWFyZ2lufSIvPgogICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IkJhY2tncm91bmQiIFZhbHVlPSJUcmFuc3BhcmVudCIvPgogICAgPC9TdHlsZT4KICAgIDxTdHlsZSB4OktleT0iQXBwRW50cnlCdXR0b25TdHlsZSIgVGFyZ2V0VHlwZT0iQnV0dG9uIj4KICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJXaWR0aCIgVmFsdWU9IntEeW5hbWljUmVzb3VyY2UgSWNvbkJ1dHRvblNpemV9Ii8+CiAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iSGVpZ2h0IiBWYWx1ZT0ie0R5bmFtaWNSZXNvdXJjZSBJY29uQnV0dG9uU2l6ZX0iLz4KICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJNYXJnaW4iIFZhbHVlPSJ7RHluYW1pY1Jlc291cmNlIEFwcEVudHJ5TWFyZ2lufSIvPgogICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IkZvcmVncm91bmQiIFZhbHVlPSJ7RHluYW1pY1Jlc291cmNlIEJ1dHRvbkZvcmVncm91bmRDb2xvcn0iLz4KICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJCYWNrZ3JvdW5kIiBWYWx1ZT0ie0R5bmFtaWNSZXNvdXJjZSBCdXR0b25CYWNrZ3JvdW5kQ29sb3J9Ii8+CiAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iSG9yaXpvbnRhbEFsaWdubWVudCIgVmFsdWU9IkNlbnRlciIvPgogICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IlZlcnRpY2FsQWxpZ25tZW50IiBWYWx1ZT0iQ2VudGVyIi8+CiAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iQ29udGVudFRlbXBsYXRlIj4KICAgICAgICAgICAgPFNldHRlci5WYWx1ZT4KICAgICAgICAgICAgICAgIDxEYXRhVGVtcGxhdGU+CiAgICAgICAgICAgICAgICAgICAgPFRleHRCbG9jayAgVGV4dD0ie0JpbmRpbmd9IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEZvbnRGYW1pbHk9IlNlZ29lIE1ETDIgQXNzZXRzIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEZvbnRTaXplPSJ7RHluYW1pY1Jlc291cmNlIEljb25Gb250U2l6ZX0iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgQmFja2dyb3VuZD0iVHJhbnNwYXJlbnQiLz4KICAgICAgICAgICAgICAgIDwvRGF0YVRlbXBsYXRlPgogICAgICAgICAgICA8L1NldHRlci5WYWx1ZT4KICAgICAgICA8L1NldHRlcj4KICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJUZW1wbGF0ZSI+CiAgICAgICAgICAgICAgICA8U2V0dGVyLlZhbHVlPgogICAgICAgICAgICAgICAgICAgIDxDb250cm9sVGVtcGxhdGUgVGFyZ2V0VHlwZT0iQnV0dG9uIj4KICAgICAgICAgICAgICAgICAgICAgICAgPEdyaWQ+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8Qm9yZGVyIE5hbWU9IkJhY2tncm91bmRCb3JkZXIiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEJhY2tncm91bmQ9IntUZW1wbGF0ZUJpbmRpbmcgQmFja2dyb3VuZH0iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEJvcmRlckJydXNoPSJ7VGVtcGxhdGVCaW5kaW5nIEJvcmRlckJydXNofSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgQm9yZGVyVGhpY2tuZXNzPSJ7RHluYW1pY1Jlc291cmNlIEJ1dHRvbkJvcmRlclRoaWNrbmVzc30iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIENvcm5lclJhZGl1cz0ie0R5bmFtaWNSZXNvdXJjZSBCdXR0b25Db3JuZXJSYWRpdXN9Ij4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8Q29udGVudFByZXNlbnRlciBIb3Jpem9udGFsQWxpZ25tZW50PSJDZW50ZXIiIFZlcnRpY2FsQWxpZ25tZW50PSJDZW50ZXIiLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvQm9yZGVyPgogICAgICAgICAgICAgICAgICAgICAgICA8L0dyaWQ+CiAgICAgICAgICAgICAgICAgICAgICAgIDxDb250cm9sVGVtcGxhdGUuVHJpZ2dlcnM+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8VHJpZ2dlciBQcm9wZXJ0eT0iSXNQcmVzc2VkIiBWYWx1ZT0iVHJ1ZSI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPFNldHRlciBUYXJnZXROYW1lPSJCYWNrZ3JvdW5kQm9yZGVyIiBQcm9wZXJ0eT0iQmFja2dyb3VuZCIgVmFsdWU9IntEeW5hbWljUmVzb3VyY2UgQnV0dG9uQmFja2dyb3VuZFByZXNzZWRDb2xvcn0iLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvVHJpZ2dlcj4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxUcmlnZ2VyIFByb3BlcnR5PSJJc01vdXNlT3ZlciIgVmFsdWU9IlRydWUiPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IkN1cnNvciIgVmFsdWU9IkhhbmQiLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8U2V0dGVyIFRhcmdldE5hbWU9IkJhY2tncm91bmRCb3JkZXIiIFByb3BlcnR5PSJCYWNrZ3JvdW5kIiBWYWx1ZT0ie0R5bmFtaWNSZXNvdXJjZSBCdXR0b25CYWNrZ3JvdW5kTW91c2VvdmVyQ29sb3J9Ii8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L1RyaWdnZXI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8VHJpZ2dlciBQcm9wZXJ0eT0iSXNFbmFibGVkIiBWYWx1ZT0iRmFsc2UiPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxTZXR0ZXIgVGFyZ2V0TmFtZT0iQmFja2dyb3VuZEJvcmRlciIgUHJvcGVydHk9IkJhY2tncm91bmQiIFZhbHVlPSJ7RHluYW1pY1Jlc291cmNlIEJ1dHRvbkJhY2tncm91bmRTZWxlY3RlZENvbG9yfSIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IkZvcmVncm91bmQiIFZhbHVlPSJEaW1HcmF5Ii8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L1RyaWdnZXI+CiAgICAgICAgICAgICAgICAgICAgICAgIDwvQ29udHJvbFRlbXBsYXRlLlRyaWdnZXJzPgogICAgICAgICAgICAgICAgICAgIDwvQ29udHJvbFRlbXBsYXRlPgogICAgICAgICAgICAgICAgPC9TZXR0ZXIuVmFsdWU+CiAgICAgICAgICAgIDwvU2V0dGVyPgoKCiAgICA8L1N0eWxlPgogICAgPFN0eWxlIFRhcmdldFR5cGU9IkJ1dHRvbiIgeDpLZXk9IkhvdmVyQnV0dG9uU3R5bGUiPgogICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IkZvcmVncm91bmQiIFZhbHVlPSJ7RHluYW1pY1Jlc291cmNlIE1haW5Gb3JlZ3JvdW5kQ29sb3J9IiAvPgogICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IkZvbnRXZWlnaHQiIFZhbHVlPSJOb3JtYWwiIC8+CiAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iRm9udFNpemUiIFZhbHVlPSJ7RHluYW1pY1Jlc291cmNlIEJ1dHRvbkZvbnRTaXplfSIgLz4KICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJUZXh0RWxlbWVudC5Gb250RmFtaWx5IiBWYWx1ZT0ie0R5bmFtaWNSZXNvdXJjZSBCdXR0b25Gb250RmFtaWx5fSIvPgogICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IkJhY2tncm91bmQiIFZhbHVlPSJ7RHluYW1pY1Jlc291cmNlIE1haW5CYWNrZ3JvdW5kQ29sb3J9IiAvPgogICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IlRlbXBsYXRlIj4KICAgICAgICAgICAgPFNldHRlci5WYWx1ZT4KICAgICAgICAgICAgICAgIDxDb250cm9sVGVtcGxhdGUgVGFyZ2V0VHlwZT0iQnV0dG9uIj4KICAgICAgICAgICAgICAgICAgICA8Qm9yZGVyIEJhY2tncm91bmQ9IntUZW1wbGF0ZUJpbmRpbmcgQmFja2dyb3VuZH0iPgogICAgICAgICAgICAgICAgICAgICAgICA8Q29udGVudFByZXNlbnRlciBIb3Jpem9udGFsQWxpZ25tZW50PSJDZW50ZXIiIFZlcnRpY2FsQWxpZ25tZW50PSJDZW50ZXIiLz4KICAgICAgICAgICAgICAgICAgICA8L0JvcmRlcj4KICAgICAgICAgICAgICAgICAgICA8Q29udHJvbFRlbXBsYXRlLlRyaWdnZXJzPgogICAgICAgICAgICAgICAgICAgICAgICA8VHJpZ2dlciBQcm9wZXJ0eT0iSXNNb3VzZU92ZXIiIFZhbHVlPSJUcnVlIj4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IkZvbnRXZWlnaHQiIFZhbHVlPSJCb2xkIiAvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iRm9yZWdyb3VuZCIgVmFsdWU9IntEeW5hbWljUmVzb3VyY2UgTWFpbkZvcmVncm91bmRDb2xvcn0iIC8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJDdXJzb3IiIFZhbHVlPSJIYW5kIiAvPgogICAgICAgICAgICAgICAgICAgICAgICA8L1RyaWdnZXI+CiAgICAgICAgICAgICAgICAgICAgPC9Db250cm9sVGVtcGxhdGUuVHJpZ2dlcnM+CiAgICAgICAgICAgICAgICA8L0NvbnRyb2xUZW1wbGF0ZT4KICAgICAgICAgICAgPC9TZXR0ZXIuVmFsdWU+CiAgICAgICAgPC9TZXR0ZXI+CiAgICA8L1N0eWxlPgoKICAgIDwhLS1TY3JvbGxCYXJzLS0+CiAgICA8U3R5bGUgeDpLZXk9Int4OlR5cGUgU2Nyb2xsQmFyfSIgVGFyZ2V0VHlwZT0ie3g6VHlwZSBTY3JvbGxCYXJ9Ij4KICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJTdHlsdXMuSXNGbGlja3NFbmFibGVkIiBWYWx1ZT0iZmFsc2UiIC8+CiAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iRm9yZWdyb3VuZCIgVmFsdWU9IntEeW5hbWljUmVzb3VyY2UgU2Nyb2xsQmFyQmFja2dyb3VuZENvbG9yfSIgLz4KICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJCYWNrZ3JvdW5kIiBWYWx1ZT0ie0R5bmFtaWNSZXNvdXJjZSBNYWluQmFja2dyb3VuZENvbG9yfSIgLz4KICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJXaWR0aCIgVmFsdWU9IjYiIC8+CiAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iVGVtcGxhdGUiPgogICAgICAgICAgICA8U2V0dGVyLlZhbHVlPgogICAgICAgICAgICAgICAgPENvbnRyb2xUZW1wbGF0ZSBUYXJnZXRUeXBlPSJ7eDpUeXBlIFNjcm9sbEJhcn0iPgogICAgICAgICAgICAgICAgICAgIDxHcmlkIE5hbWU9IkdyaWRSb290IiBXaWR0aD0iNyIgQmFja2dyb3VuZD0ie1RlbXBsYXRlQmluZGluZyBCYWNrZ3JvdW5kfSIgPgogICAgICAgICAgICAgICAgICAgICAgICA8R3JpZC5Sb3dEZWZpbml0aW9ucz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxSb3dEZWZpbml0aW9uIEhlaWdodD0iMC4wMDAwMSoiIC8+CiAgICAgICAgICAgICAgICAgICAgICAgIDwvR3JpZC5Sb3dEZWZpbml0aW9ucz4KCiAgICAgICAgICAgICAgICAgICAgICAgIDxUcmFjayBOYW1lPSJQQVJUX1RyYWNrIiBHcmlkLlJvdz0iMCIgSXNEaXJlY3Rpb25SZXZlcnNlZD0idHJ1ZSIgRm9jdXNhYmxlPSJmYWxzZSI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8VHJhY2suVGh1bWI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPFRodW1iIE5hbWU9IlRodW1iIiBCYWNrZ3JvdW5kPSJ7VGVtcGxhdGVCaW5kaW5nIEZvcmVncm91bmR9IiBTdHlsZT0ie0R5bmFtaWNSZXNvdXJjZSBTY3JvbGxUaHVtYnN9IiAvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9UcmFjay5UaHVtYj4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxUcmFjay5JbmNyZWFzZVJlcGVhdEJ1dHRvbj4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8UmVwZWF0QnV0dG9uIE5hbWU9IlBhZ2VVcCIgQ29tbWFuZD0iU2Nyb2xsQmFyLlBhZ2VEb3duQ29tbWFuZCIgT3BhY2l0eT0iMCIgRm9jdXNhYmxlPSJmYWxzZSIgLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvVHJhY2suSW5jcmVhc2VSZXBlYXRCdXR0b24+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8VHJhY2suRGVjcmVhc2VSZXBlYXRCdXR0b24+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPFJlcGVhdEJ1dHRvbiBOYW1lPSJQYWdlRG93biIgQ29tbWFuZD0iU2Nyb2xsQmFyLlBhZ2VVcENvbW1hbmQiIE9wYWNpdHk9IjAiIEZvY3VzYWJsZT0iZmFsc2UiIC8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L1RyYWNrLkRlY3JlYXNlUmVwZWF0QnV0dG9uPgogICAgICAgICAgICAgICAgICAgICAgICA8L1RyYWNrPgogICAgICAgICAgICAgICAgICAgIDwvR3JpZD4KCiAgICAgICAgICAgICAgICAgICAgPENvbnRyb2xUZW1wbGF0ZS5UcmlnZ2Vycz4KICAgICAgICAgICAgICAgICAgICAgICAgPFRyaWdnZXIgU291cmNlTmFtZT0iVGh1bWIiIFByb3BlcnR5PSJJc01vdXNlT3ZlciIgVmFsdWU9InRydWUiPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPFNldHRlciBWYWx1ZT0ie0R5bmFtaWNSZXNvdXJjZSBTY3JvbGxCYXJIb3ZlckNvbG9yfSIgVGFyZ2V0TmFtZT0iVGh1bWIiIFByb3BlcnR5PSJCYWNrZ3JvdW5kIiAvPgogICAgICAgICAgICAgICAgICAgICAgICA8L1RyaWdnZXI+CiAgICAgICAgICAgICAgICAgICAgICAgIDxUcmlnZ2VyIFNvdXJjZU5hbWU9IlRodW1iIiBQcm9wZXJ0eT0iSXNEcmFnZ2luZyIgVmFsdWU9InRydWUiPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPFNldHRlciBWYWx1ZT0ie0R5bmFtaWNSZXNvdXJjZSBTY3JvbGxCYXJEcmFnZ2luZ0NvbG9yfSIgVGFyZ2V0TmFtZT0iVGh1bWIiIFByb3BlcnR5PSJCYWNrZ3JvdW5kIiAvPgogICAgICAgICAgICAgICAgICAgICAgICA8L1RyaWdnZXI+CgogICAgICAgICAgICAgICAgICAgICAgICA8VHJpZ2dlciBQcm9wZXJ0eT0iSXNFbmFibGVkIiBWYWx1ZT0iZmFsc2UiPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPFNldHRlciBUYXJnZXROYW1lPSJUaHVtYiIgUHJvcGVydHk9IlZpc2liaWxpdHkiIFZhbHVlPSJDb2xsYXBzZWQiIC8+CiAgICAgICAgICAgICAgICAgICAgICAgIDwvVHJpZ2dlcj4KICAgICAgICAgICAgICAgICAgICAgICAgPFRyaWdnZXIgUHJvcGVydHk9Ik9yaWVudGF0aW9uIiBWYWx1ZT0iSG9yaXpvbnRhbCI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8U2V0dGVyIFRhcmdldE5hbWU9IkdyaWRSb290IiBQcm9wZXJ0eT0iTGF5b3V0VHJhbnNmb3JtIj4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8U2V0dGVyLlZhbHVlPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8Um90YXRlVHJhbnNmb3JtIEFuZ2xlPSItOTAiIC8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9TZXR0ZXIuVmFsdWU+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L1NldHRlcj4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxTZXR0ZXIgVGFyZ2V0TmFtZT0iUEFSVF9UcmFjayIgUHJvcGVydHk9IkxheW91dFRyYW5zZm9ybSI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPFNldHRlci5WYWx1ZT4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPFJvdGF0ZVRyYW5zZm9ybSBBbmdsZT0iLTkwIiAvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvU2V0dGVyLlZhbHVlPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9TZXR0ZXI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJXaWR0aCIgVmFsdWU9IkF1dG8iIC8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJIZWlnaHQiIFZhbHVlPSI4IiAvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPFNldHRlciBUYXJnZXROYW1lPSJUaHVtYiIgUHJvcGVydHk9IlRhZyIgVmFsdWU9Ikhvcml6b250YWwiIC8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8U2V0dGVyIFRhcmdldE5hbWU9IlBhZ2VEb3duIiBQcm9wZXJ0eT0iQ29tbWFuZCIgVmFsdWU9IlNjcm9sbEJhci5QYWdlTGVmdENvbW1hbmQiIC8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8U2V0dGVyIFRhcmdldE5hbWU9IlBhZ2VVcCIgUHJvcGVydHk9IkNvbW1hbmQiIFZhbHVlPSJTY3JvbGxCYXIuUGFnZVJpZ2h0Q29tbWFuZCIgLz4KICAgICAgICAgICAgICAgICAgICAgICAgPC9UcmlnZ2VyPgogICAgICAgICAgICAgICAgICAgIDwvQ29udHJvbFRlbXBsYXRlLlRyaWdnZXJzPgogICAgICAgICAgICAgICAgPC9Db250cm9sVGVtcGxhdGU+CiAgICAgICAgICAgIDwvU2V0dGVyLlZhbHVlPgogICAgICAgIDwvU2V0dGVyPgogICAgICAgIDwvU3R5bGU+CiAgICAgICAgPFN0eWxlIHg6S2V5PSJDb21ib0JveFRvZ2dsZUJ1dHRvblN0eWxlIiBUYXJnZXRUeXBlPSJUb2dnbGVCdXR0b24iPgogICAgICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJUZW1wbGF0ZSI+CiAgICAgICAgICAgICAgICA8U2V0dGVyLlZhbHVlPgogICAgICAgICAgICAgICAgICAgIDxDb250cm9sVGVtcGxhdGUgVGFyZ2V0VHlwZT0iVG9nZ2xlQnV0dG9uIj4KICAgICAgICAgICAgICAgICAgICAgICAgPEJvcmRlciBCYWNrZ3JvdW5kPSJ7VGVtcGxhdGVCaW5kaW5nIEJhY2tncm91bmR9IiBCb3JkZXJUaGlja25lc3M9IjAiPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPENvbnRlbnRQcmVzZW50ZXIvPgogICAgICAgICAgICAgICAgICAgICAgICA8L0JvcmRlcj4KICAgICAgICAgICAgICAgICAgICA8L0NvbnRyb2xUZW1wbGF0ZT4KICAgICAgICAgICAgICAgIDwvU2V0dGVyLlZhbHVlPgogICAgICAgICAgICA8L1NldHRlcj4KICAgICAgICA8L1N0eWxlPgogICAgICAgIDxTdHlsZSBUYXJnZXRUeXBlPSJDb21ib0JveCI+CiAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IkZvcmVncm91bmQiIFZhbHVlPSJ7RHluYW1pY1Jlc291cmNlIENvbWJvQm94Rm9yZWdyb3VuZENvbG9yfSIgLz4KICAgICAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iQmFja2dyb3VuZCIgVmFsdWU9IntEeW5hbWljUmVzb3VyY2UgQ29tYm9Cb3hCYWNrZ3JvdW5kQ29sb3J9IiAvPgogICAgICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJNaW5XaWR0aCIgICBWYWx1ZT0ie0R5bmFtaWNSZXNvdXJjZSBCdXR0b25XaWR0aH0iIC8+CiAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IlRlbXBsYXRlIj4KICAgICAgICAgICAgICAgIDxTZXR0ZXIuVmFsdWU+CiAgICAgICAgICAgICAgICAgICAgPENvbnRyb2xUZW1wbGF0ZSBUYXJnZXRUeXBlPSJDb21ib0JveCI+CiAgICAgICAgICAgICAgICAgICAgICAgIDxHcmlkPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPEJvcmRlciBOYW1lPSJPdXRlckJvcmRlciIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgQm9yZGVyQnJ1c2g9IntEeW5hbWljUmVzb3VyY2UgQm9yZGVyQ29sb3J9IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBCb3JkZXJUaGlja25lc3M9IjEiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIENvcm5lclJhZGl1cz0ie0R5bmFtaWNSZXNvdXJjZSBCdXR0b25Db3JuZXJSYWRpdXN9IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBCYWNrZ3JvdW5kPSJ7VGVtcGxhdGVCaW5kaW5nIEJhY2tncm91bmR9Ij4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8VG9nZ2xlQnV0dG9uIE5hbWU9IlRvZ2dsZUJ1dHRvbiIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIFN0eWxlPSJ7U3RhdGljUmVzb3VyY2UgQ29tYm9Cb3hUb2dnbGVCdXR0b25TdHlsZX0iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBCYWNrZ3JvdW5kPSJUcmFuc3BhcmVudCIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEJvcmRlclRoaWNrbmVzcz0iMCIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIElzQ2hlY2tlZD0ie0JpbmRpbmcgSXNEcm9wRG93bk9wZW4sIE1vZGU9VHdvV2F5LCBSZWxhdGl2ZVNvdXJjZT17UmVsYXRpdmVTb3VyY2UgVGVtcGxhdGVkUGFyZW50fX0iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBDbGlja01vZGU9IlByZXNzIj4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPEdyaWQ+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8R3JpZC5Db2x1bW5EZWZpbml0aW9ucz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8Q29sdW1uRGVmaW5pdGlvbiBXaWR0aD0iKiIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxDb2x1bW5EZWZpbml0aW9uIFdpZHRoPSJBdXRvIi8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L0dyaWQuQ29sdW1uRGVmaW5pdGlvbnM+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8VGV4dEJsb2NrIEdyaWQuQ29sdW1uPSIwIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBUZXh0PSJ7VGVtcGxhdGVCaW5kaW5nIFNlbGVjdGlvbkJveEl0ZW19IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBGb3JlZ3JvdW5kPSJ7VGVtcGxhdGVCaW5kaW5nIEZvcmVncm91bmR9IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBCYWNrZ3JvdW5kPSJUcmFuc3BhcmVudCIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgSG9yaXpvbnRhbEFsaWdubWVudD0iTGVmdCIgVmVydGljYWxBbGlnbm1lbnQ9IkNlbnRlciIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgTWFyZ2luPSI2LDMsMiwzIi8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8UGF0aCBHcmlkLkNvbHVtbj0iMSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIERhdGE9Ik0gMCwwIEwgOCwwIEwgNCw1IFoiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBGaWxsPSJ7VGVtcGxhdGVCaW5kaW5nIEZvcmVncm91bmR9IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgV2lkdGg9IjgiIEhlaWdodD0iNSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIFZlcnRpY2FsQWxpZ25tZW50PSJDZW50ZXIiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBIb3Jpem9udGFsQWxpZ25tZW50PSJDZW50ZXIiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBTdHJldGNoPSJVbmlmb3JtIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgTWFyZ2luPSI0LDAsNiwwIi8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvR3JpZD4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L1RvZ2dsZUJ1dHRvbj4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvQm9yZGVyPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPFBvcHVwIE5hbWU9IlBvcHVwIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIElzT3Blbj0ie1RlbXBsYXRlQmluZGluZyBJc0Ryb3BEb3duT3Blbn0iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgUGxhY2VtZW50PSJCb3R0b20iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgRm9jdXNhYmxlPSJGYWxzZSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBBbGxvd3NUcmFuc3BhcmVuY3k9IlRydWUiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgUG9wdXBBbmltYXRpb249IlNsaWRlIj4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8Qm9yZGVyIE5hbWU9IkRyb3BEb3duQm9yZGVyIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgQmFja2dyb3VuZD0ie1RlbXBsYXRlQmluZGluZyBCYWNrZ3JvdW5kfSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEJvcmRlckJydXNoPSJ7RHluYW1pY1Jlc291cmNlIEJvcmRlckNvbG9yfSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEJvcmRlclRoaWNrbmVzcz0iMSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIENvcm5lclJhZGl1cz0iNCI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxTY3JvbGxWaWV3ZXI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8SXRlbXNQcmVzZW50ZXIgSG9yaXpvbnRhbEFsaWdubWVudD0iTGVmdCIgVmVydGljYWxBbGlnbm1lbnQ9IkNlbnRlciIgTWFyZ2luPSI0LDIiLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9TY3JvbGxWaWV3ZXI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9Cb3JkZXI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L1BvcHVwPgogICAgICAgICAgICAgICAgICAgICAgICA8L0dyaWQ+CiAgICAgICAgICAgICAgICAgICAgPC9Db250cm9sVGVtcGxhdGU+CiAgICAgICAgICAgICAgICA8L1NldHRlci5WYWx1ZT4KICAgICAgICAgICAgPC9TZXR0ZXI+CiAgICAgICAgPC9TdHlsZT4KICAgICAgICA8U3R5bGUgVGFyZ2V0VHlwZT0iQ29tYm9Cb3hJdGVtIj4KICAgICAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iQmFja2dyb3VuZCIgVmFsdWU9IntEeW5hbWljUmVzb3VyY2UgQ29tYm9Cb3hCYWNrZ3JvdW5kQ29sb3J9Ii8+CiAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IkZvcmVncm91bmQiIFZhbHVlPSJ7RHluYW1pY1Jlc291cmNlIENvbWJvQm94Rm9yZWdyb3VuZENvbG9yfSIvPgogICAgICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJQYWRkaW5nIiBWYWx1ZT0iNiwzIi8+CiAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IkNvbnRlbnRUZW1wbGF0ZSI+CiAgICAgICAgICAgICAgICA8U2V0dGVyLlZhbHVlPgogICAgICAgICAgICAgICAgICAgIDxEYXRhVGVtcGxhdGU+CiAgICAgICAgICAgICAgICAgICAgICAgIDxUZXh0QmxvY2sgVGV4dD0ie0JpbmRpbmd9IiBCYWNrZ3JvdW5kPSJUcmFuc3BhcmVudCIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBGb3JlZ3JvdW5kPSJ7QmluZGluZyBGb3JlZ3JvdW5kLCBSZWxhdGl2ZVNvdXJjZT17UmVsYXRpdmVTb3VyY2UgQW5jZXN0b3JUeXBlPUNvbWJvQm94SXRlbX19Ii8+CiAgICAgICAgICAgICAgICAgICAgPC9EYXRhVGVtcGxhdGU+CiAgICAgICAgICAgICAgICA8L1NldHRlci5WYWx1ZT4KICAgICAgICAgICAgPC9TZXR0ZXI+CiAgICAgICAgICAgIDxTdHlsZS5UcmlnZ2Vycz4KICAgICAgICAgICAgICAgIDxUcmlnZ2VyIFByb3BlcnR5PSJJc0hpZ2hsaWdodGVkIiBWYWx1ZT0iVHJ1ZSI+CiAgICAgICAgICAgICAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iQmFja2dyb3VuZCIgVmFsdWU9IntEeW5hbWljUmVzb3VyY2UgQnV0dG9uQmFja2dyb3VuZE1vdXNlb3ZlckNvbG9yfSIvPgogICAgICAgICAgICAgICAgPC9UcmlnZ2VyPgogICAgICAgICAgICAgICAgPFRyaWdnZXIgUHJvcGVydHk9IklzU2VsZWN0ZWQiIFZhbHVlPSJUcnVlIj4KICAgICAgICAgICAgICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJCYWNrZ3JvdW5kIiBWYWx1ZT0ie0R5bmFtaWNSZXNvdXJjZSBCdXR0b25CYWNrZ3JvdW5kU2VsZWN0ZWRDb2xvcn0iLz4KICAgICAgICAgICAgICAgIDwvVHJpZ2dlcj4KICAgICAgICAgICAgPC9TdHlsZS5UcmlnZ2Vycz4KICAgICAgICA8L1N0eWxlPgogICAgICAgIDxTdHlsZSBUYXJnZXRUeXBlPSJMYWJlbCI+CiAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IkZvcmVncm91bmQiIFZhbHVlPSJ7RHluYW1pY1Jlc291cmNlIExhYmVsYm94Rm9yZWdyb3VuZENvbG9yfSIvPgogICAgICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJCYWNrZ3JvdW5kIiBWYWx1ZT0ie0R5bmFtaWNSZXNvdXJjZSBMYWJlbEJhY2tncm91bmRDb2xvcn0iLz4KICAgICAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iRm9udEZhbWlseSIgVmFsdWU9IntEeW5hbWljUmVzb3VyY2UgRm9udEZhbWlseX0iLz4KICAgICAgICA8L1N0eWxlPgoKICAgICAgICA8IS0tIFRleHRCbG9jayB0ZW1wbGF0ZSAtLT4KICAgICAgICA8U3R5bGUgVGFyZ2V0VHlwZT0iVGV4dEJsb2NrIj4KICAgICAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iRm9udFNpemUiIFZhbHVlPSJ7RHluYW1pY1Jlc291cmNlIEZvbnRTaXplfSIvPgogICAgICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJGb3JlZ3JvdW5kIiBWYWx1ZT0ie0R5bmFtaWNSZXNvdXJjZSBMYWJlbGJveEZvcmVncm91bmRDb2xvcn0iLz4KICAgICAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iQmFja2dyb3VuZCIgVmFsdWU9IntEeW5hbWljUmVzb3VyY2UgTGFiZWxCYWNrZ3JvdW5kQ29sb3J9Ii8+CiAgICAgICAgPC9TdHlsZT4KICAgICAgICA8U3R5bGUgeDpLZXk9IlRhYlRvZ2dsZUJ1dHRvbiIgVGFyZ2V0VHlwZT0ie3g6VHlwZSBUb2dnbGVCdXR0b259Ij4KICAgICAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iTWFyZ2luIiBWYWx1ZT0ie0R5bmFtaWNSZXNvdXJjZSBCdXR0b25NYXJnaW59Ii8+CiAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IkNvbnRlbnQiIFZhbHVlPSIiLz4KICAgICAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iRm9udEZhbWlseSIgVmFsdWU9IntEeW5hbWljUmVzb3VyY2UgRm9udEZhbWlseX0iLz4KICAgICAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iVGVtcGxhdGUiPgogICAgICAgICAgICAgICAgPFNldHRlci5WYWx1ZT4KICAgICAgICAgICAgICAgICAgICA8Q29udHJvbFRlbXBsYXRlIFRhcmdldFR5cGU9IlRvZ2dsZUJ1dHRvbiI+CiAgICAgICAgICAgICAgICAgICAgICAgIDxHcmlkPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPEJvcmRlciBOYW1lPSJCdXR0b25HbG93IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgQmFja2dyb3VuZD0ie1RlbXBsYXRlQmluZGluZyBCYWNrZ3JvdW5kfSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEJvcmRlckJydXNoPSJ7RHluYW1pY1Jlc291cmNlIEJ1dHRvbkZvcmVncm91bmRDb2xvcn0iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBCb3JkZXJUaGlja25lc3M9IntEeW5hbWljUmVzb3VyY2UgQnV0dG9uQm9yZGVyVGhpY2tuZXNzfSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIENvcm5lclJhZGl1cz0ie0R5bmFtaWNSZXNvdXJjZSBCdXR0b25Db3JuZXJSYWRpdXN9Ij4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8R3JpZD4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPEJvcmRlciBOYW1lPSJCYWNrZ3JvdW5kQm9yZGVyIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgQmFja2dyb3VuZD0ie1RlbXBsYXRlQmluZGluZyBCYWNrZ3JvdW5kfSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEJvcmRlckJydXNoPSJ7RHluYW1pY1Jlc291cmNlIEJ1dHRvbkJhY2tncm91bmRDb2xvcn0iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBCb3JkZXJUaGlja25lc3M9IntEeW5hbWljUmVzb3VyY2UgQnV0dG9uQm9yZGVyVGhpY2tuZXNzfSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIENvcm5lclJhZGl1cz0ie0R5bmFtaWNSZXNvdXJjZSBCdXR0b25Db3JuZXJSYWRpdXN9Ij4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxDb250ZW50UHJlc2VudGVyCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgSG9yaXpvbnRhbEFsaWdubWVudD0iQ2VudGVyIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIFZlcnRpY2FsQWxpZ25tZW50PSJDZW50ZXIiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgTWFyZ2luPSIxMCwyLDEwLDIiLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9Cb3JkZXI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9HcmlkPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9Cb3JkZXI+CiAgICAgICAgICAgICAgICAgICAgICAgIDwvR3JpZD4KICAgICAgICAgICAgICAgICAgICAgICAgPENvbnRyb2xUZW1wbGF0ZS5UcmlnZ2Vycz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxUcmlnZ2VyIFByb3BlcnR5PSJJc01vdXNlT3ZlciIgVmFsdWU9IlRydWUiPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxTZXR0ZXIgVGFyZ2V0TmFtZT0iQmFja2dyb3VuZEJvcmRlciIgUHJvcGVydHk9IkJhY2tncm91bmQiIFZhbHVlPSJ7RHluYW1pY1Jlc291cmNlIEJ1dHRvbkJhY2tncm91bmRNb3VzZW92ZXJDb2xvcn0iLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJFZmZlY3QiPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8U2V0dGVyLlZhbHVlPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPERyb3BTaGFkb3dFZmZlY3QgT3BhY2l0eT0iMSIgU2hhZG93RGVwdGg9IjUiIENvbG9yPSJ7RHluYW1pY1Jlc291cmNlIENCdXR0b25CYWNrZ3JvdW5kTW91c2VvdmVyQ29sb3J9IiBEaXJlY3Rpb249Ii0xMDAiIEJsdXJSYWRpdXM9IjE1Ii8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvU2V0dGVyLlZhbHVlPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvU2V0dGVyPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IlBhbmVsLlpJbmRleCIgVmFsdWU9IjIwMDAiLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvVHJpZ2dlcj4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxUcmlnZ2VyIFByb3BlcnR5PSJJc0NoZWNrZWQiIFZhbHVlPSJUcnVlIj4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJCb3JkZXJCcnVzaCIgVmFsdWU9IlBpbmsiLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJCb3JkZXJUaGlja25lc3MiIFZhbHVlPSIyIi8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPFNldHRlciBUYXJnZXROYW1lPSJCYWNrZ3JvdW5kQm9yZGVyIiBQcm9wZXJ0eT0iQmFja2dyb3VuZCIgVmFsdWU9IntEeW5hbWljUmVzb3VyY2UgQnV0dG9uQmFja2dyb3VuZFNlbGVjdGVkQ29sb3J9Ii8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iRWZmZWN0Ij4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPFNldHRlci5WYWx1ZT4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxEcm9wU2hhZG93RWZmZWN0IE9wYWNpdHk9IjEiIFNoYWRvd0RlcHRoPSIyIiBDb2xvcj0ie0R5bmFtaWNSZXNvdXJjZSBDQnV0dG9uQmFja2dyb3VuZE1vdXNlb3ZlckNvbG9yfSIgRGlyZWN0aW9uPSItMTExIiBCbHVyUmFkaXVzPSIxMCIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L1NldHRlci5WYWx1ZT4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L1NldHRlcj4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvVHJpZ2dlcj4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxUcmlnZ2VyIFByb3BlcnR5PSJJc0NoZWNrZWQiIFZhbHVlPSJGYWxzZSI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iQm9yZGVyQnJ1c2giIFZhbHVlPSJUcmFuc3BhcmVudCIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IkJvcmRlclRoaWNrbmVzcyIgVmFsdWU9IntEeW5hbWljUmVzb3VyY2UgQnV0dG9uQm9yZGVyVGhpY2tuZXNzfSIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9UcmlnZ2VyPgogICAgICAgICAgICAgICAgICAgICAgICA8L0NvbnRyb2xUZW1wbGF0ZS5UcmlnZ2Vycz4KICAgICAgICAgICAgICAgICAgICA8L0NvbnRyb2xUZW1wbGF0ZT4KICAgICAgICAgICAgICAgIDwvU2V0dGVyLlZhbHVlPgogICAgICAgICAgICA8L1NldHRlcj4KICAgICAgICA8L1N0eWxlPgogICAgICAgIDwhLS0gQnV0dG9uIFRlbXBsYXRlIC0tPgogICAgICAgIDxTdHlsZSBUYXJnZXRUeXBlPSJCdXR0b24iPgogICAgICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJNYXJnaW4iIFZhbHVlPSJ7RHluYW1pY1Jlc291cmNlIEJ1dHRvbk1hcmdpbn0iLz4KICAgICAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iRm9yZWdyb3VuZCIgVmFsdWU9IntEeW5hbWljUmVzb3VyY2UgQnV0dG9uRm9yZWdyb3VuZENvbG9yfSIvPgogICAgICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJCYWNrZ3JvdW5kIiBWYWx1ZT0ie0R5bmFtaWNSZXNvdXJjZSBCdXR0b25CYWNrZ3JvdW5kQ29sb3J9Ii8+CiAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IkhlaWdodCIgVmFsdWU9IntEeW5hbWljUmVzb3VyY2UgQnV0dG9uSGVpZ2h0fSIvPgogICAgICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJXaWR0aCIgVmFsdWU9IntEeW5hbWljUmVzb3VyY2UgQnV0dG9uV2lkdGh9Ii8+CiAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IkZvbnRTaXplIiBWYWx1ZT0ie0R5bmFtaWNSZXNvdXJjZSBCdXR0b25Gb250U2l6ZX0iLz4KICAgICAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iRm9udEZhbWlseSIgVmFsdWU9IntEeW5hbWljUmVzb3VyY2UgRm9udEZhbWlseX0iLz4KICAgICAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iVGVtcGxhdGUiPgogICAgICAgICAgICAgICAgPFNldHRlci5WYWx1ZT4KICAgICAgICAgICAgICAgICAgICA8Q29udHJvbFRlbXBsYXRlIFRhcmdldFR5cGU9IkJ1dHRvbiI+CiAgICAgICAgICAgICAgICAgICAgICAgIDxHcmlkPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPEJvcmRlciBOYW1lPSJCYWNrZ3JvdW5kQm9yZGVyIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBCYWNrZ3JvdW5kPSJ7VGVtcGxhdGVCaW5kaW5nIEJhY2tncm91bmR9IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBCb3JkZXJCcnVzaD0ie1RlbXBsYXRlQmluZGluZyBCb3JkZXJCcnVzaH0iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEJvcmRlclRoaWNrbmVzcz0ie0R5bmFtaWNSZXNvdXJjZSBCdXR0b25Cb3JkZXJUaGlja25lc3N9IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBDb3JuZXJSYWRpdXM9IntEeW5hbWljUmVzb3VyY2UgQnV0dG9uQ29ybmVyUmFkaXVzfSI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPENvbnRlbnRQcmVzZW50ZXIgSG9yaXpvbnRhbEFsaWdubWVudD0iQ2VudGVyIiBWZXJ0aWNhbEFsaWdubWVudD0iQ2VudGVyIiBNYXJnaW49IjEwLDIsMTAsMiIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9Cb3JkZXI+CiAgICAgICAgICAgICAgICAgICAgICAgIDwvR3JpZD4KICAgICAgICAgICAgICAgICAgICAgICAgPENvbnRyb2xUZW1wbGF0ZS5UcmlnZ2Vycz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxUcmlnZ2VyIFByb3BlcnR5PSJJc1ByZXNzZWQiIFZhbHVlPSJUcnVlIj4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8U2V0dGVyIFRhcmdldE5hbWU9IkJhY2tncm91bmRCb3JkZXIiIFByb3BlcnR5PSJCYWNrZ3JvdW5kIiBWYWx1ZT0ie0R5bmFtaWNSZXNvdXJjZSBCdXR0b25CYWNrZ3JvdW5kUHJlc3NlZENvbG9yfSIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9UcmlnZ2VyPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPFRyaWdnZXIgUHJvcGVydHk9IklzTW91c2VPdmVyIiBWYWx1ZT0iVHJ1ZSI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPFNldHRlciBUYXJnZXROYW1lPSJCYWNrZ3JvdW5kQm9yZGVyIiBQcm9wZXJ0eT0iQmFja2dyb3VuZCIgVmFsdWU9IntEeW5hbWljUmVzb3VyY2UgQnV0dG9uQmFja2dyb3VuZE1vdXNlb3ZlckNvbG9yfSIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9UcmlnZ2VyPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPFRyaWdnZXIgUHJvcGVydHk9IklzRW5hYmxlZCIgVmFsdWU9IkZhbHNlIj4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8U2V0dGVyIFRhcmdldE5hbWU9IkJhY2tncm91bmRCb3JkZXIiIFByb3BlcnR5PSJCYWNrZ3JvdW5kIiBWYWx1ZT0ie0R5bmFtaWNSZXNvdXJjZSBCdXR0b25CYWNrZ3JvdW5kU2VsZWN0ZWRDb2xvcn0iLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJGb3JlZ3JvdW5kIiBWYWx1ZT0iRGltR3JheSIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9UcmlnZ2VyPgogICAgICAgICAgICAgICAgICAgICAgICA8L0NvbnRyb2xUZW1wbGF0ZS5UcmlnZ2Vycz4KICAgICAgICAgICAgICAgICAgICA8L0NvbnRyb2xUZW1wbGF0ZT4KICAgICAgICAgICAgICAgIDwvU2V0dGVyLlZhbHVlPgogICAgICAgICAgICA8L1NldHRlcj4KICAgICAgICA8L1N0eWxlPgoKICAgICAgICA8U3R5bGUgeDpLZXk9IlRvZ2dsZUJ1dHRvblN0eWxlIiBUYXJnZXRUeXBlPSJUb2dnbGVCdXR0b24iPgogICAgICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJNYXJnaW4iIFZhbHVlPSJ7RHluYW1pY1Jlc291cmNlIEJ1dHRvbk1hcmdpbn0iLz4KICAgICAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iRm9yZWdyb3VuZCIgVmFsdWU9IntEeW5hbWljUmVzb3VyY2UgQnV0dG9uRm9yZWdyb3VuZENvbG9yfSIvPgogICAgICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJCYWNrZ3JvdW5kIiBWYWx1ZT0ie0R5bmFtaWNSZXNvdXJjZSBCdXR0b25CYWNrZ3JvdW5kQ29sb3J9Ii8+CiAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IkhlaWdodCIgVmFsdWU9IntEeW5hbWljUmVzb3VyY2UgQnV0dG9uSGVpZ2h0fSIvPgogICAgICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJXaWR0aCIgVmFsdWU9IntEeW5hbWljUmVzb3VyY2UgQnV0dG9uV2lkdGh9Ii8+CiAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IkZvbnRTaXplIiBWYWx1ZT0ie0R5bmFtaWNSZXNvdXJjZSBCdXR0b25Gb250U2l6ZX0iLz4KICAgICAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iRm9udEZhbWlseSIgVmFsdWU9IntEeW5hbWljUmVzb3VyY2UgRm9udEZhbWlseX0iLz4KICAgICAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iVGVtcGxhdGUiPgogICAgICAgICAgICAgICAgPFNldHRlci5WYWx1ZT4KICAgICAgICAgICAgICAgICAgICA8Q29udHJvbFRlbXBsYXRlIFRhcmdldFR5cGU9IlRvZ2dsZUJ1dHRvbiI+CiAgICAgICAgICAgICAgICAgICAgICAgIDxHcmlkPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPEJvcmRlciBOYW1lPSJCYWNrZ3JvdW5kQm9yZGVyIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBCYWNrZ3JvdW5kPSJ7VGVtcGxhdGVCaW5kaW5nIEJhY2tncm91bmR9IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBCb3JkZXJCcnVzaD0ie1RlbXBsYXRlQmluZGluZyBCb3JkZXJCcnVzaH0iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEJvcmRlclRoaWNrbmVzcz0ie0R5bmFtaWNSZXNvdXJjZSBCdXR0b25Cb3JkZXJUaGlja25lc3N9IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBDb3JuZXJSYWRpdXM9IntEeW5hbWljUmVzb3VyY2UgQnV0dG9uQ29ybmVyUmFkaXVzfSI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPEdyaWQ+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwhLS0gVG9nZ2xlIERvdCBCYWNrZ3JvdW5kIC0tPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8RWxsaXBzZSBXaWR0aD0iOCIgSGVpZ2h0PSIxNiIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBGaWxsPSJ7RHluYW1pY1Jlc291cmNlIFRvZ2dsZUJ1dHRvbk9uQ29sb3J9IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEhvcml6b250YWxBbGlnbm1lbnQ9IlJpZ2h0IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIFZlcnRpY2FsQWxpZ25tZW50PSJUb3AiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgTWFyZ2luPSIwLDMsNSwwIiAvPgoKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPCEtLSBUb2dnbGUgRG90IHdpdGggaG92ZXIgZ3JvdyBlZmZlY3QgLS0+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxFbGxpcHNlIE5hbWU9IlRvZ2dsZURvdCIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBXaWR0aD0iOCIgSGVpZ2h0PSI4IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEZpbGw9IntEeW5hbWljUmVzb3VyY2UgQnV0dG9uRm9yZWdyb3VuZENvbG9yfSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBIb3Jpem9udGFsQWxpZ25tZW50PSJSaWdodCIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBWZXJ0aWNhbEFsaWdubWVudD0iVG9wIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIE1hcmdpbj0iMCwzLDUsMCIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBSZW5kZXJUcmFuc2Zvcm1PcmlnaW49IjAuNSwwLjUiPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPEVsbGlwc2UuUmVuZGVyVHJhbnNmb3JtPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxTY2FsZVRyYW5zZm9ybSBTY2FsZVg9IjEiIFNjYWxlWT0iMSIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9FbGxpcHNlLlJlbmRlclRyYW5zZm9ybT4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9FbGxpcHNlPgoKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPCEtLSBDb250ZW50IFByZXNlbnRlciAtLT4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPENvbnRlbnRQcmVzZW50ZXIgSG9yaXpvbnRhbEFsaWdubWVudD0iQ2VudGVyIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgVmVydGljYWxBbGlnbm1lbnQ9IkNlbnRlciIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIE1hcmdpbj0iMTAsMiwxMCwyIi8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9HcmlkPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9Cb3JkZXI+CiAgICAgICAgICAgICAgICAgICAgICAgIDwvR3JpZD4KCiAgICAgICAgICAgICAgICAgICAgICAgIDwhLS0gVHJpZ2dlcnMgZm9yIFRvZ2dsZUJ1dHRvbiBzdGF0ZXMgLS0+CiAgICAgICAgICAgICAgICAgICAgICAgIDxDb250cm9sVGVtcGxhdGUuVHJpZ2dlcnM+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8IS0tIEhvdmVyIGVmZmVjdCAtLT4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxUcmlnZ2VyIFByb3BlcnR5PSJJc01vdXNlT3ZlciIgVmFsdWU9IlRydWUiPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxTZXR0ZXIgVGFyZ2V0TmFtZT0iQmFja2dyb3VuZEJvcmRlciIgUHJvcGVydHk9IkJhY2tncm91bmQiIFZhbHVlPSJ7RHluYW1pY1Jlc291cmNlIEJ1dHRvbkJhY2tncm91bmRNb3VzZW92ZXJDb2xvcn0iLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8VHJpZ2dlci5FbnRlckFjdGlvbnM+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxCZWdpblN0b3J5Ym9hcmQ+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8U3Rvcnlib2FyZD4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8IS0tIEFuaW1hdGlvbiB0byBncm93IHRoZSBkb3Qgd2hlbiBob3ZlcmVkIC0tPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxEb3VibGVBbmltYXRpb24gU3Rvcnlib2FyZC5UYXJnZXROYW1lPSJUb2dnbGVEb3QiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIFN0b3J5Ym9hcmQuVGFyZ2V0UHJvcGVydHk9IihVSUVsZW1lbnQuUmVuZGVyVHJhbnNmb3JtKS4oU2NhbGVUcmFuc2Zvcm0uU2NhbGVYKSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgVG89IjEuMiIgRHVyYXRpb249IjA6MDowLjEiLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8RG91YmxlQW5pbWF0aW9uIFN0b3J5Ym9hcmQuVGFyZ2V0TmFtZT0iVG9nZ2xlRG90IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBTdG9yeWJvYXJkLlRhcmdldFByb3BlcnR5PSIoVUlFbGVtZW50LlJlbmRlclRyYW5zZm9ybSkuKFNjYWxlVHJhbnNmb3JtLlNjYWxlWSkiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIFRvPSIxLjIiIER1cmF0aW9uPSIwOjA6MC4xIi8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L1N0b3J5Ym9hcmQ+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvQmVnaW5TdG9yeWJvYXJkPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvVHJpZ2dlci5FbnRlckFjdGlvbnM+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPFRyaWdnZXIuRXhpdEFjdGlvbnM+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxCZWdpblN0b3J5Ym9hcmQ+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8U3Rvcnlib2FyZD4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8IS0tIEFuaW1hdGlvbiB0byBzaHJpbmsgdGhlIGRvdCBiYWNrIHRvIG9yaWdpbmFsIHNpemUgd2hlbiBub3QgaG92ZXJlZCAtLT4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8RG91YmxlQW5pbWF0aW9uIFN0b3J5Ym9hcmQuVGFyZ2V0TmFtZT0iVG9nZ2xlRG90IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBTdG9yeWJvYXJkLlRhcmdldFByb3BlcnR5PSIoVUlFbGVtZW50LlJlbmRlclRyYW5zZm9ybSkuKFNjYWxlVHJhbnNmb3JtLlNjYWxlWCkiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIFRvPSIxLjAiIER1cmF0aW9uPSIwOjA6MC4xIi8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPERvdWJsZUFuaW1hdGlvbiBTdG9yeWJvYXJkLlRhcmdldE5hbWU9IlRvZ2dsZURvdCIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgU3Rvcnlib2FyZC5UYXJnZXRQcm9wZXJ0eT0iKFVJRWxlbWVudC5SZW5kZXJUcmFuc2Zvcm0pLihTY2FsZVRyYW5zZm9ybS5TY2FsZVkpIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBUbz0iMS4wIiBEdXJhdGlvbj0iMDowOjAuMSIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9TdG9yeWJvYXJkPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L0JlZ2luU3Rvcnlib2FyZD4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L1RyaWdnZXIuRXhpdEFjdGlvbnM+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L1RyaWdnZXI+CgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPCEtLSBJc0NoZWNrZWQgc3RhdGUgLS0+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8VHJpZ2dlciBQcm9wZXJ0eT0iSXNDaGVja2VkIiBWYWx1ZT0iVHJ1ZSI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPFNldHRlciBUYXJnZXROYW1lPSJUb2dnbGVEb3QiIFByb3BlcnR5PSJWZXJ0aWNhbEFsaWdubWVudCIgVmFsdWU9IkJvdHRvbSIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxTZXR0ZXIgVGFyZ2V0TmFtZT0iVG9nZ2xlRG90IiBQcm9wZXJ0eT0iTWFyZ2luIiBWYWx1ZT0iMCwwLDUsMyIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9UcmlnZ2VyPgoKICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwhLS0gSXNFbmFibGVkIHN0YXRlIC0tPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPFRyaWdnZXIgUHJvcGVydHk9IklzRW5hYmxlZCIgVmFsdWU9IkZhbHNlIj4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8U2V0dGVyIFRhcmdldE5hbWU9IkJhY2tncm91bmRCb3JkZXIiIFByb3BlcnR5PSJCYWNrZ3JvdW5kIiBWYWx1ZT0ie0R5bmFtaWNSZXNvdXJjZSBCdXR0b25CYWNrZ3JvdW5kU2VsZWN0ZWRDb2xvcn0iLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJGb3JlZ3JvdW5kIiBWYWx1ZT0iRGltR3JheSIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9UcmlnZ2VyPgogICAgICAgICAgICAgICAgICAgICAgICA8L0NvbnRyb2xUZW1wbGF0ZS5UcmlnZ2Vycz4KICAgICAgICAgICAgICAgICAgICA8L0NvbnRyb2xUZW1wbGF0ZT4KICAgICAgICAgICAgICAgIDwvU2V0dGVyLlZhbHVlPgogICAgICAgICAgICA8L1NldHRlcj4KICAgICAgICA8L1N0eWxlPgoKICAgICAgICA8U3R5bGUgeDpLZXk9IlNlYXJjaEJhckNsZWFyQnV0dG9uU3R5bGUiIFRhcmdldFR5cGU9IkJ1dHRvbiI+CiAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IkZvbnRGYW1pbHkiIFZhbHVlPSJ7RHluYW1pY1Jlc291cmNlIEZvbnRGYW1pbHl9Ii8+CiAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IkZvbnRTaXplIiBWYWx1ZT0ie0R5bmFtaWNSZXNvdXJjZSBTZWFyY2hCYXJDbGVhckJ1dHRvbkZvbnRTaXplfSIvPgogICAgICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJDb250ZW50IiBWYWx1ZT0iWCIvPgogICAgICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJIZWlnaHQiIFZhbHVlPSJ7RHluYW1pY1Jlc291cmNlIFNlYXJjaEJhckNsZWFyQnV0dG9uRm9udFNpemV9Ii8+CiAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IldpZHRoIiBWYWx1ZT0ie0R5bmFtaWNSZXNvdXJjZSBTZWFyY2hCYXJDbGVhckJ1dHRvbkZvbnRTaXplfSIvPgogICAgICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJCYWNrZ3JvdW5kIiBWYWx1ZT0iVHJhbnNwYXJlbnQiLz4KICAgICAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iRm9yZWdyb3VuZCIgVmFsdWU9IntEeW5hbWljUmVzb3VyY2UgTWFpbkZvcmVncm91bmRDb2xvcn0iLz4KICAgICAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iUGFkZGluZyIgVmFsdWU9IjAiLz4KICAgICAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iQm9yZGVyQnJ1c2giIFZhbHVlPSJUcmFuc3BhcmVudCIvPgogICAgICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJCb3JkZXJUaGlja25lc3MiIFZhbHVlPSIwIi8+CiAgICAgICAgICAgIDxTdHlsZS5UcmlnZ2Vycz4KICAgICAgICAgICAgICAgIDxUcmlnZ2VyIFByb3BlcnR5PSJJc01vdXNlT3ZlciIgVmFsdWU9IlRydWUiPgogICAgICAgICAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IkZvcmVncm91bmQiIFZhbHVlPSJSZWQiLz4KICAgICAgICAgICAgICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJCYWNrZ3JvdW5kIiBWYWx1ZT0iVHJhbnNwYXJlbnQiLz4KICAgICAgICAgICAgICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJCb3JkZXJUaGlja25lc3MiIFZhbHVlPSIxMCIvPgogICAgICAgICAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IkN1cnNvciIgVmFsdWU9IkhhbmQiLz4KICAgICAgICAgICAgICAgIDwvVHJpZ2dlcj4KICAgICAgICAgICAgPC9TdHlsZS5UcmlnZ2Vycz4KICAgICAgICA8L1N0eWxlPgogICAgICAgIDwhLS0gQ2hlY2tib3ggdGVtcGxhdGUgLS0+CiAgICAgICAgPFN0eWxlIFRhcmdldFR5cGU9IkNoZWNrQm94Ij4KICAgICAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iRm9yZWdyb3VuZCIgVmFsdWU9IntEeW5hbWljUmVzb3VyY2UgTWFpbkZvcmVncm91bmRDb2xvcn0iLz4KICAgICAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iQmFja2dyb3VuZCIgVmFsdWU9IntEeW5hbWljUmVzb3VyY2UgTWFpbkJhY2tncm91bmRDb2xvcn0iLz4KICAgICAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iRm9udFNpemUiIFZhbHVlPSJ7RHluYW1pY1Jlc291cmNlIEZvbnRTaXplfSIgLz4KICAgICAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iRm9udEZhbWlseSIgVmFsdWU9IntEeW5hbWljUmVzb3VyY2UgRm9udEZhbWlseX0iLz4KICAgICAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iVGV4dEVsZW1lbnQuRm9udEZhbWlseSIgVmFsdWU9IntEeW5hbWljUmVzb3VyY2UgRm9udEZhbWlseX0iLz4KICAgICAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iVGVtcGxhdGUiPgogICAgICAgICAgICAgICAgPFNldHRlci5WYWx1ZT4KICAgICAgICAgICAgICAgICAgICA8Q29udHJvbFRlbXBsYXRlIFRhcmdldFR5cGU9IkNoZWNrQm94Ij4KICAgICAgICAgICAgICAgICAgICAgICAgPEdyaWQgQmFja2dyb3VuZD0ie1RlbXBsYXRlQmluZGluZyBCYWNrZ3JvdW5kfSIgTWFyZ2luPSJ7RHluYW1pY1Jlc291cmNlIENoZWNrQm94TWFyZ2lufSI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8QnVsbGV0RGVjb3JhdG9yIEJhY2tncm91bmQ9IlRyYW5zcGFyZW50Ij4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8QnVsbGV0RGVjb3JhdG9yLkJ1bGxldD4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPEdyaWQgV2lkdGg9IntEeW5hbWljUmVzb3VyY2UgQ2hlY2tCb3hCdWxsZXREZWNvcmF0b3JTaXplfSIgSGVpZ2h0PSJ7RHluYW1pY1Jlc291cmNlIENoZWNrQm94QnVsbGV0RGVjb3JhdG9yU2l6ZX0iPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPEJvcmRlciBOYW1lPSJCb3JkZXIiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEJvcmRlckJydXNoPSJ7VGVtcGxhdGVCaW5kaW5nIEJvcmRlckJydXNofSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgQmFja2dyb3VuZD0ie0R5bmFtaWNSZXNvdXJjZSBCdXR0b25CYWNrZ3JvdW5kQ29sb3J9IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBCb3JkZXJUaGlja25lc3M9IjEiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIFdpZHRoPSJ7RHluYW1pY1Jlc291cmNlIENoZWNrQm94QnVsbGV0RGVjb3JhdG9yU2l6ZSAqMC44NX0iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEhlaWdodD0ie0R5bmFtaWNSZXNvdXJjZSBDaGVja0JveEJ1bGxldERlY29yYXRvclNpemUgKjAuODV9IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBNYXJnaW49IjEiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIFNuYXBzVG9EZXZpY2VQaXhlbHM9IlRydWUiLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxWaWV3Ym94IE5hbWU9IkNoZWNrTWFya0NvbnRhaW5lciIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgV2lkdGg9IntEeW5hbWljUmVzb3VyY2UgQ2hlY2tCb3hCdWxsZXREZWNvcmF0b3JTaXplfSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgSGVpZ2h0PSJ7RHluYW1pY1Jlc291cmNlIENoZWNrQm94QnVsbGV0RGVjb3JhdG9yU2l6ZX0iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEhvcml6b250YWxBbGlnbm1lbnQ9IkNlbnRlciIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgVmVydGljYWxBbGlnbm1lbnQ9IkNlbnRlciIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgVmlzaWJpbGl0eT0iQ29sbGFwc2VkIj4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8UGF0aCBOYW1lPSJDaGVja01hcmsiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgU3Ryb2tlPSJ7RHluYW1pY1Jlc291cmNlIFRvZ2dsZUJ1dHRvbk9uQ29sb3J9IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIFN0cm9rZVRoaWNrbmVzcz0iMS41IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIERhdGE9Ik0gMCA1IEwgNSAxMCBMIDEyIDAiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgU3RyZXRjaD0iVW5pZm9ybSIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9WaWV3Ym94PgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L0dyaWQ+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9CdWxsZXREZWNvcmF0b3IuQnVsbGV0PgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxDb250ZW50UHJlc2VudGVyIE1hcmdpbj0iNCwwLDAsMCIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBIb3Jpem9udGFsQWxpZ25tZW50PSJMZWZ0IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIFZlcnRpY2FsQWxpZ25tZW50PSJDZW50ZXIiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgUmVjb2duaXplc0FjY2Vzc0tleT0iVHJ1ZSIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9CdWxsZXREZWNvcmF0b3I+CiAgICAgICAgICAgICAgICAgICAgICAgIDwvR3JpZD4KICAgICAgICAgICAgICAgICAgICAgICAgPENvbnRyb2xUZW1wbGF0ZS5UcmlnZ2Vycz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxUcmlnZ2VyIFByb3BlcnR5PSJJc0NoZWNrZWQiIFZhbHVlPSJUcnVlIj4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8U2V0dGVyIFRhcmdldE5hbWU9IkNoZWNrTWFya0NvbnRhaW5lciIgUHJvcGVydHk9IlZpc2liaWxpdHkiIFZhbHVlPSJWaXNpYmxlIi8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L1RyaWdnZXI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8VHJpZ2dlciBQcm9wZXJ0eT0iSXNNb3VzZU92ZXIiIFZhbHVlPSJUcnVlIj4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8IS0tU2V0dGVyIFRhcmdldE5hbWU9IkJvcmRlciIgUHJvcGVydHk9IkJhY2tncm91bmQiIFZhbHVlPSJ7RHluYW1pY1Jlc291cmNlIEJ1dHRvbkJhY2tncm91bmRQcmVzc2VkQ29sb3J9Ii8tLT4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJGb3JlZ3JvdW5kIiBWYWx1ZT0ie0R5bmFtaWNSZXNvdXJjZSBCdXR0b25CYWNrZ3JvdW5kUHJlc3NlZENvbG9yfSIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9UcmlnZ2VyPgogICAgICAgICAgICAgICAgICAgICAgICA8L0NvbnRyb2xUZW1wbGF0ZS5UcmlnZ2Vycz4KICAgICAgICAgICAgICAgICAgICA8L0NvbnRyb2xUZW1wbGF0ZT4KICAgICAgICAgICAgICAgICA8L1NldHRlci5WYWx1ZT4KICAgICAgICAgICAgPC9TZXR0ZXI+CiAgICAgICAgPC9TdHlsZT4KICAgICAgICA8U3R5bGUgVGFyZ2V0VHlwZT0iUmFkaW9CdXR0b24iPgogICAgICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJGb3JlZ3JvdW5kIiBWYWx1ZT0ie0R5bmFtaWNSZXNvdXJjZSBNYWluRm9yZWdyb3VuZENvbG9yfSIvPgogICAgICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJCYWNrZ3JvdW5kIiBWYWx1ZT0ie0R5bmFtaWNSZXNvdXJjZSBNYWluQmFja2dyb3VuZENvbG9yfSIvPgogICAgICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJGb250U2l6ZSIgVmFsdWU9IntEeW5hbWljUmVzb3VyY2UgRm9udFNpemV9IiAvPgogICAgICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJGb250RmFtaWx5IiBWYWx1ZT0ie0R5bmFtaWNSZXNvdXJjZSBGb250RmFtaWx5fSIvPgogICAgICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJUZW1wbGF0ZSI+CiAgICAgICAgICAgICAgICA8U2V0dGVyLlZhbHVlPgogICAgICAgICAgICAgICAgICAgIDxDb250cm9sVGVtcGxhdGUgVGFyZ2V0VHlwZT0iUmFkaW9CdXR0b24iPgogICAgICAgICAgICAgICAgICAgICAgICA8U3RhY2tQYW5lbCBPcmllbnRhdGlvbj0iSG9yaXpvbnRhbCIgTWFyZ2luPSJ7RHluYW1pY1Jlc291cmNlIENoZWNrQm94TWFyZ2lufSI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8Vmlld2JveCBXaWR0aD0ie0R5bmFtaWNSZXNvdXJjZSBDaGVja0JveEJ1bGxldERlY29yYXRvclNpemV9IiBIZWlnaHQ9IntEeW5hbWljUmVzb3VyY2UgQ2hlY2tCb3hCdWxsZXREZWNvcmF0b3JTaXplfSI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPEdyaWQgV2lkdGg9IjE0IiBIZWlnaHQ9IjE0Ij4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPEVsbGlwc2UgTmFtZT0iT3V0ZXJDaXJjbGUiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgU3Ryb2tlPSJ7RHluYW1pY1Jlc291cmNlIFRvZ2dsZUJ1dHRvbk9mZkNvbG9yfSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBGaWxsPSJ7RHluYW1pY1Jlc291cmNlIEJ1dHRvbkJhY2tncm91bmRDb2xvcn0iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgU3Ryb2tlVGhpY2tuZXNzPSIxIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIFdpZHRoPSIxNCIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBIZWlnaHQ9IjE0IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIFNuYXBzVG9EZXZpY2VQaXhlbHM9IlRydWUiLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPEVsbGlwc2UgTmFtZT0iSW5uZXJDaXJjbGUiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgRmlsbD0ie0R5bmFtaWNSZXNvdXJjZSBUb2dnbGVCdXR0b25PbkNvbG9yfSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBXaWR0aD0iOCIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBIZWlnaHQ9IjgiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgVmlzaWJpbGl0eT0iQ29sbGFwc2VkIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEhvcml6b250YWxBbGlnbm1lbnQ9IkNlbnRlciIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBWZXJ0aWNhbEFsaWdubWVudD0iQ2VudGVyIi8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9HcmlkPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9WaWV3Ym94PgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPENvbnRlbnRQcmVzZW50ZXIgTWFyZ2luPSI0LDAsMCwwIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIFZlcnRpY2FsQWxpZ25tZW50PSJDZW50ZXIiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgUmVjb2duaXplc0FjY2Vzc0tleT0iVHJ1ZSIvPgogICAgICAgICAgICAgICAgICAgICAgICA8L1N0YWNrUGFuZWw+CiAgICAgICAgICAgICAgICAgICAgICAgIDxDb250cm9sVGVtcGxhdGUuVHJpZ2dlcnM+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8VHJpZ2dlciBQcm9wZXJ0eT0iSXNDaGVja2VkIiBWYWx1ZT0iVHJ1ZSI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPFNldHRlciBUYXJnZXROYW1lPSJJbm5lckNpcmNsZSIgUHJvcGVydHk9IlZpc2liaWxpdHkiIFZhbHVlPSJWaXNpYmxlIi8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L1RyaWdnZXI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8VHJpZ2dlciBQcm9wZXJ0eT0iSXNNb3VzZU92ZXIiIFZhbHVlPSJUcnVlIj4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8U2V0dGVyIFRhcmdldE5hbWU9Ik91dGVyQ2lyY2xlIiBQcm9wZXJ0eT0iU3Ryb2tlIiBWYWx1ZT0ie0R5bmFtaWNSZXNvdXJjZSBUb2dnbGVCdXR0b25PbkNvbG9yfSIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9UcmlnZ2VyPgogICAgICAgICAgICAgICAgICAgICAgICA8L0NvbnRyb2xUZW1wbGF0ZS5UcmlnZ2Vycz4KICAgICAgICAgICAgICAgICAgICA8L0NvbnRyb2xUZW1wbGF0ZT4KICAgICAgICAgICAgICAgIDwvU2V0dGVyLlZhbHVlPgogICAgICAgICAgICA8L1NldHRlcj4KICAgICAgICA8L1N0eWxlPgogICAgICAgIDxTdHlsZSB4OktleT0iVG9nZ2xlU3dpdGNoU3R5bGUiIFRhcmdldFR5cGU9IkNoZWNrQm94Ij4KICAgICAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iVGVtcGxhdGUiPgogICAgICAgICAgICAgICAgPFNldHRlci5WYWx1ZT4KICAgICAgICAgICAgICAgICAgICA8Q29udHJvbFRlbXBsYXRlIFRhcmdldFR5cGU9IkNoZWNrQm94Ij4KICAgICAgICAgICAgICAgICAgICAgICAgPFN0YWNrUGFuZWw+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8R3JpZD4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8Qm9yZGVyIFdpZHRoPSI0NSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEhlaWdodD0iMjAiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBCYWNrZ3JvdW5kPSIjNTU1NTU1IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgQ29ybmVyUmFkaXVzPSIxMCIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIE1hcmdpbj0iNSwwIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIC8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPEJvcmRlciBOYW1lPSJXUEZUb2dnbGVTd2l0Y2hCdXR0b24iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBXaWR0aD0iMjUiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBIZWlnaHQ9IjI1IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgQmFja2dyb3VuZD0iQmxhY2siCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBDb3JuZXJSYWRpdXM9IjEyLjUiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBIb3Jpem9udGFsQWxpZ25tZW50PSJMZWZ0IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIC8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPENvbnRlbnRQcmVzZW50ZXIgTmFtZT0iV1BGVG9nZ2xlU3dpdGNoQ29udGVudCIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBNYXJnaW49IjEwLDAsMCwwIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIENvbnRlbnQ9IntUZW1wbGF0ZUJpbmRpbmcgQ29udGVudH0iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgVmVydGljYWxBbGlnbm1lbnQ9IkNlbnRlciIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9HcmlkPgogICAgICAgICAgICAgICAgICAgICAgICA8L1N0YWNrUGFuZWw+CiAgICAgICAgICAgICAgICAgICAgICAgIDxDb250cm9sVGVtcGxhdGUuVHJpZ2dlcnM+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8VHJpZ2dlciBQcm9wZXJ0eT0iSXNDaGVja2VkIiBWYWx1ZT0iZmFsc2UiPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxUcmlnZ2VyLkV4aXRBY3Rpb25zPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8UmVtb3ZlU3Rvcnlib2FyZCBCZWdpblN0b3J5Ym9hcmROYW1lPSJXUEZUb2dnbGVTd2l0Y2hMZWZ0IiAvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8QmVnaW5TdG9yeWJvYXJkIE5hbWU9IldQRlRvZ2dsZVN3aXRjaFJpZ2h0Ij4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxTdG9yeWJvYXJkPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxUaGlja25lc3NBbmltYXRpb24gU3Rvcnlib2FyZC5UYXJnZXRQcm9wZXJ0eT0iTWFyZ2luIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgU3Rvcnlib2FyZC5UYXJnZXROYW1lPSJXUEZUb2dnbGVTd2l0Y2hCdXR0b24iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBEdXJhdGlvbj0iMDowOjA6MCIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEZyb209IjAsMCwwLDAiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBUbz0iMjgsMCwwLDAiPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvVGhpY2tuZXNzQW5pbWF0aW9uPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9TdG9yeWJvYXJkPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L0JlZ2luU3Rvcnlib2FyZD4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L1RyaWdnZXIuRXhpdEFjdGlvbnM+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPFNldHRlciBUYXJnZXROYW1lPSJXUEZUb2dnbGVTd2l0Y2hCdXR0b24iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBQcm9wZXJ0eT0iQmFja2dyb3VuZCIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIFZhbHVlPSIjZmZmOWY0ZjQiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvVHJpZ2dlcj4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxUcmlnZ2VyIFByb3BlcnR5PSJJc0NoZWNrZWQiIFZhbHVlPSJ0cnVlIj4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8VHJpZ2dlci5FeGl0QWN0aW9ucz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPFJlbW92ZVN0b3J5Ym9hcmQgQmVnaW5TdG9yeWJvYXJkTmFtZT0iV1BGVG9nZ2xlU3dpdGNoUmlnaHQiIC8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxCZWdpblN0b3J5Ym9hcmQgTmFtZT0iV1BGVG9nZ2xlU3dpdGNoTGVmdCI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8U3Rvcnlib2FyZD4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8VGhpY2tuZXNzQW5pbWF0aW9uIFN0b3J5Ym9hcmQuVGFyZ2V0UHJvcGVydHk9Ik1hcmdpbiIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIFN0b3J5Ym9hcmQuVGFyZ2V0TmFtZT0iV1BGVG9nZ2xlU3dpdGNoQnV0dG9uIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgRHVyYXRpb249IjA6MDowOjAiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBGcm9tPSIyOCwwLDAsMCIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIFRvPSIwLDAsMCwwIj4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L1RoaWNrbmVzc0FuaW1hdGlvbj4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvU3Rvcnlib2FyZD4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9CZWdpblN0b3J5Ym9hcmQ+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9UcmlnZ2VyLkV4aXRBY3Rpb25zPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxTZXR0ZXIgVGFyZ2V0TmFtZT0iV1BGVG9nZ2xlU3dpdGNoQnV0dG9uIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgUHJvcGVydHk9IkJhY2tncm91bmQiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBWYWx1ZT0iI2ZmMDYwNjAwIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIC8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L1RyaWdnZXI+CiAgICAgICAgICAgICAgICAgICAgICAgIDwvQ29udHJvbFRlbXBsYXRlLlRyaWdnZXJzPgogICAgICAgICAgICAgICAgICAgIDwvQ29udHJvbFRlbXBsYXRlPgogICAgICAgICAgICAgICAgPC9TZXR0ZXIuVmFsdWU+CiAgICAgICAgICAgIDwvU2V0dGVyPgogICAgICAgIDwvU3R5bGU+CgogICAgICAgIDxTdHlsZSB4OktleT0iQ29sb3JmdWxUb2dnbGVTd2l0Y2hTdHlsZSIgVGFyZ2V0VHlwZT0ie3g6VHlwZSBDaGVja0JveH0iPgogICAgICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJUZW1wbGF0ZSI+CiAgICAgICAgICAgICAgICA8U2V0dGVyLlZhbHVlPgogICAgICAgICAgICAgICAgICAgIDxDb250cm9sVGVtcGxhdGUgVGFyZ2V0VHlwZT0ie3g6VHlwZSBUb2dnbGVCdXR0b259Ij4KICAgICAgICAgICAgICAgICAgICAgICAgPEdyaWQgTmFtZT0idG9nZ2xlU3dpdGNoIj4KCiAgICAgICAgICAgICAgICAgICAgICAgIDxHcmlkLkNvbHVtbkRlZmluaXRpb25zPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPENvbHVtbkRlZmluaXRpb24gV2lkdGg9IkF1dG8iLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxDb2x1bW5EZWZpbml0aW9uIFdpZHRoPSJBdXRvIi8+CiAgICAgICAgICAgICAgICAgICAgICAgIDwvR3JpZC5Db2x1bW5EZWZpbml0aW9ucz4KCiAgICAgICAgICAgICAgICAgICAgICAgIDxCb3JkZXIgR3JpZC5Db2x1bW49IjEiIE5hbWU9IkJvcmRlciIgQ29ybmVyUmFkaXVzPSI4IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEJvcmRlclRoaWNrbmVzcz0iMSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBXaWR0aD0iMzQiIEhlaWdodD0iMTciPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPEVsbGlwc2UgTmFtZT0iRWxsaXBzZSIgRmlsbD0ie0R5bmFtaWNSZXNvdXJjZSBNYWluRm9yZWdyb3VuZENvbG9yfSIgU3RyZXRjaD0iVW5pZm9ybSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgTWFyZ2luPSIyLDIsMiwxIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBIb3Jpem9udGFsQWxpZ25tZW50PSJMZWZ0IiBXaWR0aD0iMTAuOCIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgUmVuZGVyVHJhbnNmb3JtT3JpZ2luPSIwLjUsIDAuNSI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPEVsbGlwc2UuUmVuZGVyVHJhbnNmb3JtPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8U2NhbGVUcmFuc2Zvcm0gU2NhbGVYPSIxIiBTY2FsZVk9IjEiIC8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9FbGxpcHNlLlJlbmRlclRyYW5zZm9ybT4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvRWxsaXBzZT4KICAgICAgICAgICAgICAgICAgICAgICAgPC9Cb3JkZXI+CiAgICAgICAgICAgICAgICAgICAgICAgIDwvR3JpZD4KCiAgICAgICAgICAgICAgICAgICAgICAgIDxDb250cm9sVGVtcGxhdGUuVHJpZ2dlcnM+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8VHJpZ2dlciBQcm9wZXJ0eT0iSXNNb3VzZU92ZXIiIFZhbHVlPSJUcnVlIj4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8U2V0dGVyIFRhcmdldE5hbWU9IkJvcmRlciIgUHJvcGVydHk9IkJvcmRlckJydXNoIiBWYWx1ZT0ie0R5bmFtaWNSZXNvdXJjZSBNYWluRm9yZWdyb3VuZENvbG9yfSIgLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8U2V0dGVyIFRhcmdldE5hbWU9IkJvcmRlciIgUHJvcGVydHk9IkJhY2tncm91bmQiIFZhbHVlPSJ7RHluYW1pY1Jlc291cmNlIExpbmtIb3ZlckZvcmVncm91bmRDb2xvcn0iLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJDdXJzb3IiIFZhbHVlPSJIYW5kIiAvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IlBhbmVsLlpJbmRleCIgVmFsdWU9IjEwMDAiLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8VHJpZ2dlci5FbnRlckFjdGlvbnM+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxCZWdpblN0b3J5Ym9hcmQ+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8U3Rvcnlib2FyZD4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8RG91YmxlQW5pbWF0aW9uIFN0b3J5Ym9hcmQuVGFyZ2V0TmFtZT0iRWxsaXBzZSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgU3Rvcnlib2FyZC5UYXJnZXRQcm9wZXJ0eT0iKFVJRWxlbWVudC5SZW5kZXJUcmFuc2Zvcm0pLihTY2FsZVRyYW5zZm9ybS5TY2FsZVgpIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBUbz0iMS4xIiBEdXJhdGlvbj0iMDowOjAuMSIgLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8RG91YmxlQW5pbWF0aW9uIFN0b3J5Ym9hcmQuVGFyZ2V0TmFtZT0iRWxsaXBzZSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgU3Rvcnlib2FyZC5UYXJnZXRQcm9wZXJ0eT0iKFVJRWxlbWVudC5SZW5kZXJUcmFuc2Zvcm0pLihTY2FsZVRyYW5zZm9ybS5TY2FsZVkpIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBUbz0iMS4xIiBEdXJhdGlvbj0iMDowOjAuMSIgLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvU3Rvcnlib2FyZD4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9CZWdpblN0b3J5Ym9hcmQ+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9UcmlnZ2VyLkVudGVyQWN0aW9ucz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8VHJpZ2dlci5FeGl0QWN0aW9ucz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPEJlZ2luU3Rvcnlib2FyZD4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxTdG9yeWJvYXJkPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxEb3VibGVBbmltYXRpb24gU3Rvcnlib2FyZC5UYXJnZXROYW1lPSJFbGxpcHNlIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBTdG9yeWJvYXJkLlRhcmdldFByb3BlcnR5PSIoVUlFbGVtZW50LlJlbmRlclRyYW5zZm9ybSkuKFNjYWxlVHJhbnNmb3JtLlNjYWxlWCkiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIFRvPSIxLjAiIER1cmF0aW9uPSIwOjA6MC4xIiAvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxEb3VibGVBbmltYXRpb24gU3Rvcnlib2FyZC5UYXJnZXROYW1lPSJFbGxpcHNlIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBTdG9yeWJvYXJkLlRhcmdldFByb3BlcnR5PSIoVUlFbGVtZW50LlJlbmRlclRyYW5zZm9ybSkuKFNjYWxlVHJhbnNmb3JtLlNjYWxlWSkiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIFRvPSIxLjAiIER1cmF0aW9uPSIwOjA6MC4xIiAvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9TdG9yeWJvYXJkPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L0JlZ2luU3Rvcnlib2FyZD4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L1RyaWdnZXIuRXhpdEFjdGlvbnM+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L1RyaWdnZXI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8VHJpZ2dlciBQcm9wZXJ0eT0iVG9nZ2xlQnV0dG9uLklzQ2hlY2tlZCIgVmFsdWU9IkZhbHNlIj4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8U2V0dGVyIFRhcmdldE5hbWU9IkJvcmRlciIgUHJvcGVydHk9IkJhY2tncm91bmQiIFZhbHVlPSJ7RHluYW1pY1Jlc291cmNlIE1haW5CYWNrZ3JvdW5kQ29sb3J9IiAvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxTZXR0ZXIgVGFyZ2V0TmFtZT0iQm9yZGVyIiBQcm9wZXJ0eT0iQm9yZGVyQnJ1c2giIFZhbHVlPSJ7RHluYW1pY1Jlc291cmNlIFRvZ2dsZUJ1dHRvbk9mZkNvbG9yfSIgLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8U2V0dGVyIFRhcmdldE5hbWU9IkVsbGlwc2UiIFByb3BlcnR5PSJGaWxsIiBWYWx1ZT0ie0R5bmFtaWNSZXNvdXJjZSBUb2dnbGVCdXR0b25PZmZDb2xvcn0iIC8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L1RyaWdnZXI+CgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPFRyaWdnZXIgUHJvcGVydHk9IlRvZ2dsZUJ1dHRvbi5Jc0NoZWNrZWQiIFZhbHVlPSJUcnVlIj4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8U2V0dGVyIFRhcmdldE5hbWU9IkJvcmRlciIgUHJvcGVydHk9IkJhY2tncm91bmQiIFZhbHVlPSJ7RHluYW1pY1Jlc291cmNlIFRvZ2dsZUJ1dHRvbk9uQ29sb3J9IiAvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxTZXR0ZXIgVGFyZ2V0TmFtZT0iQm9yZGVyIiBQcm9wZXJ0eT0iQm9yZGVyQnJ1c2giIFZhbHVlPSJ7RHluYW1pY1Jlc291cmNlIFRvZ2dsZUJ1dHRvbk9uQ29sb3J9IiAvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxTZXR0ZXIgVGFyZ2V0TmFtZT0iRWxsaXBzZSIgUHJvcGVydHk9IkZpbGwiIFZhbHVlPSJXaGl0ZSIgLz4KCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPFRyaWdnZXIuRW50ZXJBY3Rpb25zPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8QmVnaW5TdG9yeWJvYXJkPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPFN0b3J5Ym9hcmQ+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPFRoaWNrbmVzc0FuaW1hdGlvbiBTdG9yeWJvYXJkLlRhcmdldE5hbWU9IkVsbGlwc2UiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBTdG9yeWJvYXJkLlRhcmdldFByb3BlcnR5PSJNYXJnaW4iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBUbz0iMTgsMiwyLDIiIER1cmF0aW9uPSIwOjA6MC4xIiAvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9TdG9yeWJvYXJkPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L0JlZ2luU3Rvcnlib2FyZD4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L1RyaWdnZXIuRW50ZXJBY3Rpb25zPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxUcmlnZ2VyLkV4aXRBY3Rpb25zPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8QmVnaW5TdG9yeWJvYXJkPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPFN0b3J5Ym9hcmQ+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPFRoaWNrbmVzc0FuaW1hdGlvbiBTdG9yeWJvYXJkLlRhcmdldE5hbWU9IkVsbGlwc2UiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBTdG9yeWJvYXJkLlRhcmdldFByb3BlcnR5PSJNYXJnaW4iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBUbz0iMiwyLDIsMSIgRHVyYXRpb249IjA6MDowLjEiIC8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L1N0b3J5Ym9hcmQ+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvQmVnaW5TdG9yeWJvYXJkPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvVHJpZ2dlci5FeGl0QWN0aW9ucz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvVHJpZ2dlcj4KICAgICAgICAgICAgICAgICAgICAgICAgPC9Db250cm9sVGVtcGxhdGUuVHJpZ2dlcnM+CiAgICAgICAgICAgICAgICAgICAgPC9Db250cm9sVGVtcGxhdGU+CiAgICAgICAgICAgICAgICA8L1NldHRlci5WYWx1ZT4KICAgICAgICAgICAgPC9TZXR0ZXI+CiAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IlZlcnRpY2FsQ29udGVudEFsaWdubWVudCIgVmFsdWU9IkNlbnRlciIgLz4KICAgICAgICA8L1N0eWxlPgoKICAgICAgICA8U3R5bGUgeDpLZXk9ImxhYmVsZm9ydHdlYWtzIiBUYXJnZXRUeXBlPSJ7eDpUeXBlIExhYmVsfSI+CiAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IkZvcmVncm91bmQiIFZhbHVlPSJ7RHluYW1pY1Jlc291cmNlIE1haW5Gb3JlZ3JvdW5kQ29sb3J9IiAvPgogICAgICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJCYWNrZ3JvdW5kIiBWYWx1ZT0ie0R5bmFtaWNSZXNvdXJjZSBNYWluQmFja2dyb3VuZENvbG9yfSIgLz4KICAgICAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iRm9udEZhbWlseSIgVmFsdWU9IntEeW5hbWljUmVzb3VyY2UgRm9udEZhbWlseX0iLz4KICAgICAgICAgICAgPFN0eWxlLlRyaWdnZXJzPgogICAgICAgICAgICAgICAgPFRyaWdnZXIgUHJvcGVydHk9IklzTW91c2VPdmVyIiBWYWx1ZT0iVHJ1ZSI+CiAgICAgICAgICAgICAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iRm9yZWdyb3VuZCIgVmFsdWU9IldoaXRlIiAvPgogICAgICAgICAgICAgICAgPC9UcmlnZ2VyPgogICAgICAgICAgICA8L1N0eWxlLlRyaWdnZXJzPgogICAgICAgIDwvU3R5bGU+CgogICAgICAgIDxTdHlsZSB4OktleT0iQm9yZGVyU3R5bGUiIFRhcmdldFR5cGU9IkJvcmRlciI+CiAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IkJhY2tncm91bmQiIFZhbHVlPSJ7RHluYW1pY1Jlc291cmNlIE1haW5CYWNrZ3JvdW5kQ29sb3J9Ii8+CiAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IkJvcmRlckJydXNoIiBWYWx1ZT0ie0R5bmFtaWNSZXNvdXJjZSBCb3JkZXJDb2xvcn0iLz4KICAgICAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iQm9yZGVyVGhpY2tuZXNzIiBWYWx1ZT0iMSIvPgogICAgICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJDb3JuZXJSYWRpdXMiIFZhbHVlPSI1Ii8+CiAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IlBhZGRpbmciIFZhbHVlPSI1Ii8+CiAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9Ik1hcmdpbiIgVmFsdWU9IjUiLz4KICAgICAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iRWZmZWN0Ij4KICAgICAgICAgICAgICAgIDxTZXR0ZXIuVmFsdWU+CiAgICAgICAgICAgICAgICAgICAgPERyb3BTaGFkb3dFZmZlY3QgU2hhZG93RGVwdGg9IjUiIEJsdXJSYWRpdXM9IjUiIE9wYWNpdHk9IntEeW5hbWljUmVzb3VyY2UgQm9yZGVyT3BhY2l0eX0iIENvbG9yPSJ7RHluYW1pY1Jlc291cmNlIENCb3JkZXJDb2xvcn0iLz4KICAgICAgICAgICAgICAgIDwvU2V0dGVyLlZhbHVlPgogICAgICAgICAgICA8L1NldHRlcj4KICAgICAgICA8L1N0eWxlPgoKICAgICAgICA8U3R5bGUgVGFyZ2V0VHlwZT0iVGV4dEJveCI+CiAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IkJhY2tncm91bmQiIFZhbHVlPSJ7RHluYW1pY1Jlc291cmNlIE1haW5CYWNrZ3JvdW5kQ29sb3J9Ii8+CiAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IkJvcmRlckJydXNoIiBWYWx1ZT0ie0R5bmFtaWNSZXNvdXJjZSBNYWluRm9yZWdyb3VuZENvbG9yfSIvPgogICAgICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJCb3JkZXJUaGlja25lc3MiIFZhbHVlPSIxIi8+CiAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IkZvcmVncm91bmQiIFZhbHVlPSJ7RHluYW1pY1Jlc291cmNlIE1haW5Gb3JlZ3JvdW5kQ29sb3J9Ii8+CiAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IkZvbnRTaXplIiBWYWx1ZT0ie0R5bmFtaWNSZXNvdXJjZSBGb250U2l6ZX0iLz4KICAgICAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iRm9udEZhbWlseSIgVmFsdWU9IntEeW5hbWljUmVzb3VyY2UgRm9udEZhbWlseX0iLz4KICAgICAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iUGFkZGluZyIgVmFsdWU9IjUiLz4KICAgICAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iSG9yaXpvbnRhbEFsaWdubWVudCIgVmFsdWU9IlN0cmV0Y2giLz4KICAgICAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iVmVydGljYWxBbGlnbm1lbnQiIFZhbHVlPSJDZW50ZXIiLz4KICAgICAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iSG9yaXpvbnRhbENvbnRlbnRBbGlnbm1lbnQiIFZhbHVlPSJTdHJldGNoIi8+CiAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IkNhcmV0QnJ1c2giIFZhbHVlPSJ7RHluYW1pY1Jlc291cmNlIE1haW5Gb3JlZ3JvdW5kQ29sb3J9Ii8+CiAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IkNvbnRleHRNZW51Ij4KICAgICAgICAgICAgICAgIDxTZXR0ZXIuVmFsdWU+CiAgICAgICAgICAgICAgICAgICAgPENvbnRleHRNZW51PgogICAgICAgICAgICAgICAgICAgICAgICA8Q29udGV4dE1lbnUuU3R5bGU+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8U3R5bGUgVGFyZ2V0VHlwZT0iQ29udGV4dE1lbnUiPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IlRlbXBsYXRlIj4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPFNldHRlci5WYWx1ZT4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxDb250cm9sVGVtcGxhdGUgVGFyZ2V0VHlwZT0iQ29udGV4dE1lbnUiPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxCb3JkZXIgQmFja2dyb3VuZD0ie0R5bmFtaWNSZXNvdXJjZSBNYWluQmFja2dyb3VuZENvbG9yfSIgQm9yZGVyQnJ1c2g9IntEeW5hbWljUmVzb3VyY2UgQm9yZGVyQ29sb3J9IiBCb3JkZXJUaGlja25lc3M9IjEiIENvcm5lclJhZGl1cz0iNSIgUGFkZGluZz0iNSI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxTdGFja1BhbmVsPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPE1lbnVJdGVtIENvbW1hbmQ9IkN1dCIgSGVhZGVyPSJDdXQiLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxNZW51SXRlbSBDb21tYW5kPSJDb3B5IiBIZWFkZXI9IkNvcHkiLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxNZW51SXRlbSBDb21tYW5kPSJQYXN0ZSIgSGVhZGVyPSJQYXN0ZSIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L1N0YWNrUGFuZWw+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9Cb3JkZXI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L0NvbnRyb2xUZW1wbGF0ZT4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9TZXR0ZXIuVmFsdWU+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9TZXR0ZXI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L1N0eWxlPgogICAgICAgICAgICAgICAgICAgICAgICA8L0NvbnRleHRNZW51LlN0eWxlPgogICAgICAgICAgICAgICAgICAgIDwvQ29udGV4dE1lbnU+CiAgICAgICAgICAgICAgICA8L1NldHRlci5WYWx1ZT4KICAgICAgICAgICAgPC9TZXR0ZXI+CiAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IlRlbXBsYXRlIj4KICAgICAgICAgICAgICAgIDxTZXR0ZXIuVmFsdWU+CiAgICAgICAgICAgICAgICAgICAgPENvbnRyb2xUZW1wbGF0ZSBUYXJnZXRUeXBlPSJUZXh0Qm94Ij4KICAgICAgICAgICAgICAgICAgICAgICAgPEJvcmRlciBCYWNrZ3JvdW5kPSJ7VGVtcGxhdGVCaW5kaW5nIEJhY2tncm91bmR9IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEJvcmRlckJydXNoPSJ7VGVtcGxhdGVCaW5kaW5nIEJvcmRlckJydXNofSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBCb3JkZXJUaGlja25lc3M9IntUZW1wbGF0ZUJpbmRpbmcgQm9yZGVyVGhpY2tuZXNzfSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBDb3JuZXJSYWRpdXM9IjUiPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPEdyaWQ+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPFNjcm9sbFZpZXdlciBOYW1lPSJQQVJUX0NvbnRlbnRIb3N0IiAvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9HcmlkPgogICAgICAgICAgICAgICAgICAgICAgICA8L0JvcmRlcj4KICAgICAgICAgICAgICAgICAgICA8L0NvbnRyb2xUZW1wbGF0ZT4KICAgICAgICAgICAgICAgIDwvU2V0dGVyLlZhbHVlPgogICAgICAgICAgICA8L1NldHRlcj4KICAgICAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iRWZmZWN0Ij4KICAgICAgICAgICAgICAgIDxTZXR0ZXIuVmFsdWU+CiAgICAgICAgICAgICAgICAgICAgPERyb3BTaGFkb3dFZmZlY3QgU2hhZG93RGVwdGg9IjUiIEJsdXJSYWRpdXM9IjUiIE9wYWNpdHk9IntEeW5hbWljUmVzb3VyY2UgQm9yZGVyT3BhY2l0eX0iIENvbG9yPSJ7RHluYW1pY1Jlc291cmNlIENCb3JkZXJDb2xvcn0iLz4KICAgICAgICAgICAgICAgIDwvU2V0dGVyLlZhbHVlPgogICAgICAgICAgICA8L1NldHRlcj4KICAgICAgICA8L1N0eWxlPgogICAgICAgIDxTdHlsZSBUYXJnZXRUeXBlPSJQYXNzd29yZEJveCI+CiAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IkJhY2tncm91bmQiIFZhbHVlPSJ7RHluYW1pY1Jlc291cmNlIE1haW5CYWNrZ3JvdW5kQ29sb3J9Ii8+CiAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IkJvcmRlckJydXNoIiBWYWx1ZT0ie0R5bmFtaWNSZXNvdXJjZSBNYWluRm9yZWdyb3VuZENvbG9yfSIvPgogICAgICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJCb3JkZXJUaGlja25lc3MiIFZhbHVlPSIxIi8+CiAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IkZvcmVncm91bmQiIFZhbHVlPSJ7RHluYW1pY1Jlc291cmNlIE1haW5Gb3JlZ3JvdW5kQ29sb3J9Ii8+CiAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IkZvbnRTaXplIiBWYWx1ZT0ie0R5bmFtaWNSZXNvdXJjZSBGb250U2l6ZX0iLz4KICAgICAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iRm9udEZhbWlseSIgVmFsdWU9IntEeW5hbWljUmVzb3VyY2UgRm9udEZhbWlseX0iLz4KICAgICAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iUGFkZGluZyIgVmFsdWU9IjUiLz4KICAgICAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iSG9yaXpvbnRhbEFsaWdubWVudCIgVmFsdWU9IlN0cmV0Y2giLz4KICAgICAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iVmVydGljYWxBbGlnbm1lbnQiIFZhbHVlPSJDZW50ZXIiLz4KICAgICAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iSG9yaXpvbnRhbENvbnRlbnRBbGlnbm1lbnQiIFZhbHVlPSJTdHJldGNoIi8+CiAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IkNhcmV0QnJ1c2giIFZhbHVlPSJ7RHluYW1pY1Jlc291cmNlIE1haW5Gb3JlZ3JvdW5kQ29sb3J9Ii8+CiAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IlRlbXBsYXRlIj4KICAgICAgICAgICAgICAgIDxTZXR0ZXIuVmFsdWU+CiAgICAgICAgICAgICAgICAgICAgPENvbnRyb2xUZW1wbGF0ZSBUYXJnZXRUeXBlPSJQYXNzd29yZEJveCI+CiAgICAgICAgICAgICAgICAgICAgICAgIDxCb3JkZXIgQmFja2dyb3VuZD0ie1RlbXBsYXRlQmluZGluZyBCYWNrZ3JvdW5kfSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBCb3JkZXJCcnVzaD0ie1RlbXBsYXRlQmluZGluZyBCb3JkZXJCcnVzaH0iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgQm9yZGVyVGhpY2tuZXNzPSJ7VGVtcGxhdGVCaW5kaW5nIEJvcmRlclRoaWNrbmVzc30iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgQ29ybmVyUmFkaXVzPSI1Ij4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxHcmlkPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxTY3JvbGxWaWV3ZXIgTmFtZT0iUEFSVF9Db250ZW50SG9zdCIgLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvR3JpZD4KICAgICAgICAgICAgICAgICAgICAgICAgPC9Cb3JkZXI+CiAgICAgICAgICAgICAgICAgICAgPC9Db250cm9sVGVtcGxhdGU+CiAgICAgICAgICAgICAgICA8L1NldHRlci5WYWx1ZT4KICAgICAgICAgICAgPC9TZXR0ZXI+CiAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IkVmZmVjdCI+CiAgICAgICAgICAgICAgICA8U2V0dGVyLlZhbHVlPgogICAgICAgICAgICAgICAgICAgIDxEcm9wU2hhZG93RWZmZWN0IFNoYWRvd0RlcHRoPSI1IiBCbHVyUmFkaXVzPSI1IiBPcGFjaXR5PSJ7RHluYW1pY1Jlc291cmNlIEJvcmRlck9wYWNpdHl9IiBDb2xvcj0ie0R5bmFtaWNSZXNvdXJjZSBDQm9yZGVyQ29sb3J9Ii8+CiAgICAgICAgICAgICAgICA8L1NldHRlci5WYWx1ZT4KICAgICAgICAgICAgPC9TZXR0ZXI+CiAgICAgICAgPC9TdHlsZT4KICAgICAgICA8U3R5bGUgeDpLZXk9IlNjcm9sbFZpc2liaWxpdHlSZWN0YW5nbGUiIFRhcmdldFR5cGU9IlJlY3RhbmdsZSI+CiAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IlZpc2liaWxpdHkiIFZhbHVlPSJDb2xsYXBzZWQiLz4KICAgICAgICAgICAgPFN0eWxlLlRyaWdnZXJzPgogICAgICAgICAgICAgICAgPE11bHRpRGF0YVRyaWdnZXI+CiAgICAgICAgICAgICAgICAgICAgPE11bHRpRGF0YVRyaWdnZXIuQ29uZGl0aW9ucz4KICAgICAgICAgICAgICAgICAgICAgICAgPENvbmRpdGlvbiBCaW5kaW5nPSJ7QmluZGluZyBQYXRoPUNvbXB1dGVkSG9yaXpvbnRhbFNjcm9sbEJhclZpc2liaWxpdHksIEVsZW1lbnROYW1lPXNjcm9sbFZpZXdlcn0iIFZhbHVlPSJWaXNpYmxlIi8+CiAgICAgICAgICAgICAgICAgICAgICAgIDxDb25kaXRpb24gQmluZGluZz0ie0JpbmRpbmcgUGF0aD1Db21wdXRlZFZlcnRpY2FsU2Nyb2xsQmFyVmlzaWJpbGl0eSwgRWxlbWVudE5hbWU9c2Nyb2xsVmlld2VyfSIgVmFsdWU9IlZpc2libGUiLz4KICAgICAgICAgICAgICAgICAgICA8L011bHRpRGF0YVRyaWdnZXIuQ29uZGl0aW9ucz4KICAgICAgICAgICAgICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJWaXNpYmlsaXR5IiBWYWx1ZT0iVmlzaWJsZSIvPgogICAgICAgICAgICAgICAgPC9NdWx0aURhdGFUcmlnZ2VyPgogICAgICAgICAgICA8L1N0eWxlLlRyaWdnZXJzPgogICAgICAgIDwvU3R5bGU+CiAgICAgICAgPFN0eWxlIHg6S2V5PSJSb3VuZGVkUHJvZ3Jlc3NCYXJTdHlsZSIgVGFyZ2V0VHlwZT0iUHJvZ3Jlc3NCYXIiPgogICAgICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJUZW1wbGF0ZSI+CiAgICAgICAgICAgICAgICA8U2V0dGVyLlZhbHVlPgogICAgICAgICAgICAgICAgICAgIDxDb250cm9sVGVtcGxhdGUgVGFyZ2V0VHlwZT0iUHJvZ3Jlc3NCYXIiPgogICAgICAgICAgICAgICAgICAgICAgICA8Qm9yZGVyIENvcm5lclJhZGl1cz0iNCIgQmFja2dyb3VuZD0ie0R5bmFtaWNSZXNvdXJjZSBNYWluQmFja2dyb3VuZENvbG9yfSIgQm9yZGVyQnJ1c2g9IntEeW5hbWljUmVzb3VyY2UgTWFpbkZvcmVncm91bmRDb2xvcn0iIEJvcmRlclRoaWNrbmVzcz0iMSI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8R3JpZCBDbGlwVG9Cb3VuZHM9IlRydWUiPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxCb3JkZXIgTmFtZT0iUEFSVF9UcmFjayIgQ29ybmVyUmFkaXVzPSI0IiBCYWNrZ3JvdW5kPSJUcmFuc3BhcmVudCIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxCb3JkZXIgTmFtZT0iUEFSVF9JbmRpY2F0b3IiIENvcm5lclJhZGl1cz0iNCIgQmFja2dyb3VuZD0ie0R5bmFtaWNSZXNvdXJjZSBQcm9ncmVzc0JhckZvcmVncm91bmRDb2xvcn0iIEhvcml6b250YWxBbGlnbm1lbnQ9IkxlZnQiLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvR3JpZD4KICAgICAgICAgICAgICAgICAgICAgICAgPC9Cb3JkZXI+CiAgICAgICAgICAgICAgICAgICAgPC9Db250cm9sVGVtcGxhdGU+CiAgICAgICAgICAgICAgICA8L1NldHRlci5WYWx1ZT4KICAgICAgICAgICAgPC9TZXR0ZXI+CiAgICAgICAgPC9TdHlsZT4KICAgICAgICA8IS0tIEZpbHRlciBDaGlwIFN0eWxlIOKAlCB1c2VkIGJ5IHRoZSBJbnN0YWxsIHRhYiBjYXRlZ29yeSBmaWx0ZXIgYnV0dG9ucyAtLT4KICAgICAgICA8U3R5bGUgeDpLZXk9IkZpbHRlckNoaXBTdHlsZSIgVGFyZ2V0VHlwZT0iQnV0dG9uIiBCYXNlZE9uPSJ7U3RhdGljUmVzb3VyY2Uge3g6VHlwZSBCdXR0b259fSI+CiAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9Ik1hcmdpbiIgVmFsdWU9IjIiLz4KICAgICAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iUGFkZGluZyIgVmFsdWU9IjEyLDAsMTIsMCIvPgogICAgICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJXaWR0aCIgVmFsdWU9IkF1dG8iLz4KICAgICAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iQ3Vyc29yIiBWYWx1ZT0iSGFuZCIvPgogICAgICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJUZW1wbGF0ZSI+CiAgICAgICAgICAgICAgICA8U2V0dGVyLlZhbHVlPgogICAgICAgICAgICAgICAgICAgIDxDb250cm9sVGVtcGxhdGUgVGFyZ2V0VHlwZT0iQnV0dG9uIj4KICAgICAgICAgICAgICAgICAgICAgICAgPEJvcmRlciBOYW1lPSJDaGlwQm9yZGVyIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEJhY2tncm91bmQ9IntUZW1wbGF0ZUJpbmRpbmcgQmFja2dyb3VuZH0iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgQm9yZGVyQnJ1c2g9IntUZW1wbGF0ZUJpbmRpbmcgQm9yZGVyQnJ1c2h9IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEJvcmRlclRoaWNrbmVzcz0ie0R5bmFtaWNSZXNvdXJjZSBCdXR0b25Cb3JkZXJUaGlja25lc3N9IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIENvcm5lclJhZGl1cz0ie0R5bmFtaWNSZXNvdXJjZSBCdXR0b25Db3JuZXJSYWRpdXN9IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIFBhZGRpbmc9IntUZW1wbGF0ZUJpbmRpbmcgUGFkZGluZ30iPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPENvbnRlbnRQcmVzZW50ZXIgSG9yaXpvbnRhbEFsaWdubWVudD0iQ2VudGVyIiBWZXJ0aWNhbEFsaWdubWVudD0iQ2VudGVyIi8+CiAgICAgICAgICAgICAgICAgICAgICAgIDwvQm9yZGVyPgogICAgICAgICAgICAgICAgICAgICAgICA8Q29udHJvbFRlbXBsYXRlLlRyaWdnZXJzPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPFRyaWdnZXIgUHJvcGVydHk9IklzUHJlc3NlZCIgVmFsdWU9IlRydWUiPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxTZXR0ZXIgVGFyZ2V0TmFtZT0iQ2hpcEJvcmRlciIgUHJvcGVydHk9IkJhY2tncm91bmQiIFZhbHVlPSJ7RHluYW1pY1Jlc291cmNlIEJ1dHRvbkJhY2tncm91bmRQcmVzc2VkQ29sb3J9Ii8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L1RyaWdnZXI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8VHJpZ2dlciBQcm9wZXJ0eT0iSXNNb3VzZU92ZXIiIFZhbHVlPSJUcnVlIj4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8U2V0dGVyIFRhcmdldE5hbWU9IkNoaXBCb3JkZXIiIFByb3BlcnR5PSJCYWNrZ3JvdW5kIiBWYWx1ZT0ie0R5bmFtaWNSZXNvdXJjZSBCdXR0b25CYWNrZ3JvdW5kTW91c2VvdmVyQ29sb3J9Ii8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L1RyaWdnZXI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8VHJpZ2dlciBQcm9wZXJ0eT0iSXNFbmFibGVkIiBWYWx1ZT0iRmFsc2UiPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxTZXR0ZXIgVGFyZ2V0TmFtZT0iQ2hpcEJvcmRlciIgUHJvcGVydHk9IkJhY2tncm91bmQiIFZhbHVlPSJ7RHluYW1pY1Jlc291cmNlIEJ1dHRvbkJhY2tncm91bmRTZWxlY3RlZENvbG9yfSIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IkZvcmVncm91bmQiIFZhbHVlPSJEaW1HcmF5Ii8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L1RyaWdnZXI+CiAgICAgICAgICAgICAgICAgICAgICAgIDwvQ29udHJvbFRlbXBsYXRlLlRyaWdnZXJzPgogICAgICAgICAgICAgICAgICAgIDwvQ29udHJvbFRlbXBsYXRlPgogICAgICAgICAgICAgICAgPC9TZXR0ZXIuVmFsdWU+CiAgICAgICAgICAgIDwvU2V0dGVyPgogICAgICAgIDwvU3R5bGU+CiAgICA8L1dpbmRvdy5SZXNvdXJjZXM+CiAgICA8R3JpZCBCYWNrZ3JvdW5kPSJ7RHluYW1pY1Jlc291cmNlIE1haW5CYWNrZ3JvdW5kQ29sb3J9IiBTaG93R3JpZExpbmVzPSJGYWxzZSIgTmFtZT0iV1BGTWFpbkdyaWQiIFdpZHRoPSJBdXRvIiBIZWlnaHQ9IkF1dG8iIEhvcml6b250YWxBbGlnbm1lbnQ9IlN0cmV0Y2giPgogICAgICAgIDxHcmlkLlJvd0RlZmluaXRpb25zPgogICAgICAgICAgICA8Um93RGVmaW5pdGlvbiBIZWlnaHQ9IkF1dG8iLz4KICAgICAgICAgICAgPFJvd0RlZmluaXRpb24gSGVpZ2h0PSJBdXRvIi8+CiAgICAgICAgICAgIDxSb3dEZWZpbml0aW9uIEhlaWdodD0iKiIvPgogICAgICAgICAgICA8Um93RGVmaW5pdGlvbiBIZWlnaHQ9IkF1dG8iLz4KICAgICAgICA8L0dyaWQuUm93RGVmaW5pdGlvbnM+CiAgICAgICAgPEdyaWQuQ29sdW1uRGVmaW5pdGlvbnM+CiAgICAgICAgICAgIDxDb2x1bW5EZWZpbml0aW9uIFdpZHRoPSIqIi8+CiAgICAgICAgPC9HcmlkLkNvbHVtbkRlZmluaXRpb25zPgogICAgICAgIDwhLS0gT2ZmbGluZSBiYW5uZXIgLS0+CiAgICAgICAgPEJvcmRlciBOYW1lPSJXUEZPZmZsaW5lQmFubmVyIiBHcmlkLlJvdz0iMCIgQmFja2dyb3VuZD0iIzhCMDAwMCIgVmlzaWJpbGl0eT0iQ29sbGFwc2VkIiBQYWRkaW5nPSI2LDQiPgogICAgICAgICAgICA8VGV4dEJsb2NrIFRleHQ9IiYjeDI2QTA7IE9mZmxpbmUgTW9kZSAtIE5vIEludGVybmV0IENvbm5lY3Rpb24iIEZvcmVncm91bmQ9IldoaXRlIiBGb250V2VpZ2h0PSJCb2xkIgogICAgICAgICAgICAgICAgSG9yaXpvbnRhbEFsaWdubWVudD0iQ2VudGVyIiBGb250U2l6ZT0iMTMiIEJhY2tncm91bmQ9IlRyYW5zcGFyZW50Ii8+CiAgICAgICAgPC9Cb3JkZXI+CiAgICAgICAgPEdyaWQgR3JpZC5Sb3c9IjEiIEJhY2tncm91bmQ9IntEeW5hbWljUmVzb3VyY2UgTWFpbkJhY2tncm91bmRDb2xvcn0iPgogICAgICAgICAgICA8R3JpZC5Db2x1bW5EZWZpbml0aW9ucz4KICAgICAgICAgICAgICAgIDxDb2x1bW5EZWZpbml0aW9uIFdpZHRoPSJBdXRvIi8+IDwhLS0gTmF2aWdhdGlvbiBidXR0b25zIC0tPgogICAgICAgICAgICAgICAgPENvbHVtbkRlZmluaXRpb24gV2lkdGg9IioiLz4gPCEtLSBTZWFyY2ggYmFyIGFuZCBidXR0b25zIC0tPgogICAgICAgICAgICA8L0dyaWQuQ29sdW1uRGVmaW5pdGlvbnM+CgogICAgICAgICAgICA8IS0tIE5hdmlnYXRpb24gQnV0dG9ucyBQYW5lbCAtLT4KICAgICAgICAgICAgPFN0YWNrUGFuZWwgTmFtZT0iTmF2RG9ja1BhbmVsIiBPcmllbnRhdGlvbj0iSG9yaXpvbnRhbCIgR3JpZC5Db2x1bW49IjAiIFZlcnRpY2FsQWxpZ25tZW50PSJDZW50ZXIiIE1hcmdpbj0iNSw1LDEwLDUiPgogICAgICAgICAgICAgICAgPFN0YWNrUGFuZWwgTmFtZT0iTmF2TG9nb1BhbmVsIiBPcmllbnRhdGlvbj0iSG9yaXpvbnRhbCIgSG9yaXpvbnRhbEFsaWdubWVudD0iTGVmdCIgQmFja2dyb3VuZD0ie0R5bmFtaWNSZXNvdXJjZSBNYWluQmFja2dyb3VuZENvbG9yfSIgU25hcHNUb0RldmljZVBpeGVscz0iVHJ1ZSIgTWFyZ2luPSIxMCwwLDIwLDAiPgogICAgICAgICAgICAgICAgPC9TdGFja1BhbmVsPgogICAgICAgICAgICAgICAgPFRvZ2dsZUJ1dHRvbiBTdHlsZT0ie1N0YXRpY1Jlc291cmNlIFRhYlRvZ2dsZUJ1dHRvbn0iIE1hcmdpbj0iMCwwLDUsMCIgSGVpZ2h0PSJ7RHluYW1pY1Jlc291cmNlIFRhYkJ1dHRvbkhlaWdodH0iIFdpZHRoPSJ7RHluYW1pY1Jlc291cmNlIFRhYkJ1dHRvbldpZHRofSIKICAgICAgICAgICAgICAgICAgICBCYWNrZ3JvdW5kPSJ7RHluYW1pY1Jlc291cmNlIEJ1dHRvbkluc3RhbGxCYWNrZ3JvdW5kQ29sb3J9IiBGb3JlZ3JvdW5kPSJ3aGl0ZSIgRm9udFdlaWdodD0iQm9sZCIgTmFtZT0iV1BGVGFiMUJUIj4KICAgICAgICAgICAgICAgICAgICA8VG9nZ2xlQnV0dG9uLkNvbnRlbnQ+CiAgICAgICAgICAgICAgICAgICAgICAgIDxUZXh0QmxvY2sgRm9udFNpemU9IntEeW5hbWljUmVzb3VyY2UgVGFiQnV0dG9uRm9udFNpemV9IiBCYWNrZ3JvdW5kPSJUcmFuc3BhcmVudCIgRm9yZWdyb3VuZD0ie0R5bmFtaWNSZXNvdXJjZSBCdXR0b25JbnN0YWxsRm9yZWdyb3VuZENvbG9yfSIgPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPFVuZGVybGluZT5JPC9VbmRlcmxpbmU+bnN0YWxsCiAgICAgICAgICAgICAgICAgICAgICAgIDwvVGV4dEJsb2NrPgogICAgICAgICAgICAgICAgICAgIDwvVG9nZ2xlQnV0dG9uLkNvbnRlbnQ+CiAgICAgICAgICAgICAgICA8L1RvZ2dsZUJ1dHRvbj4KICAgICAgICAgICAgICAgIDxUb2dnbGVCdXR0b24gU3R5bGU9IntTdGF0aWNSZXNvdXJjZSBUYWJUb2dnbGVCdXR0b259IiBNYXJnaW49IjAsMCw1LDAiIEhlaWdodD0ie0R5bmFtaWNSZXNvdXJjZSBUYWJCdXR0b25IZWlnaHR9IiBXaWR0aD0ie0R5bmFtaWNSZXNvdXJjZSBUYWJCdXR0b25XaWR0aH0iCiAgICAgICAgICAgICAgICAgICAgQmFja2dyb3VuZD0ie0R5bmFtaWNSZXNvdXJjZSBCdXR0b25Ud2Vha3NCYWNrZ3JvdW5kQ29sb3J9IiBGb3JlZ3JvdW5kPSJ7RHluYW1pY1Jlc291cmNlIEJ1dHRvblR3ZWFrc0ZvcmVncm91bmRDb2xvcn0iIEZvbnRXZWlnaHQ9IkJvbGQiIE5hbWU9IldQRlRhYjJCVCI+CiAgICAgICAgICAgICAgICAgICAgPFRvZ2dsZUJ1dHRvbi5Db250ZW50PgogICAgICAgICAgICAgICAgICAgICAgICA8VGV4dEJsb2NrIEZvbnRTaXplPSJ7RHluYW1pY1Jlc291cmNlIFRhYkJ1dHRvbkZvbnRTaXplfSIgQmFja2dyb3VuZD0iVHJhbnNwYXJlbnQiIEZvcmVncm91bmQ9IntEeW5hbWljUmVzb3VyY2UgQnV0dG9uVHdlYWtzRm9yZWdyb3VuZENvbG9yfSI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8VW5kZXJsaW5lPlQ8L1VuZGVybGluZT53ZWFrcwogICAgICAgICAgICAgICAgICAgICAgICA8L1RleHRCbG9jaz4KICAgICAgICAgICAgICAgICAgICA8L1RvZ2dsZUJ1dHRvbi5Db250ZW50PgogICAgICAgICAgICAgICAgPC9Ub2dnbGVCdXR0b24+CiAgICAgICAgICAgICAgICA8VG9nZ2xlQnV0dG9uIFN0eWxlPSJ7U3RhdGljUmVzb3VyY2UgVGFiVG9nZ2xlQnV0dG9ufSIgTWFyZ2luPSIwLDAsNSwwIiBIZWlnaHQ9IntEeW5hbWljUmVzb3VyY2UgVGFiQnV0dG9uSGVpZ2h0fSIgV2lkdGg9IntEeW5hbWljUmVzb3VyY2UgVGFiQnV0dG9uV2lkdGh9IgogICAgICAgICAgICAgICAgICAgIEJhY2tncm91bmQ9IntEeW5hbWljUmVzb3VyY2UgQnV0dG9uQ29uZmlnQmFja2dyb3VuZENvbG9yfSIgRm9yZWdyb3VuZD0ie0R5bmFtaWNSZXNvdXJjZSBCdXR0b25Db25maWdGb3JlZ3JvdW5kQ29sb3J9IiBGb250V2VpZ2h0PSJCb2xkIiBOYW1lPSJXUEZUYWIzQlQiPgogICAgICAgICAgICAgICAgICAgIDxUb2dnbGVCdXR0b24uQ29udGVudD4KICAgICAgICAgICAgICAgICAgICAgICAgPFRleHRCbG9jayBGb250U2l6ZT0ie0R5bmFtaWNSZXNvdXJjZSBUYWJCdXR0b25Gb250U2l6ZX0iIEJhY2tncm91bmQ9IlRyYW5zcGFyZW50IiBGb3JlZ3JvdW5kPSJ7RHluYW1pY1Jlc291cmNlIEJ1dHRvbkNvbmZpZ0ZvcmVncm91bmRDb2xvcn0iPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPFVuZGVybGluZT5DPC9VbmRlcmxpbmU+b25maWcKICAgICAgICAgICAgICAgICAgICAgICAgPC9UZXh0QmxvY2s+CiAgICAgICAgICAgICAgICAgICAgPC9Ub2dnbGVCdXR0b24uQ29udGVudD4KICAgICAgICAgICAgICAgIDwvVG9nZ2xlQnV0dG9uPgogICAgICAgICAgICAgICAgPFRvZ2dsZUJ1dHRvbiBTdHlsZT0ie1N0YXRpY1Jlc291cmNlIFRhYlRvZ2dsZUJ1dHRvbn0iIE1hcmdpbj0iMCwwLDUsMCIgSGVpZ2h0PSJ7RHluYW1pY1Jlc291cmNlIFRhYkJ1dHRvbkhlaWdodH0iIFdpZHRoPSJ7RHluYW1pY1Jlc291cmNlIFRhYkJ1dHRvbldpZHRofSIKICAgICAgICAgICAgICAgICAgICBCYWNrZ3JvdW5kPSJ7RHluYW1pY1Jlc291cmNlIEJ1dHRvblVwZGF0ZXNCYWNrZ3JvdW5kQ29sb3J9IiBGb3JlZ3JvdW5kPSJ7RHluYW1pY1Jlc291cmNlIEJ1dHRvblVwZGF0ZXNGb3JlZ3JvdW5kQ29sb3J9IiBGb250V2VpZ2h0PSJCb2xkIiBOYW1lPSJXUEZUYWI0QlQiPgogICAgICAgICAgICAgICAgICAgIDxUb2dnbGVCdXR0b24uQ29udGVudD4KICAgICAgICAgICAgICAgICAgICAgICAgPFRleHRCbG9jayBGb250U2l6ZT0ie0R5bmFtaWNSZXNvdXJjZSBUYWJCdXR0b25Gb250U2l6ZX0iIEJhY2tncm91bmQ9IlRyYW5zcGFyZW50IiBGb3JlZ3JvdW5kPSJ7RHluYW1pY1Jlc291cmNlIEJ1dHRvblVwZGF0ZXNGb3JlZ3JvdW5kQ29sb3J9Ij4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxVbmRlcmxpbmU+VTwvVW5kZXJsaW5lPnBkYXRlcwogICAgICAgICAgICAgICAgICAgICAgICA8L1RleHRCbG9jaz4KICAgICAgICAgICAgICAgICAgICA8L1RvZ2dsZUJ1dHRvbi5Db250ZW50PgogICAgICAgICAgICAgICAgPC9Ub2dnbGVCdXR0b24+CiAgICAgICAgICAgICAgICA8VG9nZ2xlQnV0dG9uIFN0eWxlPSJ7U3RhdGljUmVzb3VyY2UgVGFiVG9nZ2xlQnV0dG9ufSIgTWFyZ2luPSIwLDAsNSwwIiBIZWlnaHQ9IntEeW5hbWljUmVzb3VyY2UgVGFiQnV0dG9uSGVpZ2h0fSIgV2lkdGg9IkF1dG8iIE1pbldpZHRoPSJ7RHluYW1pY1Jlc291cmNlIFRhYkJ1dHRvbldpZHRofSIKICAgICAgICAgICAgICAgICAgICBCYWNrZ3JvdW5kPSJ7RHluYW1pY1Jlc291cmNlIEJ1dHRvbldpbjExSVNPQmFja2dyb3VuZENvbG9yfSIgRm9yZWdyb3VuZD0ie0R5bmFtaWNSZXNvdXJjZSBCdXR0b25XaW4xMUlTT0ZvcmVncm91bmRDb2xvcn0iIEZvbnRXZWlnaHQ9IkJvbGQiIE5hbWU9IldQRlRhYjVCVCI+CiAgICAgICAgICAgICAgICAgICAgPFRvZ2dsZUJ1dHRvbi5Db250ZW50PgogICAgICAgICAgICAgICAgICAgICAgICA8VGV4dEJsb2NrIEZvbnRTaXplPSJ7RHluYW1pY1Jlc291cmNlIFRhYkJ1dHRvbkZvbnRTaXplfSIgQmFja2dyb3VuZD0iVHJhbnNwYXJlbnQiIEZvcmVncm91bmQ9IntEeW5hbWljUmVzb3VyY2UgQnV0dG9uV2luMTFJU09Gb3JlZ3JvdW5kQ29sb3J9Ij4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxVbmRlcmxpbmU+VzwvVW5kZXJsaW5lPmluMTEgQ3JlYXRvcgogICAgICAgICAgICAgICAgICAgICAgICA8L1RleHRCbG9jaz4KICAgICAgICAgICAgICAgICAgICA8L1RvZ2dsZUJ1dHRvbi5Db250ZW50PgogICAgICAgICAgICAgICAgPC9Ub2dnbGVCdXR0b24+CiAgICAgICAgICAgIDwvU3RhY2tQYW5lbD4KCiAgICAgICAgICAgIDwhLS0gU2VhcmNoIEJhciBhbmQgQWN0aW9uIEJ1dHRvbnMgLS0+CiAgICAgICAgICAgIDxHcmlkIE5hbWU9IkdyaWRCZXNpZGVOYXZEb2NrUGFuZWwiIEdyaWQuQ29sdW1uPSIxIiBCYWNrZ3JvdW5kPSJ7RHluYW1pY1Jlc291cmNlIE1haW5CYWNrZ3JvdW5kQ29sb3J9IiBTaG93R3JpZExpbmVzPSJGYWxzZSIgSGVpZ2h0PSJBdXRvIj4KICAgICAgICAgICAgICAgIDxHcmlkLkNvbHVtbkRlZmluaXRpb25zPgogICAgICAgICAgICAgICAgICAgIDxDb2x1bW5EZWZpbml0aW9uIFdpZHRoPSIyKiIvPiA8IS0tIFNlYXJjaCBiYXIgYXJlYSAtIHByaW9yaXR5IHNwYWNlIC0tPgogICAgICAgICAgICAgICAgICAgIDxDb2x1bW5EZWZpbml0aW9uIFdpZHRoPSJBdXRvIi8+PCEtLSBCdXR0b25zIGFyZWEgLS0+CiAgICAgICAgICAgICAgICA8L0dyaWQuQ29sdW1uRGVmaW5pdGlvbnM+CgogICAgICAgICAgICAgICAgPEJvcmRlciBHcmlkLkNvbHVtbj0iMCIgTWFyZ2luPSI1LDAsMTAsMCIgTWluV2lkdGg9IjEyMCIgSGVpZ2h0PSJ7RHluYW1pY1Jlc291cmNlIFNlYXJjaEJhckhlaWdodH0iIFZlcnRpY2FsQWxpZ25tZW50PSJDZW50ZXIiIEhvcml6b250YWxBbGlnbm1lbnQ9IlN0cmV0Y2giPgogICAgICAgICAgICAgICAgICAgIDxHcmlkPgogICAgICAgICAgICAgICAgICAgICAgICA8VGV4dEJveAogICAgICAgICAgICAgICAgICAgICAgICAgICAgSGVpZ2h0PSJ7RHluYW1pY1Jlc291cmNlIFNlYXJjaEJhckhlaWdodH0iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICBGb250U2l6ZT0ie0R5bmFtaWNSZXNvdXJjZSBTZWFyY2hCYXJUZXh0Qm94Rm9udFNpemV9IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgVmVydGljYWxBbGlnbm1lbnQ9IkNlbnRlciIgSG9yaXpvbnRhbEFsaWdubWVudD0iU3RyZXRjaCIKICAgICAgICAgICAgICAgICAgICAgICAgICAgIEJvcmRlclRoaWNrbmVzcz0iMSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgIE5hbWU9IlNlYXJjaEJhciIKICAgICAgICAgICAgICAgICAgICAgICAgICAgIEZvcmVncm91bmQ9IntEeW5hbWljUmVzb3VyY2UgTWFpbkZvcmVncm91bmRDb2xvcn0iIEJhY2tncm91bmQ9IntEeW5hbWljUmVzb3VyY2UgTWFpbkJhY2tncm91bmRDb2xvcn0iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICBQYWRkaW5nPSIzLDMsMzAsMCIKICAgICAgICAgICAgICAgICAgICAgICAgICAgIFRvb2xUaXA9IuaMiSBDdHJsLUYg6L6T5YWl5bqU55So5ZCN56ew6L+H5ruk5YiX6KGo77yM5oyJIEVzYyDph43nva7nrZvpgIkiPgogICAgICAgICAgICAgICAgICAgICAgICA8L1RleHRCb3g+CiAgICAgICAgICAgICAgICAgICAgICAgIDxUZXh0QmxvY2sKICAgICAgICAgICAgICAgICAgICAgICAgICAgIE5hbWU9IlNlYXJjaEJhckljb24iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICBWZXJ0aWNhbEFsaWdubWVudD0iQ2VudGVyIiBIb3Jpem9udGFsQWxpZ25tZW50PSJSaWdodCIKICAgICAgICAgICAgICAgICAgICAgICAgICAgIEZvbnRGYW1pbHk9IlNlZ29lIE1ETDIgQXNzZXRzIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgRm9yZWdyb3VuZD0ie0R5bmFtaWNSZXNvdXJjZSBCdXR0b25CYWNrZ3JvdW5kU2VsZWN0ZWRDb2xvcn0iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICBGb250U2l6ZT0ie0R5bmFtaWNSZXNvdXJjZSBJY29uRm9udFNpemV9IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgTWFyZ2luPSIwLDAsOCwwIiBXaWR0aD0iQXV0byIgSGVpZ2h0PSJBdXRvIj4mI3hFNzIxOwogICAgICAgICAgICAgICAgICAgICAgICA8L1RleHRCbG9jaz4KICAgICAgICAgICAgICAgICAgICA8L0dyaWQ+CiAgICAgICAgICAgICAgICA8L0JvcmRlcj4KICAgICAgICAgICAgICAgIDxCdXR0b24gR3JpZC5Db2x1bW49IjAiCiAgICAgICAgICAgICAgICAgICAgVmVydGljYWxBbGlnbm1lbnQ9IkNlbnRlciIgSG9yaXpvbnRhbEFsaWdubWVudD0iUmlnaHQiCiAgICAgICAgICAgICAgICAgICAgTmFtZT0iU2VhcmNoQmFyQ2xlYXJCdXR0b24iCiAgICAgICAgICAgICAgICAgICAgU3R5bGU9IntTdGF0aWNSZXNvdXJjZSBTZWFyY2hCYXJDbGVhckJ1dHRvblN0eWxlfSIKICAgICAgICAgICAgICAgICAgICBNYXJnaW49IjAsMCwyMCwwIiBWaXNpYmlsaXR5PSJDb2xsYXBzZWQiPgogICAgICAgICAgICAgICAgPC9CdXR0b24+CgogICAgICAgICAgICAgICAgPCEtLSBCdXR0b25zIENvbnRhaW5lciAtLT4KICAgICAgICAgICAgICAgIDxTdGFja1BhbmVsIEdyaWQuQ29sdW1uPSIxIiBPcmllbnRhdGlvbj0iSG9yaXpvbnRhbCIgSG9yaXpvbnRhbEFsaWdubWVudD0iUmlnaHQiIFZlcnRpY2FsQWxpZ25tZW50PSJDZW50ZXIiIE1hcmdpbj0iNSw1LDUsNSI+CiAgICAgICAgICAgICAgICAgICAgPEJ1dHRvbiBOYW1lPSJUaGVtZUJ1dHRvbiIKICAgICAgICAgICAgICAgICAgICAgICAgU3R5bGU9IntTdGF0aWNSZXNvdXJjZSBIb3ZlckJ1dHRvblN0eWxlfSIKICAgICAgICAgICAgICAgICAgICAgICAgQm9yZGVyQnJ1c2g9IlRyYW5zcGFyZW50IgogICAgICAgICAgICAgICAgICAgIEJhY2tncm91bmQ9IntEeW5hbWljUmVzb3VyY2UgTWFpbkJhY2tncm91bmRDb2xvcn0iCiAgICAgICAgICAgICAgICAgICAgRm9yZWdyb3VuZD0ie0R5bmFtaWNSZXNvdXJjZSBNYWluRm9yZWdyb3VuZENvbG9yfSIKICAgICAgICAgICAgICAgICAgICBGb250U2l6ZT0ie0R5bmFtaWNSZXNvdXJjZSBTZXR0aW5nc0ljb25Gb250U2l6ZX0iCiAgICAgICAgICAgICAgICAgICAgV2lkdGg9IntEeW5hbWljUmVzb3VyY2UgSWNvbkJ1dHRvblNpemV9IiBIZWlnaHQ9IntEeW5hbWljUmVzb3VyY2UgSWNvbkJ1dHRvblNpemV9IgogICAgICAgICAgICAgICAgICAgIEhvcml6b250YWxBbGlnbm1lbnQ9IlJpZ2h0IiBWZXJ0aWNhbEFsaWdubWVudD0iQ2VudGVyIgogICAgICAgICAgICAgICAgICAgIE1hcmdpbj0iMCwwLDIsMCIKICAgICAgICAgICAgICAgICAgICBGb250RmFtaWx5PSJTZWdvZSBNREwyIEFzc2V0cyIKICAgICAgICAgICAgICAgICAgICBDb250ZW50PSLml6AiCiAgICAgICAgICAgICAgICAgICAgVG9vbFRpcD0i5YiH5o2iIFdpblV0aWwg55WM6Z2i5Li76aKYIgogICAgICAgICAgICAgICAgLz4KICAgICAgICAgICAgICAgICAgICA8UG9wdXAgTmFtZT0iVGhlbWVQb3B1cCIKICAgICAgICAgICAgICAgICAgICBJc09wZW49IkZhbHNlIgogICAgICAgICAgICAgICAgICAgIFBsYWNlbWVudFRhcmdldD0ie0JpbmRpbmcgRWxlbWVudE5hbWU9VGhlbWVCdXR0b259IiBQbGFjZW1lbnQ9IkJvdHRvbSIKICAgICAgICAgICAgICAgICAgICBIb3Jpem9udGFsQWxpZ25tZW50PSJSaWdodCIgVmVydGljYWxBbGlnbm1lbnQ9IlRvcCI+CiAgICAgICAgICAgICAgICAgICAgPEJvcmRlciBCYWNrZ3JvdW5kPSJ7RHluYW1pY1Jlc291cmNlIE1haW5CYWNrZ3JvdW5kQ29sb3J9IiBCb3JkZXJCcnVzaD0ie0R5bmFtaWNSZXNvdXJjZSBNYWluRm9yZWdyb3VuZENvbG9yfSIgQm9yZGVyVGhpY2tuZXNzPSIxIiBDb3JuZXJSYWRpdXM9IjAiIE1hcmdpbj0iMCI+CiAgICAgICAgICAgICAgICAgICAgICAgIDxTdGFja1BhbmVsIEJhY2tncm91bmQ9IntEeW5hbWljUmVzb3VyY2UgTWFpbkJhY2tncm91bmRDb2xvcn0iIEhvcml6b250YWxBbGlnbm1lbnQ9IlN0cmV0Y2giIFZlcnRpY2FsQWxpZ25tZW50PSJTdHJldGNoIj4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxNZW51SXRlbSBGb250U2l6ZT0ie0R5bmFtaWNSZXNvdXJjZSBCdXR0b25Gb250U2l6ZX0iIEhlYWRlcj0iQXV0byIgTmFtZT0iQXV0b1RoZW1lTWVudUl0ZW0iIEZvcmVncm91bmQ9IntEeW5hbWljUmVzb3VyY2UgTWFpbkZvcmVncm91bmRDb2xvcn0iPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxNZW51SXRlbS5Ub29sVGlwPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8VG9vbFRpcCBDb250ZW50PSLot5/pmo8gV2luZG93cyDkuLvpopgiLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L01lbnVJdGVtLlRvb2xUaXA+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L01lbnVJdGVtPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPE1lbnVJdGVtIEZvbnRTaXplPSJ7RHluYW1pY1Jlc291cmNlIEJ1dHRvbkZvbnRTaXplfSIgSGVhZGVyPSJEYXJrIiBOYW1lPSJEYXJrVGhlbWVNZW51SXRlbSIgRm9yZWdyb3VuZD0ie0R5bmFtaWNSZXNvdXJjZSBNYWluRm9yZWdyb3VuZENvbG9yfSI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPE1lbnVJdGVtLlRvb2xUaXA+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxUb29sVGlwIENvbnRlbnQ9IuS9v+eUqOa3seiJsuS4u+mimCIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvTWVudUl0ZW0uVG9vbFRpcD4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvTWVudUl0ZW0+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8TWVudUl0ZW0gRm9udFNpemU9IntEeW5hbWljUmVzb3VyY2UgQnV0dG9uRm9udFNpemV9IiBIZWFkZXI9IkxpZ2h0IiBOYW1lPSJMaWdodFRoZW1lTWVudUl0ZW0iIEZvcmVncm91bmQ9IntEeW5hbWljUmVzb3VyY2UgTWFpbkZvcmVncm91bmRDb2xvcn0iPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxNZW51SXRlbS5Ub29sVGlwPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8VG9vbFRpcCBDb250ZW50PSLkvb/nlKjmtYXoibLkuLvpopgiLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L01lbnVJdGVtLlRvb2xUaXA+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L01lbnVJdGVtPgogICAgICAgICAgICAgICAgICAgICAgICA8L1N0YWNrUGFuZWw+CiAgICAgICAgICAgICAgICAgICAgPC9Cb3JkZXI+CiAgICAgICAgICAgICAgICA8L1BvcHVwPgoKICAgICAgICAgICAgICAgICAgICA8QnV0dG9uIE5hbWU9IkZvbnRTY2FsaW5nQnV0dG9uIgogICAgICAgICAgICAgICAgICAgICAgICBTdHlsZT0ie1N0YXRpY1Jlc291cmNlIEhvdmVyQnV0dG9uU3R5bGV9IgogICAgICAgICAgICAgICAgICAgICAgICBCb3JkZXJCcnVzaD0iVHJhbnNwYXJlbnQiCiAgICAgICAgICAgICAgICAgICAgQmFja2dyb3VuZD0ie0R5bmFtaWNSZXNvdXJjZSBNYWluQmFja2dyb3VuZENvbG9yfSIKICAgICAgICAgICAgICAgICAgICBGb3JlZ3JvdW5kPSJ7RHluYW1pY1Jlc291cmNlIE1haW5Gb3JlZ3JvdW5kQ29sb3J9IgogICAgICAgICAgICAgICAgICAgIEZvbnRTaXplPSJ7RHluYW1pY1Jlc291cmNlIFNldHRpbmdzSWNvbkZvbnRTaXplfSIKICAgICAgICAgICAgICAgICAgICBXaWR0aD0ie0R5bmFtaWNSZXNvdXJjZSBJY29uQnV0dG9uU2l6ZX0iIEhlaWdodD0ie0R5bmFtaWNSZXNvdXJjZSBJY29uQnV0dG9uU2l6ZX0iCiAgICAgICAgICAgICAgICAgICAgSG9yaXpvbnRhbEFsaWdubWVudD0iUmlnaHQiIFZlcnRpY2FsQWxpZ25tZW50PSJDZW50ZXIiCiAgICAgICAgICAgICAgICAgICAgTWFyZ2luPSIwLDAsMiwwIgogICAgICAgICAgICAgICAgICAgIEZvbnRGYW1pbHk9IlNlZ29lIE1ETDIgQXNzZXRzIgogICAgICAgICAgICAgICAgICAgIENvbnRlbnQ9IiYjeEU4RDM7IgogICAgICAgICAgICAgICAgICAgIFRvb2xUaXA9Iuiwg+aVtOWtl+S9k+e8qeaUvuS7pemAguW6lOi+heWKqeWKn+iDvemcgOaxgiIKICAgICAgICAgICAgICAgIC8+CiAgICAgICAgICAgICAgICAgICAgPFBvcHVwIE5hbWU9IkZvbnRTY2FsaW5nUG9wdXAiCiAgICAgICAgICAgICAgICAgICAgSXNPcGVuPSJGYWxzZSIKICAgICAgICAgICAgICAgICAgICBQbGFjZW1lbnRUYXJnZXQ9IntCaW5kaW5nIEVsZW1lbnROYW1lPUZvbnRTY2FsaW5nQnV0dG9ufSIgUGxhY2VtZW50PSJCb3R0b20iCiAgICAgICAgICAgICAgICAgICAgSG9yaXpvbnRhbEFsaWdubWVudD0iUmlnaHQiIFZlcnRpY2FsQWxpZ25tZW50PSJUb3AiPgogICAgICAgICAgICAgICAgICAgIDxCb3JkZXIgQmFja2dyb3VuZD0ie0R5bmFtaWNSZXNvdXJjZSBNYWluQmFja2dyb3VuZENvbG9yfSIgQm9yZGVyQnJ1c2g9IntEeW5hbWljUmVzb3VyY2UgTWFpbkZvcmVncm91bmRDb2xvcn0iIEJvcmRlclRoaWNrbmVzcz0iMSIgQ29ybmVyUmFkaXVzPSIwIiBNYXJnaW49IjAiPgogICAgICAgICAgICAgICAgICAgICAgICA8U3RhY2tQYW5lbCBCYWNrZ3JvdW5kPSJ7RHluYW1pY1Jlc291cmNlIE1haW5CYWNrZ3JvdW5kQ29sb3J9IiBIb3Jpem9udGFsQWxpZ25tZW50PSJTdHJldGNoIiBWZXJ0aWNhbEFsaWdubWVudD0iU3RyZXRjaCIgTWluV2lkdGg9IjIwMCI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8VGV4dEJsb2NrIFRleHQ9IkZvbnQgU2NhbGluZyIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgRm9udFNpemU9IntEeW5hbWljUmVzb3VyY2UgQnV0dG9uRm9udFNpemV9IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBGb3JlZ3JvdW5kPSJ7RHluYW1pY1Jlc291cmNlIE1haW5Gb3JlZ3JvdW5kQ29sb3J9IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBIb3Jpem9udGFsQWxpZ25tZW50PSJDZW50ZXIiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIE1hcmdpbj0iMTAsNSwxMCw1IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBGb250V2VpZ2h0PSJCb2xkIi8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8U2VwYXJhdG9yIE1hcmdpbj0iNSwwLDUsNSIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPFN0YWNrUGFuZWwgT3JpZW50YXRpb249Ikhvcml6b250YWwiIE1hcmdpbj0iMTAsNSwxMCwxMCI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPFRleHRCbG9jayBUZXh0PSJTbWFsbCIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEZvbnRTaXplPSJ7RHluYW1pY1Jlc291cmNlIEJ1dHRvbkZvbnRTaXplfSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEZvcmVncm91bmQ9IntEeW5hbWljUmVzb3VyY2UgTWFpbkZvcmVncm91bmRDb2xvcn0iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBWZXJ0aWNhbEFsaWdubWVudD0iQ2VudGVyIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgTWFyZ2luPSIwLDAsMTAsMCIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxTbGlkZXIgTmFtZT0iRm9udFNjYWxpbmdTbGlkZXIiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBNaW5pbXVtPSIwLjc1IiBNYXhpbXVtPSIyLjAiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBWYWx1ZT0iMS4wIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgVGlja0ZyZXF1ZW5jeT0iMC4yNSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIFRpY2tQbGFjZW1lbnQ9IkJvdHRvbVJpZ2h0IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgSXNTbmFwVG9UaWNrRW5hYmxlZD0iVHJ1ZSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIFdpZHRoPSIxMjAiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBWZXJ0aWNhbEFsaWdubWVudD0iQ2VudGVyIi8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPFRleHRCbG9jayBUZXh0PSJMYXJnZSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEZvbnRTaXplPSJ7RHluYW1pY1Jlc291cmNlIEJ1dHRvbkZvbnRTaXplfSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEZvcmVncm91bmQ9IntEeW5hbWljUmVzb3VyY2UgTWFpbkZvcmVncm91bmRDb2xvcn0iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBWZXJ0aWNhbEFsaWdubWVudD0iQ2VudGVyIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgTWFyZ2luPSIxMCwwLDAsMCIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9TdGFja1BhbmVsPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPFRleHRCbG9jayBOYW1lPSJGb250U2NhbGluZ1ZhbHVlIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBUZXh0PSIxMDAlIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBGb250U2l6ZT0ie0R5bmFtaWNSZXNvdXJjZSBCdXR0b25Gb250U2l6ZX0iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEZvcmVncm91bmQ9IntEeW5hbWljUmVzb3VyY2UgTWFpbkZvcmVncm91bmRDb2xvcn0iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEhvcml6b250YWxBbGlnbm1lbnQ9IkNlbnRlciIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgTWFyZ2luPSIxMCwwLDEwLDUiLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxTdGFja1BhbmVsIE9yaWVudGF0aW9uPSJIb3Jpem9udGFsIiBIb3Jpem9udGFsQWxpZ25tZW50PSJDZW50ZXIiIE1hcmdpbj0iMTAsMCwxMCwxMCI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPEJ1dHRvbiBOYW1lPSJGb250U2NhbGluZ1Jlc2V0QnV0dG9uIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgQ29udGVudD0i6YeN572uIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgU3R5bGU9IntTdGF0aWNSZXNvdXJjZSBIb3ZlckJ1dHRvblN0eWxlfSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIFdpZHRoPSI2MCIgSGVpZ2h0PSIyNSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIE1hcmdpbj0iNSwwLDUsMCIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxCdXR0b24gTmFtZT0iRm9udFNjYWxpbmdBcHBseUJ1dHRvbiIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIENvbnRlbnQ9IuW6lOeUqCIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIFN0eWxlPSJ7U3RhdGljUmVzb3VyY2UgSG92ZXJCdXR0b25TdHlsZX0iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBXaWR0aD0iNjAiIEhlaWdodD0iMjUiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBNYXJnaW49IjUsMCw1LDAiLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvU3RhY2tQYW5lbD4KICAgICAgICAgICAgICAgICAgICAgICAgPC9TdGFja1BhbmVsPgogICAgICAgICAgICAgICAgICAgIDwvQm9yZGVyPgogICAgICAgICAgICAgICAgPC9Qb3B1cD4KCiAgICAgICAgICAgICAgICAgICAgPEJ1dHRvbiBOYW1lPSJTZXR0aW5nc0J1dHRvbiIKICAgICAgICAgICAgICAgICAgICAgICAgU3R5bGU9IntTdGF0aWNSZXNvdXJjZSBIb3ZlckJ1dHRvblN0eWxlfSIKICAgICAgICAgICAgICAgICAgICAgICAgQm9yZGVyQnJ1c2g9IlRyYW5zcGFyZW50IgogICAgICAgICAgICAgICAgICAgIEJhY2tncm91bmQ9IntEeW5hbWljUmVzb3VyY2UgTWFpbkJhY2tncm91bmRDb2xvcn0iCiAgICAgICAgICAgICAgICAgICAgRm9yZWdyb3VuZD0ie0R5bmFtaWNSZXNvdXJjZSBNYWluRm9yZWdyb3VuZENvbG9yfSIKICAgICAgICAgICAgICAgICAgICBGb250U2l6ZT0ie0R5bmFtaWNSZXNvdXJjZSBTZXR0aW5nc0ljb25Gb250U2l6ZX0iCiAgICAgICAgICAgICAgICAgICAgV2lkdGg9IntEeW5hbWljUmVzb3VyY2UgSWNvbkJ1dHRvblNpemV9IiBIZWlnaHQ9IntEeW5hbWljUmVzb3VyY2UgSWNvbkJ1dHRvblNpemV9IgogICAgICAgICAgICAgICAgICAgIEhvcml6b250YWxBbGlnbm1lbnQ9IlJpZ2h0IiBWZXJ0aWNhbEFsaWdubWVudD0iQ2VudGVyIgogICAgICAgICAgICAgICAgICAgIE1hcmdpbj0iMCwwLDIsMCIKICAgICAgICAgICAgICAgICAgICBGb250RmFtaWx5PSJTZWdvZSBNREwyIEFzc2V0cyIKICAgICAgICAgICAgICAgICAgICBDb250ZW50PSImI3hFNzEzOyIvPgogICAgICAgICAgICAgICAgICAgIDxQb3B1cCBOYW1lPSJTZXR0aW5nc1BvcHVwIgogICAgICAgICAgICAgICAgICAgIElzT3Blbj0iRmFsc2UiCiAgICAgICAgICAgICAgICAgICAgUGxhY2VtZW50VGFyZ2V0PSJ7QmluZGluZyBFbGVtZW50TmFtZT1TZXR0aW5nc0J1dHRvbn0iIFBsYWNlbWVudD0iQm90dG9tIgogICAgICAgICAgICAgICAgICAgIEhvcml6b250YWxBbGlnbm1lbnQ9IlJpZ2h0IiBWZXJ0aWNhbEFsaWdubWVudD0iVG9wIj4KICAgICAgICAgICAgICAgICAgICA8Qm9yZGVyIEJhY2tncm91bmQ9IntEeW5hbWljUmVzb3VyY2UgTWFpbkJhY2tncm91bmRDb2xvcn0iIEJvcmRlckJydXNoPSJ7RHluYW1pY1Jlc291cmNlIE1haW5Gb3JlZ3JvdW5kQ29sb3J9IiBCb3JkZXJUaGlja25lc3M9IjEiIENvcm5lclJhZGl1cz0iMCIgTWFyZ2luPSIwIj4KICAgICAgICAgICAgICAgICAgICAgICAgPFN0YWNrUGFuZWwgQmFja2dyb3VuZD0ie0R5bmFtaWNSZXNvdXJjZSBNYWluQmFja2dyb3VuZENvbG9yfSIgSG9yaXpvbnRhbEFsaWdubWVudD0iU3RyZXRjaCIgVmVydGljYWxBbGlnbm1lbnQ9IlN0cmV0Y2giPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPE1lbnVJdGVtIEZvbnRTaXplPSJ7RHluYW1pY1Jlc291cmNlIEJ1dHRvbkZvbnRTaXplfSIgSGVhZGVyPSJJbXBvcnQiIE5hbWU9IkltcG9ydE1lbnVJdGVtIiBGb3JlZ3JvdW5kPSJ7RHluYW1pY1Jlc291cmNlIE1haW5Gb3JlZ3JvdW5kQ29sb3J9Ij4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8TWVudUl0ZW0uVG9vbFRpcD4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPFRvb2xUaXAgQ29udGVudD0i5LuO5a+85Ye655qE5paH5Lu25a+85YWl6YWN572uIi8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9NZW51SXRlbS5Ub29sVGlwPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9NZW51SXRlbT4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxNZW51SXRlbSBGb250U2l6ZT0ie0R5bmFtaWNSZXNvdXJjZSBCdXR0b25Gb250U2l6ZX0iIEhlYWRlcj0iRXhwb3J0IiBOYW1lPSJFeHBvcnRNZW51SXRlbSIgRm9yZWdyb3VuZD0ie0R5bmFtaWNSZXNvdXJjZSBNYWluRm9yZWdyb3VuZENvbG9yfSI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPE1lbnVJdGVtLlRvb2xUaXA+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxUb29sVGlwIENvbnRlbnQ9IuWvvOWHuuW3sumAiemhueW5tuWwhuWRveS7pOWkjeWItuWIsOWJqui0tOadvyIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvTWVudUl0ZW0uVG9vbFRpcD4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvTWVudUl0ZW0+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8U2VwYXJhdG9yLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxNZW51SXRlbSBGb250U2l6ZT0ie0R5bmFtaWNSZXNvdXJjZSBCdXR0b25Gb250U2l6ZX0iIEhlYWRlcj0iQWJvdXQiIE5hbWU9IkFib3V0TWVudUl0ZW0iIEZvcmVncm91bmQ9IntEeW5hbWljUmVzb3VyY2UgTWFpbkZvcmVncm91bmRDb2xvcn0iLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxNZW51SXRlbSBGb250U2l6ZT0ie0R5bmFtaWNSZXNvdXJjZSBCdXR0b25Gb250U2l6ZX0iIEhlYWRlcj0iRG9jdW1lbnRhdGlvbiIgTmFtZT0iRG9jdW1lbnRhdGlvbk1lbnVJdGVtIiBGb3JlZ3JvdW5kPSJ7RHluYW1pY1Jlc291cmNlIE1haW5Gb3JlZ3JvdW5kQ29sb3J9Ii8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8TWVudUl0ZW0gRm9udFNpemU9IntEeW5hbWljUmVzb3VyY2UgQnV0dG9uRm9udFNpemV9IiBIZWFkZXI9IlNwb25zb3JzIiBOYW1lPSJTcG9uc29yTWVudUl0ZW0iIEZvcmVncm91bmQ9IntEeW5hbWljUmVzb3VyY2UgTWFpbkZvcmVncm91bmRDb2xvcn0iLz4KICAgICAgICAgICAgICAgICAgICAgICAgPC9TdGFja1BhbmVsPgogICAgICAgICAgICAgICAgICAgIDwvQm9yZGVyPgogICAgICAgICAgICAgICAgPC9Qb3B1cD4KCiAgICAgICAgICAgICAgICAgICAgPEJ1dHRvbgogICAgICAgICAgICAgICAgICAgICAgICBDb250ZW50PSImI3hFOTIxOyIKICAgICAgICAgICAgICAgICAgICAgICAgU3R5bGU9IntTdGF0aWNSZXNvdXJjZSBIb3ZlckJ1dHRvblN0eWxlfSIKICAgICAgICAgICAgICAgICAgICAgICAgQm9yZGVyVGhpY2tuZXNzPSIwIgogICAgICAgICAgICAgICAgICAgICAgICBCb3JkZXJCcnVzaD0iVHJhbnNwYXJlbnQiCiAgICAgICAgICAgICAgICAgICAgICAgIEJhY2tncm91bmQ9IntEeW5hbWljUmVzb3VyY2UgTWFpbkJhY2tncm91bmRDb2xvcn0iCiAgICAgICAgICAgICAgICAgICAgICAgIFdpZHRoPSJ7RHluYW1pY1Jlc291cmNlIEljb25CdXR0b25TaXplfSIgSGVpZ2h0PSJ7RHluYW1pY1Jlc291cmNlIEljb25CdXR0b25TaXplfSIKICAgICAgICAgICAgICAgICAgICAgICAgSG9yaXpvbnRhbEFsaWdubWVudD0iUmlnaHQiIFZlcnRpY2FsQWxpZ25tZW50PSJDZW50ZXIiCiAgICAgICAgICAgICAgICAgICAgICAgIE1hcmdpbj0iMCIKICAgICAgICAgICAgICAgICAgICAgICAgRm9udEZhbWlseT0iU2Vnb2UgTURMMiBBc3NldHMiCiAgICAgICAgICAgICAgICAgICAgICAgIEZvcmVncm91bmQ9IntEeW5hbWljUmVzb3VyY2UgTWFpbkZvcmVncm91bmRDb2xvcn0iCiAgICAgICAgICAgICAgICAgICAgICAgIEZvbnRTaXplPSJ7RHluYW1pY1Jlc291cmNlIENsb3NlSWNvbkZvbnRTaXplfSIKICAgICAgICAgICAgICAgICAgICAgICAgVG9vbFRpcD0i5pyA5bCP5YyWIgogICAgICAgICAgICAgICAgICAgICAgICBBdXRvbWF0aW9uUHJvcGVydGllcy5OYW1lPSJNaW5pbWl6ZSIKICAgICAgICAgICAgICAgICAgICAgICAgTmFtZT0iV1BGTWluaW1pemVCdXR0b24iIC8+CiAgICAgICAgICAgICAgICAgICAgPEJ1dHRvbgogICAgICAgICAgICAgICAgICAgICAgICBCb3JkZXJUaGlja25lc3M9IjAiCiAgICAgICAgICAgICAgICAgICAgICAgIEJvcmRlckJydXNoPSJUcmFuc3BhcmVudCIKICAgICAgICAgICAgICAgICAgICAgICAgQmFja2dyb3VuZD0ie0R5bmFtaWNSZXNvdXJjZSBNYWluQmFja2dyb3VuZENvbG9yfSIKICAgICAgICAgICAgICAgICAgICAgICAgV2lkdGg9IntEeW5hbWljUmVzb3VyY2UgSWNvbkJ1dHRvblNpemV9IiBIZWlnaHQ9IntEeW5hbWljUmVzb3VyY2UgSWNvbkJ1dHRvblNpemV9IgogICAgICAgICAgICAgICAgICAgICAgICBIb3Jpem9udGFsQWxpZ25tZW50PSJSaWdodCIgVmVydGljYWxBbGlnbm1lbnQ9IkNlbnRlciIKICAgICAgICAgICAgICAgICAgICAgICAgTWFyZ2luPSIwLDAsMCwwIgogICAgICAgICAgICAgICAgICAgICAgICBGb250RmFtaWx5PSJTZWdvZSBNREwyIEFzc2V0cyIKICAgICAgICAgICAgICAgICAgICAgICAgRm9yZWdyb3VuZD0ie0R5bmFtaWNSZXNvdXJjZSBNYWluRm9yZWdyb3VuZENvbG9yfSIKICAgICAgICAgICAgICAgICAgICAgICAgRm9udFNpemU9IntEeW5hbWljUmVzb3VyY2UgQ2xvc2VJY29uRm9udFNpemV9IgogICAgICAgICAgICAgICAgICAgICAgICBOYW1lPSJXUEZNYXhpbWl6ZUJ1dHRvbiI+CiAgICAgICAgICAgICAgICAgICAgICAgIDxCdXR0b24uU3R5bGU+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8U3R5bGUgVGFyZ2V0VHlwZT0iQnV0dG9uIiBCYXNlZE9uPSJ7U3RhdGljUmVzb3VyY2UgSG92ZXJCdXR0b25TdHlsZX0iPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IkNvbnRlbnQiIFZhbHVlPSImI3hFOTIyOyIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IlRvb2xUaXAiIFZhbHVlPSJNYXhpbWl6ZSIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IkF1dG9tYXRpb25Qcm9wZXJ0aWVzLk5hbWUiIFZhbHVlPSJNYXhpbWl6ZSIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxTdHlsZS5UcmlnZ2Vycz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPERhdGFUcmlnZ2VyIEJpbmRpbmc9IntCaW5kaW5nIFdpbmRvd1N0YXRlLCBSZWxhdGl2ZVNvdXJjZT17UmVsYXRpdmVTb3VyY2UgQW5jZXN0b3JUeXBlPXt4OlR5cGUgV2luZG93fX19IiBWYWx1ZT0iTWF4aW1pemVkIj4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IkNvbnRlbnQiIFZhbHVlPSImI3hFOTIzOyIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iVG9vbFRpcCIgVmFsdWU9IlJlc3RvcmUiLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IkF1dG9tYXRpb25Qcm9wZXJ0aWVzLk5hbWUiIFZhbHVlPSJSZXN0b3JlIi8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvRGF0YVRyaWdnZXI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9TdHlsZS5UcmlnZ2Vycz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvU3R5bGU+CiAgICAgICAgICAgICAgICAgICAgICAgIDwvQnV0dG9uLlN0eWxlPgogICAgICAgICAgICAgICAgICAgIDwvQnV0dG9uPgoKICAgICAgICAgICAgICAgICAgICA8QnV0dG9uCiAgICAgICAgICAgICAgICAgICAgICAgIENvbnRlbnQ9IiYjeEU4QkI7IgogICAgICAgICAgICAgICAgICAgICAgICBTdHlsZT0ie1N0YXRpY1Jlc291cmNlIEhvdmVyQnV0dG9uU3R5bGV9IgogICAgICAgICAgICAgICAgICAgICAgICBCb3JkZXJUaGlja25lc3M9IjAiCiAgICAgICAgICAgICAgICAgICAgICAgIEJvcmRlckJydXNoPSJUcmFuc3BhcmVudCIKICAgICAgICAgICAgICAgICAgICAgICAgQmFja2dyb3VuZD0ie0R5bmFtaWNSZXNvdXJjZSBNYWluQmFja2dyb3VuZENvbG9yfSIKICAgICAgICAgICAgICAgICAgICAgICAgV2lkdGg9IntEeW5hbWljUmVzb3VyY2UgSWNvbkJ1dHRvblNpemV9IiBIZWlnaHQ9IntEeW5hbWljUmVzb3VyY2UgSWNvbkJ1dHRvblNpemV9IgogICAgICAgICAgICAgICAgICAgICAgICBIb3Jpem9udGFsQWxpZ25tZW50PSJSaWdodCIgVmVydGljYWxBbGlnbm1lbnQ9IkNlbnRlciIKICAgICAgICAgICAgICAgICAgICAgICAgTWFyZ2luPSIwIgogICAgICAgICAgICAgICAgICAgICAgICBGb250RmFtaWx5PSJTZWdvZSBNREwyIEFzc2V0cyIKICAgICAgICAgICAgICAgICAgICAgICAgRm9yZWdyb3VuZD0ie0R5bmFtaWNSZXNvdXJjZSBNYWluRm9yZWdyb3VuZENvbG9yfSIKICAgICAgICAgICAgICAgICAgICAgICAgRm9udFNpemU9IntEeW5hbWljUmVzb3VyY2UgQ2xvc2VJY29uRm9udFNpemV9IgogICAgICAgICAgICAgICAgICAgICAgICBUb29sVGlwPSLlhbPpl60iCiAgICAgICAgICAgICAgICAgICAgICAgIEF1dG9tYXRpb25Qcm9wZXJ0aWVzLk5hbWU9IkNsb3NlIgogICAgICAgICAgICAgICAgICAgICAgICBOYW1lPSJXUEZDbG9zZUJ1dHRvbiIgLz4KICAgICAgICAgICAgICAgIDwvU3RhY2tQYW5lbD4KICAgICAgICAgICAgPC9HcmlkPgogICAgICAgIDwvR3JpZD4KCiAgICAgICAgPFRhYkNvbnRyb2wgTmFtZT0iV1BGVGFiTmF2IiBCYWNrZ3JvdW5kPSJUcmFuc3BhcmVudCIgV2lkdGg9IkF1dG8iIEhlaWdodD0iQXV0byIgQm9yZGVyQnJ1c2g9IlRyYW5zcGFyZW50IiBCb3JkZXJUaGlja25lc3M9IjAiIEdyaWQuUm93PSIyIiBHcmlkLkNvbHVtbj0iMCIgUGFkZGluZz0iLTEiPgogICAgICAgICAgICA8VGFiSXRlbSBIZWFkZXI9IuW6lOeUqOWuieijhSIgVmlzaWJpbGl0eT0iQ29sbGFwc2VkIiBOYW1lPSJXUEZUYWIxIj4KICAgICAgICAgICAgICAgIDxHcmlkIEJhY2tncm91bmQ9IlRyYW5zcGFyZW50IiA+CiAgICAgICAgICAgICAgICAgICAgPEdyaWQuUm93RGVmaW5pdGlvbnM+CiAgICAgICAgICAgICAgICAgICAgICAgIDxSb3dEZWZpbml0aW9uIEhlaWdodD0iQXV0byIvPgogICAgICAgICAgICAgICAgICAgICAgICA8Um93RGVmaW5pdGlvbiBIZWlnaHQ9IioiLz4KICAgICAgICAgICAgICAgICAgICA8L0dyaWQuUm93RGVmaW5pdGlvbnM+CgogICAgICAgICAgICAgICAgICAgIDwhLS0gUXVpY2sgQ2F0ZWdvcnkgU2VhcmNoIENoaXBzIC0tPgogICAgICAgICAgICAgICAgICAgIDxXcmFwUGFuZWwgR3JpZC5Sb3c9IjAiIE9yaWVudGF0aW9uPSJIb3Jpem9udGFsIiBNYXJnaW49IjUsNSw1LDUiIE5hbWU9IldQRlNlYXJjaENoaXBzIj4KICAgICAgICAgICAgICAgICAgICAgICAgPFRleHRCbG9jayBUZXh0PSJGaWx0ZXJzIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEZvbnRTaXplPSJ7RHluYW1pY1Jlc291cmNlIEhlYWRlckZvbnRTaXplfSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBGb250RmFtaWx5PSJ7RHluYW1pY1Jlc291cmNlIEhlYWRlckZvbnRGYW1pbHl9IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEZvcmVncm91bmQ9IntEeW5hbWljUmVzb3VyY2UgTGFiZWxib3hGb3JlZ3JvdW5kQ29sb3J9IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEJhY2tncm91bmQ9IlRyYW5zcGFyZW50IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIFZlcnRpY2FsQWxpZ25tZW50PSJDZW50ZXIiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgTWFyZ2luPSIxNSwwLDgsMCIvPgogICAgICAgICAgICAgICAgICAgICAgICA8QnV0dG9uIE5hbWU9IldQRlNlYXJjaENoaXBBbGwiICAgICAgICAgICAgIENvbnRlbnQ9IuWFqOmDqCIgICAgICAgICAgICAgICBTdHlsZT0ie1N0YXRpY1Jlc291cmNlIEZpbHRlckNoaXBTdHlsZX0iLz4KICAgICAgICAgICAgICAgICAgICAgICAgPEJ1dHRvbiBOYW1lPSJXUEZTZWFyY2hDaGlwQnJvd3NlcnMiICAgICAgICBDb250ZW50PSLmtY/op4jlmagiICAgICAgICAgIFN0eWxlPSJ7U3RhdGljUmVzb3VyY2UgRmlsdGVyQ2hpcFN0eWxlfSIvPgogICAgICAgICAgICAgICAgICAgICAgICA8QnV0dG9uIE5hbWU9IldQRlNlYXJjaENoaXBDb21tdW5pY2F0aW9ucyIgIENvbnRlbnQ9IumAmuiuryIgICAgU3R5bGU9IntTdGF0aWNSZXNvdXJjZSBGaWx0ZXJDaGlwU3R5bGV9Ii8+CiAgICAgICAgICAgICAgICAgICAgICAgIDxCdXR0b24gTmFtZT0iV1BGU2VhcmNoQ2hpcERldmVsb3BtZW50IiAgICAgQ29udGVudD0i5byA5Y+R5bel5YW3IiAgICAgICBTdHlsZT0ie1N0YXRpY1Jlc291cmNlIEZpbHRlckNoaXBTdHlsZX0iLz4KICAgICAgICAgICAgICAgICAgICAgICAgPEJ1dHRvbiBOYW1lPSJXUEZTZWFyY2hDaGlwR2FtZXMiICAgICAgICAgICBDb250ZW50PSLmuLjmiI8iICAgICAgICAgICAgIFN0eWxlPSJ7U3RhdGljUmVzb3VyY2UgRmlsdGVyQ2hpcFN0eWxlfSIvPgogICAgICAgICAgICAgICAgICAgICAgICA8QnV0dG9uIE5hbWU9IldQRlNlYXJjaENoaXBNaWNyb3NvZnRUb29scyIgIENvbnRlbnQ9IuW+rui9r+W3peWFtyIgICBTdHlsZT0ie1N0YXRpY1Jlc291cmNlIEZpbHRlckNoaXBTdHlsZX0iLz4KICAgICAgICAgICAgICAgICAgICAgICAgPEJ1dHRvbiBOYW1lPSJXUEZTZWFyY2hDaGlwTXVsdGltZWRpYVRvb2xzIiBDb250ZW50PSLlpJrlqpLkvZPlt6XlhbciICBTdHlsZT0ie1N0YXRpY1Jlc291cmNlIEZpbHRlckNoaXBTdHlsZX0iLz4KICAgICAgICAgICAgICAgICAgICAgICAgPEJ1dHRvbiBOYW1lPSJXUEZTZWFyY2hDaGlwUHJvVG9vbHMiICAgICAgICBDb250ZW50PSLkuJPkuJrlt6XlhbciICAgICAgICAgU3R5bGU9IntTdGF0aWNSZXNvdXJjZSBGaWx0ZXJDaGlwU3R5bGV9Ii8+CiAgICAgICAgICAgICAgICAgICAgICAgIDxCdXR0b24gTmFtZT0iV1BGU2VhcmNoQ2hpcFNlbGZob3N0ZWRUb29scyIgQ29udGVudD0i6Ieq5omY566h5bel5YW3IiAgU3R5bGU9IntTdGF0aWNSZXNvdXJjZSBGaWx0ZXJDaGlwU3R5bGV9Ii8+CiAgICAgICAgICAgICAgICAgICAgICAgIDxCdXR0b24gTmFtZT0iV1BGU2VhcmNoQ2hpcFV0aWxpdGllcyIgICAgICAgQ29udGVudD0i5a6e55So5bel5YW3IiAgICAgICAgIFN0eWxlPSJ7U3RhdGljUmVzb3VyY2UgRmlsdGVyQ2hpcFN0eWxlfSIvPgogICAgICAgICAgICAgICAgICAgIDwvV3JhcFBhbmVsPgoKICAgICAgICAgICAgICAgICAgICA8R3JpZCBHcmlkLlJvdz0iMSIgTWFyZ2luPSJ7RHluYW1pY1Jlc291cmNlIFRhYkNvbnRlbnRNYXJnaW59Ij4KICAgICAgICAgICAgICAgICAgICAgICAgPEdyaWQuQ29sdW1uRGVmaW5pdGlvbnM+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8Q29sdW1uRGVmaW5pdGlvbiBXaWR0aD0iQXV0byIgLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxDb2x1bW5EZWZpbml0aW9uIFdpZHRoPSIqIiAvPgogICAgICAgICAgICAgICAgICAgICAgICA8L0dyaWQuQ29sdW1uRGVmaW5pdGlvbnM+CgogICAgICAgICAgICAgICAgICAgICAgICA8R3JpZCBOYW1lPSJhcHBzY2F0ZWdvcnkiIEdyaWQuQ29sdW1uPSIwIiBIb3Jpem9udGFsQWxpZ25tZW50PSJTdHJldGNoIiBWZXJ0aWNhbEFsaWdubWVudD0iU3RyZXRjaCI+CiAgICAgICAgICAgICAgICAgICAgICAgIDwvR3JpZD4KCiAgICAgICAgICAgICAgICAgICAgICAgIDxHcmlkIE5hbWU9ImFwcHNwYW5lbCIgR3JpZC5Db2x1bW49IjEiIEhvcml6b250YWxBbGlnbm1lbnQ9IlN0cmV0Y2giIFZlcnRpY2FsQWxpZ25tZW50PSJTdHJldGNoIj4KICAgICAgICAgICAgICAgICAgICAgICAgPC9HcmlkPgogICAgICAgICAgICAgICAgICAgIDwvR3JpZD4KICAgICAgICAgICAgICAgIDwvR3JpZD4KICAgICAgICAgICAgPC9UYWJJdGVtPgogICAgICAgICAgICA8VGFiSXRlbSBIZWFkZXI9Iuezu+e7n+S8mOWMliIgVmlzaWJpbGl0eT0iQ29sbGFwc2VkIiBOYW1lPSJXUEZUYWIyIj4KICAgICAgICAgICAgICAgIDxHcmlkPgogICAgICAgICAgICAgICAgICAgIDwhLS0gTWFpbiBjb250ZW50IGFyZWEgd2l0aCBhIFNjcm9sbFZpZXdlciAtLT4KICAgICAgICAgICAgICAgICAgICA8R3JpZC5Sb3dEZWZpbml0aW9ucz4KICAgICAgICAgICAgICAgICAgICAgICAgPFJvd0RlZmluaXRpb24gSGVpZ2h0PSIqIiAvPgogICAgICAgICAgICAgICAgICAgICAgICA8Um93RGVmaW5pdGlvbiBIZWlnaHQ9IkF1dG8iIC8+CiAgICAgICAgICAgICAgICAgICAgPC9HcmlkLlJvd0RlZmluaXRpb25zPgoKICAgICAgICAgICAgICAgICAgICA8U2Nyb2xsVmlld2VyIFZlcnRpY2FsU2Nyb2xsQmFyVmlzaWJpbGl0eT0iQXV0byIgSG9yaXpvbnRhbFNjcm9sbEJhclZpc2liaWxpdHk9IkRpc2FibGVkIiBHcmlkLlJvdz0iMCIgTWFyZ2luPSJ7RHluYW1pY1Jlc291cmNlIFRhYkNvbnRlbnRNYXJnaW59Ij4KICAgICAgICAgICAgICAgICAgICAgICAgPEdyaWQgQmFja2dyb3VuZD0iVHJhbnNwYXJlbnQiPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPEdyaWQuUm93RGVmaW5pdGlvbnM+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPFJvd0RlZmluaXRpb24gSGVpZ2h0PSJBdXRvIi8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPFJvd0RlZmluaXRpb24gSGVpZ2h0PSIqIi8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPFJvd0RlZmluaXRpb24gSGVpZ2h0PSJBdXRvIi8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L0dyaWQuUm93RGVmaW5pdGlvbnM+CgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPFN0YWNrUGFuZWwgQmFja2dyb3VuZD0ie0R5bmFtaWNSZXNvdXJjZSBNYWluQmFja2dyb3VuZENvbG9yfSIgT3JpZW50YXRpb249IlZlcnRpY2FsIiBHcmlkLlJvdz0iMCIgR3JpZC5Db2x1bW49IjAiIEdyaWQuQ29sdW1uU3Bhbj0iMiIgTWFyZ2luPSI1Ij4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8TGFiZWwgQ29udGVudD0i5o6o6I2Q6YCJ5oup77yaIiBGb250U2l6ZT0ie0R5bmFtaWNSZXNvdXJjZSBGb250U2l6ZX0iIFZlcnRpY2FsQWxpZ25tZW50PSJDZW50ZXIiIE1hcmdpbj0iMiIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxXcmFwUGFuZWwgT3JpZW50YXRpb249Ikhvcml6b250YWwiIEhvcml6b250YWxBbGlnbm1lbnQ9IkxlZnQiIE1hcmdpbj0iMCwyLDAsMCI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxCdXR0b24gTmFtZT0iV1BGc3RhbmRhcmQiIENvbnRlbnQ9IiDmoIflh4YgIiBNYXJnaW49IjIiIFdpZHRoPSJ7RHluYW1pY1Jlc291cmNlIEJ1dHRvbldpZHRofSIgSGVpZ2h0PSJ7RHluYW1pY1Jlc291cmNlIEJ1dHRvbkhlaWdodH0iLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPEJ1dHRvbiBOYW1lPSJXUEZtaW5pbWFsIiBDb250ZW50PSIg57K+566AICIgTWFyZ2luPSIyIiBXaWR0aD0ie0R5bmFtaWNSZXNvdXJjZSBCdXR0b25XaWR0aH0iIEhlaWdodD0ie0R5bmFtaWNSZXNvdXJjZSBCdXR0b25IZWlnaHR9Ii8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxCdXR0b24gTmFtZT0iV1BGQWR2YW5jZWQiIENvbnRlbnQ9IiDpq5jnuqcgIiBNYXJnaW49IjIiIFdpZHRoPSJ7RHluYW1pY1Jlc291cmNlIEJ1dHRvbldpZHRofSIgSGVpZ2h0PSJ7RHluYW1pY1Jlc291cmNlIEJ1dHRvbkhlaWdodH0iLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPEJ1dHRvbiBOYW1lPSJXUEZDbGVhclR3ZWFrc1NlbGVjdGlvbiIgQ29udGVudD0iIOa4hemZpCAiIE1hcmdpbj0iMiIgV2lkdGg9IntEeW5hbWljUmVzb3VyY2UgQnV0dG9uV2lkdGh9IiBIZWlnaHQ9IntEeW5hbWljUmVzb3VyY2UgQnV0dG9uSGVpZ2h0fSIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8QnV0dG9uIE5hbWU9IldQRkdldEluc3RhbGxlZFR3ZWFrcyIgQ29udGVudD0i5bey5a6J6KOF5LyY5YyW5YiX6KGoIiBNYXJnaW49IjIiIFdpZHRoPSJ7RHluYW1pY1Jlc291cmNlIEJ1dHRvbldpZHRofSIgSGVpZ2h0PSJ7RHluYW1pY1Jlc291cmNlIEJ1dHRvbkhlaWdodH0iLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPEJ1dHRvbiBOYW1lPSJXUEZBcHB4UmVtb3ZhbCIgQ29udGVudD0iQXBwWCDnp7vpmaQiIE1hcmdpbj0iMiIgV2lkdGg9IntEeW5hbWljUmVzb3VyY2UgQnV0dG9uV2lkdGh9IiBIZWlnaHQ9IntEeW5hbWljUmVzb3VyY2UgQnV0dG9uSGVpZ2h0fSIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvV3JhcFBhbmVsPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9TdGFja1BhbmVsPgoKICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxHcmlkIE5hbWU9InR3ZWFrc3BhbmVsIiBHcmlkLlJvdz0iMSI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPCEtLSBZb3VyIHR3ZWFrc3BhbmVsIGNvbnRlbnQgZ29lcyBoZXJlIC0tPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9HcmlkPgoKICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxCb3JkZXIgR3JpZC5Db2x1bW5TcGFuPSIyIiBHcmlkLlJvdz0iMiIgR3JpZC5Db2x1bW49IjAiIFN0eWxlPSJ7U3RhdGljUmVzb3VyY2UgQm9yZGVyU3R5bGV9Ij4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8U3RhY2tQYW5lbCBCYWNrZ3JvdW5kPSJ7RHluYW1pY1Jlc291cmNlIE1haW5CYWNrZ3JvdW5kQ29sb3J9IiBPcmllbnRhdGlvbj0iSG9yaXpvbnRhbCIgSG9yaXpvbnRhbEFsaWdubWVudD0iTGVmdCI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxUZXh0QmxvY2sgUGFkZGluZz0iMTAiPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgTm90ZTogSG92ZXIgb3ZlciBpdGVtcyB0byBnZXQgYSBiZXR0ZXIgZGVzY3JpcHRpb24uIFBsZWFzZSBiZSBjYXJlZnVsIGFzIG1hbnkgb2YgdGhlc2UgdHdlYWtzIHdpbGwgaGVhdmlseSBtb2RpZnkgeW91ciBzeXN0ZW0uCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8TGluZUJyZWFrLz5SZWNvbW1lbmRlZCBzZWxlY3Rpb25zIGFyZSBmb3Igbm9ybWFsIHVzZXJzIGFuZCBpZiB5b3UgYXJlIHVuc3VyZSBkbyBOT1QgY2hlY2sgYW55dGhpbmcgZWxzZSEKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9UZXh0QmxvY2s+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9TdGFja1BhbmVsPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9Cb3JkZXI+CiAgICAgICAgICAgICAgICAgICAgICAgIDwvR3JpZD4KICAgICAgICAgICAgICAgICAgICA8L1Njcm9sbFZpZXdlcj4KICAgICAgICAgICAgICAgICAgICA8Qm9yZGVyIEdyaWQuUm93PSIxIiBCYWNrZ3JvdW5kPSJ7RHluYW1pY1Jlc291cmNlIE1haW5CYWNrZ3JvdW5kQ29sb3J9IiBCb3JkZXJCcnVzaD0ie0R5bmFtaWNSZXNvdXJjZSBCb3JkZXJDb2xvcn0iIEJvcmRlclRoaWNrbmVzcz0iMSIgQ29ybmVyUmFkaXVzPSI1IiBIb3Jpem9udGFsQWxpZ25tZW50PSJTdHJldGNoIiBQYWRkaW5nPSIxMCI+CiAgICAgICAgICAgICAgICAgICAgICAgIDxXcmFwUGFuZWwgT3JpZW50YXRpb249Ikhvcml6b250YWwiIEhvcml6b250YWxBbGlnbm1lbnQ9IkxlZnQiIFZlcnRpY2FsQWxpZ25tZW50PSJDZW50ZXIiIEdyaWQuQ29sdW1uPSIwIj4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxCdXR0b24gTmFtZT0iV1BGVHdlYWtzYnV0dG9uIiBDb250ZW50PSLov5DooYzkvJjljJYiIE1hcmdpbj0iNSIgV2lkdGg9IntEeW5hbWljUmVzb3VyY2UgQnV0dG9uV2lkdGh9IiBIZWlnaHQ9IntEeW5hbWljUmVzb3VyY2UgQnV0dG9uSGVpZ2h0fSIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPEJ1dHRvbiBOYW1lPSJXUEZVbmRvYWxsIiBDb250ZW50PSLmkqTplIDkvJjljJYiIE1hcmdpbj0iNSIgV2lkdGg9IntEeW5hbWljUmVzb3VyY2UgQnV0dG9uV2lkdGh9IiBIZWlnaHQ9IntEeW5hbWljUmVzb3VyY2UgQnV0dG9uSGVpZ2h0fSIvPgogICAgICAgICAgICAgICAgICAgICAgICA8L1dyYXBQYW5lbD4KICAgICAgICAgICAgICAgICAgICA8L0JvcmRlcj4KICAgICAgICAgICAgICAgIDwvR3JpZD4KICAgICAgICAgICAgPC9UYWJJdGVtPgogICAgICAgICAgICA8VGFiSXRlbSBIZWFkZXI9IuWKn+iDvemFjee9riIgVmlzaWJpbGl0eT0iQ29sbGFwc2VkIiBOYW1lPSJXUEZUYWIzIj4KICAgICAgICAgICAgICAgIDxTY3JvbGxWaWV3ZXIgVmVydGljYWxTY3JvbGxCYXJWaXNpYmlsaXR5PSJBdXRvIiBIb3Jpem9udGFsU2Nyb2xsQmFyVmlzaWJpbGl0eT0iQXV0byIgTWFyZ2luPSJ7RHluYW1pY1Jlc291cmNlIFRhYkNvbnRlbnRNYXJnaW59Ij4KICAgICAgICAgICAgICAgICAgICA8R3JpZCBOYW1lPSJmZWF0dXJlc3BhbmVsIiBHcmlkLlJvdz0iMSIgQmFja2dyb3VuZD0iVHJhbnNwYXJlbnQiPgogICAgICAgICAgICAgICAgICAgIDwvR3JpZD4KICAgICAgICAgICAgICAgIDwvU2Nyb2xsVmlld2VyPgogICAgICAgICAgICA8L1RhYkl0ZW0+CiAgICAgICAgICAgIDxUYWJJdGVtIEhlYWRlcj0iV2luZG93cyDmm7TmlrAiIFZpc2liaWxpdHk9IkNvbGxhcHNlZCIgTmFtZT0iV1BGVGFiNCI+CiAgICAgICAgICAgICAgICA8U2Nyb2xsVmlld2VyIFZlcnRpY2FsU2Nyb2xsQmFyVmlzaWJpbGl0eT0iQXV0byIgSG9yaXpvbnRhbFNjcm9sbEJhclZpc2liaWxpdHk9IkRpc2FibGVkIiBNYXJnaW49IntEeW5hbWljUmVzb3VyY2UgVGFiQ29udGVudE1hcmdpbn0iPgogICAgICAgICAgICAgICAgICAgIDxHcmlkIEJhY2tncm91bmQ9IlRyYW5zcGFyZW50IiBNYXhXaWR0aD0iMTI1MCIgSG9yaXpvbnRhbEFsaWdubWVudD0iQ2VudGVyIj4KICAgICAgICAgICAgICAgICAgICAgICAgPEdyaWQuUm93RGVmaW5pdGlvbnM+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8Um93RGVmaW5pdGlvbiBIZWlnaHQ9IkF1dG8iLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxSb3dEZWZpbml0aW9uIEhlaWdodD0iQXV0byIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPFJvd0RlZmluaXRpb24gSGVpZ2h0PSJBdXRvIi8+CiAgICAgICAgICAgICAgICAgICAgICAgIDwvR3JpZC5Sb3dEZWZpbml0aW9ucz4KCiAgICAgICAgICAgICAgICAgICAgICAgIDxTdGFja1BhbmVsIEdyaWQuUm93PSIwIiBNYXJnaW49IjEwLDEwLDEwLDE0Ij4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxUZXh0QmxvY2sgVGV4dD0iV2luZG93cyBVcGRhdGUgUHJvZmlsZXMiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEZvbnRTaXplPSIyNCIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgRm9udFdlaWdodD0iQm9sZCIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgRm9yZWdyb3VuZD0ie0R5bmFtaWNSZXNvdXJjZSBNYWluRm9yZWdyb3VuZENvbG9yfSIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPFRleHRCbG9jayBUZXh0PSJDaG9vc2UgaG93IFdpbmRvd3MgcmVjZWl2ZXMgdXBkYXRlcy4gRWFjaCBwcm9maWxlIHJlcGxhY2VzIHRoZSBXaW5kb3dzIFVwZGF0ZSBzZXR0aW5ncyBtYW5hZ2VkIGJ5IFdpblV0aWwuIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBNYXJnaW49IjAsNiwwLDAiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEZvbnRTaXplPSIxMyIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgVGV4dFdyYXBwaW5nPSJXcmFwIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBGb3JlZ3JvdW5kPSJ7RHluYW1pY1Jlc291cmNlIE1haW5Gb3JlZ3JvdW5kQ29sb3J9Ii8+CiAgICAgICAgICAgICAgICAgICAgICAgIDwvU3RhY2tQYW5lbD4KCiAgICAgICAgICAgICAgICAgICAgICAgIDxVbmlmb3JtR3JpZCBHcmlkLlJvdz0iMSIgQ29sdW1ucz0iMyI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8Qm9yZGVyIFN0eWxlPSJ7U3RhdGljUmVzb3VyY2UgQm9yZGVyU3R5bGV9IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBCb3JkZXJCcnVzaD0ie0R5bmFtaWNSZXNvdXJjZSBQcm9ncmVzc0JhckZvcmVncm91bmRDb2xvcn0iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEJvcmRlclRoaWNrbmVzcz0iMiIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgUGFkZGluZz0iMTYiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIE1pbkhlaWdodD0iMzAwIj4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8R3JpZD4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPEdyaWQuUm93RGVmaW5pdGlvbnM+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8Um93RGVmaW5pdGlvbiBIZWlnaHQ9IkF1dG8iLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxSb3dEZWZpbml0aW9uIEhlaWdodD0iKiIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPFJvd0RlZmluaXRpb24gSGVpZ2h0PSJBdXRvIi8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvR3JpZC5Sb3dEZWZpbml0aW9ucz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPFN0YWNrUGFuZWwgR3JpZC5Sb3c9IjAiIE1hcmdpbj0iMCwwLDAsMTQiPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPFRleHRCbG9jayBUZXh0PSJSZWNvbW1lbmRlZCIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgRm9udFNpemU9IjIwIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBGb250V2VpZ2h0PSJCb2xkIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBGb3JlZ3JvdW5kPSJ7RHluYW1pY1Jlc291cmNlIE1haW5Gb3JlZ3JvdW5kQ29sb3J9Ii8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8VGV4dEJsb2NrIFRleHQ9IkJhbGFuY2VkIHNlY3VyaXR5IGFuZCBzdGFiaWxpdHkiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIE1hcmdpbj0iMCw0LDAsMCIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgRm9udFNpemU9IjEzIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBGb3JlZ3JvdW5kPSJ7RHluYW1pY1Jlc291cmNlIE1haW5Gb3JlZ3JvdW5kQ29sb3J9Ii8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvU3RhY2tQYW5lbD4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPFN0YWNrUGFuZWwgR3JpZC5Sb3c9IjEiPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPFRleHRCbG9jayBUZXh0PSItIERlZmVycyBmZWF0dXJlIHVwZGF0ZXMgZm9yIDM2NSBkYXlzIiBUZXh0V3JhcHBpbmc9IldyYXAiIE1hcmdpbj0iMCwwLDAsNyIgRm9yZWdyb3VuZD0ie0R5bmFtaWNSZXNvdXJjZSBNYWluRm9yZWdyb3VuZENvbG9yfSIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPFRleHRCbG9jayBUZXh0PSItIERlZmVycyBxdWFsaXR5IHVwZGF0ZXMgZm9yIDQgZGF5cyIgVGV4dFdyYXBwaW5nPSJXcmFwIiBNYXJnaW49IjAsMCwwLDciIEZvcmVncm91bmQ9IntEeW5hbWljUmVzb3VyY2UgTWFpbkZvcmVncm91bmRDb2xvcn0iLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxUZXh0QmxvY2sgVGV4dD0iLSBFeGNsdWRlcyBkcml2ZXJzIGZyb20gcXVhbGl0eSB1cGRhdGVzIiBUZXh0V3JhcHBpbmc9IldyYXAiIE1hcmdpbj0iMCwwLDAsNyIgRm9yZWdyb3VuZD0ie0R5bmFtaWNSZXNvdXJjZSBNYWluRm9yZWdyb3VuZENvbG9yfSIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPFRleHRCbG9jayBUZXh0PSItIFByZXZlbnRzIGF1dG9tYXRpYyByZXN0YXJ0cyB3aGlsZSBhIHVzZXIgaXMgc2lnbmVkIGluIiBUZXh0V3JhcHBpbmc9IldyYXAiIE1hcmdpbj0iMCwwLDAsMTIiIEZvcmVncm91bmQ9IntEeW5hbWljUmVzb3VyY2UgTWFpbkZvcmVncm91bmRDb2xvcn0iLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxUZXh0QmxvY2sgVGV4dD0iQXZhaWxhYmxlIG9uIFdpbmRvd3MgUHJvLCBFbnRlcnByaXNlLCBhbmQgRWR1Y2F0aW9uIGVkaXRpb25zLiIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgRm9udFNpemU9IjExIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBGb250U3R5bGU9Ikl0YWxpYyIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgVGV4dFdyYXBwaW5nPSJXcmFwIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBGb3JlZ3JvdW5kPSJ7RHluYW1pY1Jlc291cmNlIE1haW5Gb3JlZ3JvdW5kQ29sb3J9Ii8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvU3RhY2tQYW5lbD4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPEJ1dHRvbiBOYW1lPSJXUEZVcGRhdGVzc2VjdXJpdHkiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgR3JpZC5Sb3c9IjIiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgQ29udGVudD0i5bqU55So5o6o6I2QIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEZvbnRTaXplPSJ7RHluYW1pY1Jlc291cmNlIENvbmZpZ1RhYkJ1dHRvbkZvbnRTaXplfSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBNYXJnaW49IjAsMTYsMCwwIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIFBhZGRpbmc9IjEwIi8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9HcmlkPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9Cb3JkZXI+CgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPEJvcmRlciBTdHlsZT0ie1N0YXRpY1Jlc291cmNlIEJvcmRlclN0eWxlfSIgUGFkZGluZz0iMTYiIE1pbkhlaWdodD0iMzAwIj4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8R3JpZD4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPEdyaWQuUm93RGVmaW5pdGlvbnM+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8Um93RGVmaW5pdGlvbiBIZWlnaHQ9IkF1dG8iLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxSb3dEZWZpbml0aW9uIEhlaWdodD0iKiIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPFJvd0RlZmluaXRpb24gSGVpZ2h0PSJBdXRvIi8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvR3JpZC5Sb3dEZWZpbml0aW9ucz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPFN0YWNrUGFuZWwgR3JpZC5Sb3c9IjAiIE1hcmdpbj0iMCwwLDAsMTQiPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPFRleHRCbG9jayBUZXh0PSJXaW5kb3dzIERlZmF1bHQiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEZvbnRTaXplPSIyMCIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgRm9udFdlaWdodD0iQm9sZCIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgRm9yZWdyb3VuZD0ie0R5bmFtaWNSZXNvdXJjZSBNYWluRm9yZWdyb3VuZENvbG9yfSIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPFRleHRCbG9jayBUZXh0PSJSZXR1cm4gY29udHJvbCB0byBXaW5kb3dzIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBNYXJnaW49IjAsNCwwLDAiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEZvbnRTaXplPSIxMyIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgRm9yZWdyb3VuZD0ie0R5bmFtaWNSZXNvdXJjZSBNYWluRm9yZWdyb3VuZENvbG9yfSIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L1N0YWNrUGFuZWw+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxTdGFja1BhbmVsIEdyaWQuUm93PSIxIj4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxUZXh0QmxvY2sgVGV4dD0iLSBSZW1vdmVzIFdpbmRvd3MgVXBkYXRlIHBvbGljaWVzIGFwcGxpZWQgYnkgV2luVXRpbCIgVGV4dFdyYXBwaW5nPSJXcmFwIiBNYXJnaW49IjAsMCwwLDciIEZvcmVncm91bmQ9IntEeW5hbWljUmVzb3VyY2UgTWFpbkZvcmVncm91bmRDb2xvcn0iLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxUZXh0QmxvY2sgVGV4dD0iLSBSZXN0b3JlcyB1cGRhdGUgc2VydmljZSBzdGFydHVwIHNldHRpbmdzIiBUZXh0V3JhcHBpbmc9IldyYXAiIE1hcmdpbj0iMCwwLDAsNyIgRm9yZWdyb3VuZD0ie0R5bmFtaWNSZXNvdXJjZSBNYWluRm9yZWdyb3VuZENvbG9yfSIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPFRleHRCbG9jayBUZXh0PSItIFJlLWVuYWJsZXMgdXBkYXRlIHNjaGVkdWxlZCB0YXNrcyIgVGV4dFdyYXBwaW5nPSJXcmFwIiBNYXJnaW49IjAsMCwwLDEyIiBGb3JlZ3JvdW5kPSJ7RHluYW1pY1Jlc291cmNlIE1haW5Gb3JlZ3JvdW5kQ29sb3J9Ii8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8VGV4dEJsb2NrIFRleHQ9IlVzZSB0aGlzIHRvIHVuZG8gdGhlIFJlY29tbWVuZGVkIG9yIERpc2FibGUgcHJvZmlsZS4iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEZvbnRTaXplPSIxMSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgRm9udFN0eWxlPSJJdGFsaWMiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIFRleHRXcmFwcGluZz0iV3JhcCIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgRm9yZWdyb3VuZD0ie0R5bmFtaWNSZXNvdXJjZSBNYWluRm9yZWdyb3VuZENvbG9yfSIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L1N0YWNrUGFuZWw+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxCdXR0b24gTmFtZT0iV1BGVXBkYXRlc2RlZmF1bHQiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgR3JpZC5Sb3c9IjIiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgQ29udGVudD0i5oGi5aSN6buY6K6kIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEZvbnRTaXplPSJ7RHluYW1pY1Jlc291cmNlIENvbmZpZ1RhYkJ1dHRvbkZvbnRTaXplfSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBNYXJnaW49IjAsMTYsMCwwIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIFBhZGRpbmc9IjEwIi8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9HcmlkPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9Cb3JkZXI+CgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPEJvcmRlciBTdHlsZT0ie1N0YXRpY1Jlc291cmNlIEJvcmRlclN0eWxlfSIgUGFkZGluZz0iMTYiIE1pbkhlaWdodD0iMzAwIj4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8R3JpZD4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPEdyaWQuUm93RGVmaW5pdGlvbnM+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8Um93RGVmaW5pdGlvbiBIZWlnaHQ9IkF1dG8iLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxSb3dEZWZpbml0aW9uIEhlaWdodD0iKiIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPFJvd0RlZmluaXRpb24gSGVpZ2h0PSJBdXRvIi8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvR3JpZC5Sb3dEZWZpbml0aW9ucz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPFN0YWNrUGFuZWwgR3JpZC5Sb3c9IjAiIE1hcmdpbj0iMCwwLDAsMTQiPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPFRleHRCbG9jayBUZXh0PSJEaXNhYmxlIFVwZGF0ZXMiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEZvbnRTaXplPSIyMCIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgRm9udFdlaWdodD0iQm9sZCIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgRm9yZWdyb3VuZD0iUmVkIi8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8VGV4dEJsb2NrIFRleHQ9IkFkdmFuY2VkIHVzZSBvbmx5IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBNYXJnaW49IjAsNCwwLDAiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEZvbnRTaXplPSIxMyIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgRm9udFdlaWdodD0iU2VtaUJvbGQiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEZvcmVncm91bmQ9IlJlZCIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L1N0YWNrUGFuZWw+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxTdGFja1BhbmVsIEdyaWQuUm93PSIxIj4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxUZXh0QmxvY2sgVGV4dD0iLSBEaXNhYmxlcyBhdXRvbWF0aWMgdXBkYXRlIHBvbGljeSIgVGV4dFdyYXBwaW5nPSJXcmFwIiBNYXJnaW49IjAsMCwwLDciIEZvcmVncm91bmQ9IntEeW5hbWljUmVzb3VyY2UgTWFpbkZvcmVncm91bmRDb2xvcn0iLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxUZXh0QmxvY2sgVGV4dD0iLSBTdG9wcyB1cGRhdGUgc2VydmljZXMgYW5kIHNjaGVkdWxlZCB0YXNrcyIgVGV4dFdyYXBwaW5nPSJXcmFwIiBNYXJnaW49IjAsMCwwLDciIEZvcmVncm91bmQ9IntEeW5hbWljUmVzb3VyY2UgTWFpbkZvcmVncm91bmRDb2xvcn0iLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxUZXh0QmxvY2sgVGV4dD0iLSBDbGVhcnMgZG93bmxvYWRlZCB1cGRhdGUgZmlsZXMiIFRleHRXcmFwcGluZz0iV3JhcCIgTWFyZ2luPSIwLDAsMCwxMiIgRm9yZWdyb3VuZD0ie0R5bmFtaWNSZXNvdXJjZSBNYWluRm9yZWdyb3VuZENvbG9yfSIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPFRleHRCbG9jayBUZXh0PSJTZWN1cml0eSB1cGRhdGVzIHdpbGwgbm90IGJlIGluc3RhbGxlZCB3aGlsZSB0aGlzIHByb2ZpbGUgaXMgYWN0aXZlLiIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgRm9udFNpemU9IjExIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBGb250U3R5bGU9Ikl0YWxpYyIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgVGV4dFdyYXBwaW5nPSJXcmFwIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBGb3JlZ3JvdW5kPSJSZWQiLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9TdGFja1BhbmVsPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8QnV0dG9uIE5hbWU9IldQRlVwZGF0ZXNkaXNhYmxlIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEdyaWQuUm93PSIyIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIENvbnRlbnQ9IuemgeeUqOabtOaWsCIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBGb250U2l6ZT0ie0R5bmFtaWNSZXNvdXJjZSBDb25maWdUYWJCdXR0b25Gb250U2l6ZX0iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgRm9yZWdyb3VuZD0iUmVkIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIE1hcmdpbj0iMCwxNiwwLDAiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgUGFkZGluZz0iMTAiLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L0dyaWQ+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L0JvcmRlcj4KICAgICAgICAgICAgICAgICAgICAgICAgPC9Vbmlmb3JtR3JpZD4KCiAgICAgICAgICAgICAgICAgICAgICAgIDxCb3JkZXIgR3JpZC5Sb3c9IjIiIFN0eWxlPSJ7U3RhdGljUmVzb3VyY2UgQm9yZGVyU3R5bGV9IiBNYXJnaW49IjgsMTQsOCw4IiBQYWRkaW5nPSIxMiI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8VGV4dEJsb2NrIFRleHQ9IkNoYW5nZXMgYXBwbHkgc3lzdGVtLXdpZGUuIFJlc3RhcnQgV2luZG93cyBhZnRlciBzd2l0Y2hpbmcgcHJvZmlsZXMuIFVzZSBSZXN0b3JlIERlZmF1bHRzIHRvIHVuZG8gV2luVXRpbCB1cGRhdGUgcG9saWNpZXMuIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBUZXh0V3JhcHBpbmc9IldyYXAiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEhvcml6b250YWxBbGlnbm1lbnQ9IkNlbnRlciIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgRm9yZWdyb3VuZD0ie0R5bmFtaWNSZXNvdXJjZSBNYWluRm9yZWdyb3VuZENvbG9yfSIvPgogICAgICAgICAgICAgICAgICAgICAgICA8L0JvcmRlcj4KICAgICAgICAgICAgICAgICAgICA8L0dyaWQ+CiAgICAgICAgICAgICAgICA8L1Njcm9sbFZpZXdlcj4KICAgICAgICAgICAgPC9UYWJJdGVtPgogICAgICAgICAgICA8VGFiSXRlbSBIZWFkZXI9IldpbjExIElTTyIgVmlzaWJpbGl0eT0iQ29sbGFwc2VkIiBOYW1lPSJXUEZUYWI1Ij4KICAgICAgICAgICAgICAgIDxHcmlkIE5hbWU9IldpbjExSVNPUGFuZWwiIE1hcmdpbj0ie0R5bmFtaWNSZXNvdXJjZSBUYWJDb250ZW50TWFyZ2lufSIgQmFja2dyb3VuZD0iVHJhbnNwYXJlbnQiPgogICAgICAgICAgICAgICAgICAgIDxHcmlkLlJvd0RlZmluaXRpb25zPgogICAgICAgICAgICAgICAgICAgICAgICA8Um93RGVmaW5pdGlvbiBIZWlnaHQ9IkF1dG8iLz4gIDwhLS0gU3RlcHMgMS00IC0tPgogICAgICAgICAgICAgICAgICAgICAgICA8Um93RGVmaW5pdGlvbiBIZWlnaHQ9IioiLz4gICAgIDwhLS0gTG9nIC8gU3RhdHVzIC0tPgogICAgICAgICAgICAgICAgICAgIDwvR3JpZC5Sb3dEZWZpbml0aW9ucz4KCiAgICAgICAgICAgICAgICAgICAgPCEtLSBTdGVwcyAxLTQgLS0+CiAgICAgICAgICAgICAgICAgICAgPFN0YWNrUGFuZWwgR3JpZC5Sb3c9IjAiPgoKICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwhLS0g4pSA4pSA4pSAIFNURVAgMSA6IFNlbGVjdCBXaW5kb3dzIDExIElTTyDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIAgLS0+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8R3JpZCBOYW1lPSJXUEZXaW4xMUlTT1NlbGVjdFNlY3Rpb24iIE1hcmdpbj0iNSIgSG9yaXpvbnRhbEFsaWdubWVudD0iTGVmdCIgTWluV2lkdGg9IntEeW5hbWljUmVzb3VyY2UgQnV0dG9uV2lkdGh9Ij4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8R3JpZC5Db2x1bW5EZWZpbml0aW9ucz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPENvbHVtbkRlZmluaXRpb24gV2lkdGg9IioiLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPENvbHVtbkRlZmluaXRpb24gV2lkdGg9IioiLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L0dyaWQuQ29sdW1uRGVmaW5pdGlvbnM+CgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwhLS0gTGVmdDogRmlsZSBTZWxlY3RvciAtLT4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8U3RhY2tQYW5lbCBHcmlkLkNvbHVtbj0iMCIgTWFyZ2luPSI1LDUsMTUsNSI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxUZXh0QmxvY2sgRm9udFNpemU9IntEeW5hbWljUmVzb3VyY2UgRm9udFNpemV9IiBGb250V2VpZ2h0PSJCb2xkIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEZvcmVncm91bmQ9IntEeW5hbWljUmVzb3VyY2UgTWFpbkZvcmVncm91bmRDb2xvcn0iIE1hcmdpbj0iMCwwLDAsOCI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBTdGVwIDEgLSBTZWxlY3QgV2luZG93cyAxMSBJU08KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9UZXh0QmxvY2s+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxUZXh0QmxvY2sgRm9udFNpemU9IntEeW5hbWljUmVzb3VyY2UgRm9udFNpemV9IiBGb3JlZ3JvdW5kPSJ7RHluYW1pY1Jlc291cmNlIE1haW5Gb3JlZ3JvdW5kQ29sb3J9IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIFRleHRXcmFwcGluZz0iV3JhcCIgTWFyZ2luPSIwLDAsMCw2Ij4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEJyb3dzZSB0byB5b3VyIGxvY2FsbHkgc2F2ZWQgV2luZG93cyAxMSBJU08gZmlsZS4gT25seSBvZmZpY2lhbCBJU09zCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBkb3dubG9hZGVkIGZyb20gTWljcm9zb2Z0IGFyZSBzdXBwb3J0ZWQuCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvVGV4dEJsb2NrPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8VGV4dEJsb2NrIEZvbnRTaXplPSJ7RHluYW1pY1Jlc291cmNlIEZvbnRTaXplfSIgRm9yZWdyb3VuZD0ie0R5bmFtaWNSZXNvdXJjZSBNYWluRm9yZWdyb3VuZENvbG9yfSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBUZXh0V3JhcHBpbmc9IldyYXAiIE1hcmdpbj0iMCwwLDAsMTIiIEZvbnRTdHlsZT0iSXRhbGljIj4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxSdW4gRm9udFdlaWdodD0iQm9sZCI+Tk9URTo8L1J1bj4gVGhpcyBpcyBvbmx5IG1lYW50IGZvciBGcmVzaCBhbmQgTmV3IFdpbmRvd3MgaW5zdGFsbHMuCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvVGV4dEJsb2NrPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8R3JpZD4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxHcmlkLkNvbHVtbkRlZmluaXRpb25zPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxDb2x1bW5EZWZpbml0aW9uIFdpZHRoPSIqIi8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPENvbHVtbkRlZmluaXRpb24gV2lkdGg9IkF1dG8iLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvR3JpZC5Db2x1bW5EZWZpbml0aW9ucz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxUZXh0Qm94IEdyaWQuQ29sdW1uPSIwIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgTmFtZT0iV1BGV2luMTFJU09QYXRoIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgSXNSZWFkT25seT0iVHJ1ZSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIFZlcnRpY2FsQWxpZ25tZW50PSJDZW50ZXIiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBQYWRkaW5nPSI2LDQiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBNYXJnaW49IjAsMCw2LDAiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBUZXh0PSJObyBJU08gc2VsZWN0ZWQuLi4iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBGb3JlZ3JvdW5kPSJ7RHluYW1pY1Jlc291cmNlIE1haW5Gb3JlZ3JvdW5kQ29sb3J9IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgQmFja2dyb3VuZD0ie0R5bmFtaWNSZXNvdXJjZSBNYWluQmFja2dyb3VuZENvbG9yfSIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPEJ1dHRvbiBHcmlkLkNvbHVtbj0iMSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgTmFtZT0iV1BGV2luMTFJU09Ccm93c2VCdXR0b24iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIENvbnRlbnQ9Iua1j+iniCIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgV2lkdGg9IkF1dG8iIFBhZGRpbmc9IjEyLDAiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEhlaWdodD0ie0R5bmFtaWNSZXNvdXJjZSBCdXR0b25IZWlnaHR9Ii8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvR3JpZD4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPFRleHRCbG9jayBOYW1lPSJXUEZXaW4xMUlTT0ZpbGVJbmZvIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEZvbnRTaXplPSJ7RHluYW1pY1Jlc291cmNlIEZvbnRTaXplfSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBGb3JlZ3JvdW5kPSJ7RHluYW1pY1Jlc291cmNlIE1haW5Gb3JlZ3JvdW5kQ29sb3J9IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIE1hcmdpbj0iMCw4LDAsMCIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBUZXh0V3JhcHBpbmc9IldyYXAiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgVmlzaWJpbGl0eT0iQ29sbGFwc2VkIi8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9TdGFja1BhbmVsPgoKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8IS0tIFJpZ2h0OiBEb3dubG9hZCBndWlkYW5jZSAtLT4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8Qm9yZGVyIEdyaWQuQ29sdW1uPSIxIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgQmFja2dyb3VuZD0ie0R5bmFtaWNSZXNvdXJjZSBNYWluQmFja2dyb3VuZENvbG9yfSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEJvcmRlckJydXNoPSJ7RHluYW1pY1Jlc291cmNlIEJvcmRlckNvbG9yfSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEJvcmRlclRoaWNrbmVzcz0iMSIgQ29ybmVyUmFkaXVzPSI1IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgTWFyZ2luPSI1IiBQYWRkaW5nPSIxNSI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxTdGFja1BhbmVsPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPFRleHRCbG9jayBGb250U2l6ZT0ie0R5bmFtaWNSZXNvdXJjZSBGb250U2l6ZX0iIEZvbnRXZWlnaHQ9IkJvbGQiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEZvcmVncm91bmQ9Ik9yYW5nZVJlZCIgTWFyZ2luPSIwLDAsMCwxMCI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgISFXQVJOSU5HISEgWW91IG11c3QgdXNlIGFuIG9mZmljaWFsIE1pY3Jvc29mdCBJU08KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvVGV4dEJsb2NrPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPFRleHRCbG9jayBGb250U2l6ZT0ie0R5bmFtaWNSZXNvdXJjZSBGb250U2l6ZX0iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEZvcmVncm91bmQ9IntEeW5hbWljUmVzb3VyY2UgTWFpbkZvcmVncm91bmRDb2xvcn0iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIFRleHRXcmFwcGluZz0iV3JhcCIgTWFyZ2luPSIwLDAsMCw4Ij4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBEb3dubG9hZCB0aGUgV2luZG93cyAxMSBJU08gZGlyZWN0bHkgZnJvbSBNaWNyb3NvZnQuY29tLgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIFRoaXJkLXBhcnR5LCBwcmUtbW9kaWZpZWQsIG9yIHVub2ZmaWNpYWwgaW1hZ2VzIGFyZSBub3Qgc3VwcG9ydGVkCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgYW5kIG1heSBwcm9kdWNlIGJyb2tlbiByZXN1bHRzLgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9UZXh0QmxvY2s+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8VGV4dEJsb2NrIEZvbnRTaXplPSJ7RHluYW1pY1Jlc291cmNlIEZvbnRTaXplfSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgRm9yZWdyb3VuZD0ie0R5bmFtaWNSZXNvdXJjZSBNYWluRm9yZWdyb3VuZENvbG9yfSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgVGV4dFdyYXBwaW5nPSJXcmFwIiBNYXJnaW49IjAsMCwwLDYiPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIE9uIHRoZSBNaWNyb3NvZnQgZG93bmxvYWQgcGFnZSwgY2hvb3NlOgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9UZXh0QmxvY2s+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8VGV4dEJsb2NrIEZvbnRTaXplPSJ7RHluYW1pY1Jlc291cmNlIEZvbnRTaXplfSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgRm9yZWdyb3VuZD0ie0R5bmFtaWNSZXNvdXJjZSBNYWluRm9yZWdyb3VuZENvbG9yfSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgVGV4dFdyYXBwaW5nPSJXcmFwIiBNYXJnaW49IjEyLDAsMCwxMiI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgLSBFZGl0aW9uICA6IFdpbmRvd3MgMTEKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8TGluZUJyZWFrLz4tIExhbmd1YWdlIDogeW91ciBwcmVmZXJyZWQgbGFuZ3VhZ2UKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8TGluZUJyZWFrLz4tIEFyY2hpdGVjdHVyZSA6IDY0LWJpdCAoeDY0KQogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9UZXh0QmxvY2s+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8QnV0dG9uIE5hbWU9IldQRldpbjExSVNPRG93bmxvYWRMaW5rIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBDb250ZW50PSLmiZPlvIDlvq7ova/kuIvovb3pobXpnaIiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEhvcml6b250YWxBbGlnbm1lbnQ9IkxlZnQiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIFdpZHRoPSJBdXRvIiBQYWRkaW5nPSIxMiwwIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBIZWlnaHQ9IntEeW5hbWljUmVzb3VyY2UgQnV0dG9uSGVpZ2h0fSIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L1N0YWNrUGFuZWw+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9Cb3JkZXI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L0dyaWQ+CgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPCEtLSDilIDilIDilIAgU1RFUCAyIDogTW91bnQgJiBWZXJpZnkgSVNPIOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgCAtLT4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxHcmlkIE5hbWU9IldQRldpbjExSVNPTW91bnRTZWN0aW9uIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgTWFyZ2luPSI1IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgVmlzaWJpbGl0eT0iQ29sbGFwc2VkIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgSG9yaXpvbnRhbEFsaWdubWVudD0iTGVmdCIgTWluV2lkdGg9IntEeW5hbWljUmVzb3VyY2UgQnV0dG9uV2lkdGh9Ij4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8R3JpZC5Db2x1bW5EZWZpbml0aW9ucz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPENvbHVtbkRlZmluaXRpb24gV2lkdGg9IkF1dG8iLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPENvbHVtbkRlZmluaXRpb24gV2lkdGg9IioiLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L0dyaWQuQ29sdW1uRGVmaW5pdGlvbnM+CgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxTdGFja1BhbmVsIEdyaWQuQ29sdW1uPSIwIiBNYXJnaW49IjAsMCwyMCwwIiBWZXJ0aWNhbEFsaWdubWVudD0iVG9wIj4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPFRleHRCbG9jayBGb250U2l6ZT0ie0R5bmFtaWNSZXNvdXJjZSBGb250U2l6ZX0iIEZvbnRXZWlnaHQ9IkJvbGQiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgRm9yZWdyb3VuZD0ie0R5bmFtaWNSZXNvdXJjZSBNYWluRm9yZWdyb3VuZENvbG9yfSIgTWFyZ2luPSIwLDAsMCw4Ij4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIFN0ZXAgMiAtIE1vdW50ICZhbXA7IFZlcmlmeSBJU08KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9UZXh0QmxvY2s+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxUZXh0QmxvY2sgRm9udFNpemU9IntEeW5hbWljUmVzb3VyY2UgRm9udFNpemV9IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEZvcmVncm91bmQ9IntEeW5hbWljUmVzb3VyY2UgTWFpbkZvcmVncm91bmRDb2xvcn0iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgVGV4dFdyYXBwaW5nPSJXcmFwIiBNYXJnaW49IjAsMCwwLDEyIiBNYXhXaWR0aD0iMzIwIj4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIE1vdW50IHRoZSBJU08gYW5kIGNvbmZpcm0gaXQgY29udGFpbnMgYSB2YWxpZCBXaW5kb3dzIDExCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBpbnN0YWxsLndpbSBiZWZvcmUgYW55IG1vZGlmaWNhdGlvbnMgYXJlIG1hZGUuCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvVGV4dEJsb2NrPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8QnV0dG9uIE5hbWU9IldQRldpbjExSVNPTW91bnRCdXR0b24iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgQ29udGVudD0i5oyC6L295bm26aqM6K+BIElTTyIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBIb3Jpem9udGFsQWxpZ25tZW50PSJMZWZ0IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIFdpZHRoPSJBdXRvIiBQYWRkaW5nPSIxMiwwIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEhlaWdodD0ie0R5bmFtaWNSZXNvdXJjZSBCdXR0b25IZWlnaHR9Ii8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxDaGVja0JveCBOYW1lPSJXUEZXaW4xMUlTT0luamVjdERyaXZlcnMiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBDb250ZW50PSLms6jlhaXlvZPliY3ns7vnu5/pqbHliqgiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBGb250U2l6ZT0ie0R5bmFtaWNSZXNvdXJjZSBGb250U2l6ZX0iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBGb3JlZ3JvdW5kPSJ7RHluYW1pY1Jlc291cmNlIE1haW5Gb3JlZ3JvdW5kQ29sb3J9IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgSXNDaGVja2VkPSJGYWxzZSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIE1hcmdpbj0iMCw4LDAsMCIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIFRvb2xUaXA9IuS7juacrOacuuWvvOWHuuaJgOaciempseWKqOW5tuazqOWFpSBpbnN0YWxsLndpbSDlkowgYm9vdC53aW3vvIzmjqjojZDnlKjkuo7mnInkuI3mlK/mjIEgTlZNZSDmiJbnvZHnu5zmjqfliLblmajnmoTns7vnu5/jgIIiLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L1N0YWNrUGFuZWw+CgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwhLS0gVmVyaWZpY2F0aW9uIHJlc3VsdHMgcGFuZWwgLS0+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPEJvcmRlciBHcmlkLkNvbHVtbj0iMSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIE5hbWU9IldQRldpbjExSVNPVmVyaWZ5UmVzdWx0UGFuZWwiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBCYWNrZ3JvdW5kPSJ7RHluYW1pY1Jlc291cmNlIE1haW5CYWNrZ3JvdW5kQ29sb3J9IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgQm9yZGVyQnJ1c2g9IntEeW5hbWljUmVzb3VyY2UgQm9yZGVyQ29sb3J9IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgQm9yZGVyVGhpY2tuZXNzPSIxIiBDb3JuZXJSYWRpdXM9IjUiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBQYWRkaW5nPSIxMiIgTWFyZ2luPSIwLDAsMCwwIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgVmlzaWJpbGl0eT0iQ29sbGFwc2VkIj4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPFN0YWNrUGFuZWw+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8VGV4dEJsb2NrIE5hbWU9IldQRldpbjExSVNPTW91bnREcml2ZUxldHRlciIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgRm9udFNpemU9IntEeW5hbWljUmVzb3VyY2UgRm9udFNpemV9IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBGb3JlZ3JvdW5kPSJ7RHluYW1pY1Jlc291cmNlIE1haW5Gb3JlZ3JvdW5kQ29sb3J9IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBNYXJnaW49IjAsMCwwLDQiLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxUZXh0QmxvY2sgTmFtZT0iV1BGV2luMTFJU09BcmNoTGFiZWwiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEZvbnRTaXplPSJ7RHluYW1pY1Jlc291cmNlIEZvbnRTaXplfSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgRm9yZWdyb3VuZD0ie0R5bmFtaWNSZXNvdXJjZSBNYWluRm9yZWdyb3VuZENvbG9yfSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgTWFyZ2luPSIwLDAsMCw0Ii8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8VGV4dEJsb2NrIEZvbnRTaXplPSJ7RHluYW1pY1Jlc291cmNlIEZvbnRTaXplfSIgRm9udFdlaWdodD0iQm9sZCIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgRm9yZWdyb3VuZD0ie0R5bmFtaWNSZXNvdXJjZSBNYWluRm9yZWdyb3VuZENvbG9yfSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgTWFyZ2luPSIwLDYsMCw0Ij4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBTZWxlY3QgRWRpdGlvbjoKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvVGV4dEJsb2NrPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPENvbWJvQm94IE5hbWU9IldQRldpbjExSVNPRWRpdGlvbkNvbWJvQm94IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEZvbnRTaXplPSJ7RHluYW1pY1Jlc291cmNlIEZvbnRTaXplfSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBGb3JlZ3JvdW5kPSJ7RHluYW1pY1Jlc291cmNlIE1haW5Gb3JlZ3JvdW5kQ29sb3J9IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEJhY2tncm91bmQ9IntEeW5hbWljUmVzb3VyY2UgTWFpbkJhY2tncm91bmRDb2xvcn0iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgSG9yaXpvbnRhbEFsaWdubWVudD0iTGVmdCIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBNYXJnaW49IjAsMCwwLDAiLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9TdGFja1BhbmVsPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvQm9yZGVyPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9HcmlkPgoKICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwhLS0g4pSA4pSA4pSAIFNURVAgMyA6IE1vZGlmeSBpbnN0YWxsLndpbSDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIAgLS0+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8U3RhY2tQYW5lbCBOYW1lPSJXUEZXaW4xMUlTT01vZGlmeVNlY3Rpb24iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBNYXJnaW49IjUiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBWaXNpYmlsaXR5PSJDb2xsYXBzZWQiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBIb3Jpem9udGFsQWxpZ25tZW50PSJMZWZ0IiBNaW5XaWR0aD0ie0R5bmFtaWNSZXNvdXJjZSBCdXR0b25XaWR0aH0iPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxUZXh0QmxvY2sgRm9udFNpemU9IntEeW5hbWljUmVzb3VyY2UgRm9udFNpemV9IiBGb250V2VpZ2h0PSJCb2xkIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgRm9yZWdyb3VuZD0ie0R5bmFtaWNSZXNvdXJjZSBNYWluRm9yZWdyb3VuZENvbG9yfSIgTWFyZ2luPSIwLDAsMCw4Ij4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgU3RlcCAzIC0gTW9kaWZ5IGluc3RhbGwud2ltCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9UZXh0QmxvY2s+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPFRleHRCbG9jayBGb250U2l6ZT0ie0R5bmFtaWNSZXNvdXJjZSBGb250U2l6ZX0iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBGb3JlZ3JvdW5kPSJ7RHluYW1pY1Jlc291cmNlIE1haW5Gb3JlZ3JvdW5kQ29sb3J9IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgVGV4dFdyYXBwaW5nPSJXcmFwIiBNYXJnaW49IjAsMCwwLDEyIj4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgVGhlIElTTyBjb250ZW50cyB3aWxsIGJlIGV4dHJhY3RlZCB0byBhIHRlbXBvcmFyeSB3b3JraW5nIGRpcmVjdG9yeSwKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgaW5zdGFsbC53aW0gd2lsbCBiZSBtb2RpZmllZCAoY29tcG9uZW50cyByZW1vdmVkLCB0d2Vha3MgYXBwbGllZCksCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIGFuZCB0aGUgcmVzdWx0IHdpbGwgYmUgcmVwYWNrYWdlZC4gVGhpcyBwcm9jZXNzIG1heSB0YWtlIHNldmVyYWwgbWludXRlcwogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBkZXBlbmRpbmcgb24geW91ciBoYXJkd2FyZS4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L1RleHRCbG9jaz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8QnV0dG9uIE5hbWU9IldQRldpbjExSVNPTW9kaWZ5QnV0dG9uIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgQ29udGVudD0i6L+Q6KGMIFdpbmRvd3MgSVNPIOS/ruaUueWSjOWIm+W7uuW3peWFtyIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEhvcml6b250YWxBbGlnbm1lbnQ9IkxlZnQiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBXaWR0aD0iQXV0byIgUGFkZGluZz0iMTIsMCIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEhlaWdodD0ie0R5bmFtaWNSZXNvdXJjZSBCdXR0b25IZWlnaHR9Ii8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L1N0YWNrUGFuZWw+CgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPCEtLSDilIDilIDilIAgU1RFUCA0IDogT3V0cHV0IE9wdGlvbnMg4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSAIC0tPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPFN0YWNrUGFuZWwgTmFtZT0iV1BGV2luMTFJU09PdXRwdXRTZWN0aW9uIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgTWFyZ2luPSI1IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgVmlzaWJpbGl0eT0iQ29sbGFwc2VkIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgSG9yaXpvbnRhbEFsaWdubWVudD0iTGVmdCIgTWluV2lkdGg9IntEeW5hbWljUmVzb3VyY2UgQnV0dG9uV2lkdGh9Ij4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8IS0tIEhlYWRlciByb3c6IHRpdGxlICsgQ2xlYW4gJiBSZXNldCBidXR0b24gLS0+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPEdyaWQgTWFyZ2luPSIwLDAsMCwxMiI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxHcmlkLkNvbHVtbkRlZmluaXRpb25zPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPENvbHVtbkRlZmluaXRpb24gV2lkdGg9IioiLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxDb2x1bW5EZWZpbml0aW9uIFdpZHRoPSJBdXRvIi8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvR3JpZC5Db2x1bW5EZWZpbml0aW9ucz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPFRleHRCbG9jayBHcmlkLkNvbHVtbj0iMCIgRm9udFNpemU9IntEeW5hbWljUmVzb3VyY2UgRm9udFNpemV9IiBGb250V2VpZ2h0PSJCb2xkIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEZvcmVncm91bmQ9IntEeW5hbWljUmVzb3VyY2UgTWFpbkZvcmVncm91bmRDb2xvcn0iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgVmVydGljYWxBbGlnbm1lbnQ9IkNlbnRlciI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBTdGVwIDQgLSBPdXRwdXQ6IFdoYXQgd291bGQgeW91IGxpa2UgdG8gZG8gd2l0aCB0aGUgbW9kaWZpZWQgaW1hZ2U/CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvVGV4dEJsb2NrPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8QnV0dG9uIEdyaWQuQ29sdW1uPSIxIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIE5hbWU9IldQRldpbjExSVNPQ2xlYW5SZXNldEJ1dHRvbiIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBDb250ZW50PSLmuIXnkIblubbph43nva4iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgRm9yZWdyb3VuZD0iT3JhbmdlUmVkIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIFdpZHRoPSJBdXRvIiBQYWRkaW5nPSIxMiwwIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEhlaWdodD0ie0R5bmFtaWNSZXNvdXJjZSBCdXR0b25IZWlnaHR9IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIFRvb2xUaXA9IuWIoOmZpOS4tOaXtuW3peS9nOebruW9leW5tumHjee9ruWbnuatpemqpCAxIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIE1hcmdpbj0iMTIsMCwwLDAiLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L0dyaWQ+CgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwhLS0g4pSA4pSAIENob2ljZSBwcm9tcHQgYnV0dG9ucyDilIDilIAgLS0+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPEdyaWQgTWFyZ2luPSIwLDAsMCwxMiI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxHcmlkLkNvbHVtbkRlZmluaXRpb25zPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPENvbHVtbkRlZmluaXRpb24gV2lkdGg9IioiLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxDb2x1bW5EZWZpbml0aW9uIFdpZHRoPSIxNiIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPENvbHVtbkRlZmluaXRpb24gV2lkdGg9IioiLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9HcmlkLkNvbHVtbkRlZmluaXRpb25zPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8QnV0dG9uIEdyaWQuQ29sdW1uPSIwIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIE5hbWU9IldQRldpbjExSVNPQ2hvb3NlSVNPQnV0dG9uIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIENvbnRlbnQ9IuS/neWtmOS4uiBJU08g5paH5Lu2IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEhvcml6b250YWxBbGlnbm1lbnQ9IlN0cmV0Y2giCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgV2lkdGg9IkF1dG8iIFBhZGRpbmc9IjEyLDAiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgSGVpZ2h0PSJ7RHluYW1pY1Jlc291cmNlIEJ1dHRvbkhlaWdodH0iLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPEJ1dHRvbiBHcmlkLkNvbHVtbj0iMiIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBOYW1lPSJXUEZXaW4xMUlTT0Nob29zZVVTQkJ1dHRvbiIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBDb250ZW50PSLnm7TmjqXlhpnlhaUgVVNCIOmpseWKqOWZqO+8iOS8muaTpumZpOaVtOS4quejgeebmO+8iSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBGb3JlZ3JvdW5kPSJPcmFuZ2VSZWQiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgSG9yaXpvbnRhbEFsaWdubWVudD0iU3RyZXRjaCIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBXaWR0aD0iQXV0byIgUGFkZGluZz0iMTIsMCIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBIZWlnaHQ9IntEeW5hbWljUmVzb3VyY2UgQnV0dG9uSGVpZ2h0fSIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvR3JpZD4KCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPCEtLSDilIDilIAgVVNCIHdyaXRlIHN1Yi1wYW5lbCAocmV2ZWFsZWQgb24gVVNCIGNob2ljZSkg4pSA4pSAIC0tPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxCb3JkZXIgTmFtZT0iV1BGV2luMTFJU09PcHRpb25VU0IiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBTdHlsZT0ie1N0YXRpY1Jlc291cmNlIEJvcmRlclN0eWxlfSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIFZpc2liaWxpdHk9IkNvbGxhcHNlZCIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIE1hcmdpbj0iMCw4LDAsMCI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxTdGFja1BhbmVsPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPFRleHRCbG9jayBGb250U2l6ZT0ie0R5bmFtaWNSZXNvdXJjZSBGb250U2l6ZX0iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEZvcmVncm91bmQ9IntEeW5hbWljUmVzb3VyY2UgTWFpbkZvcmVncm91bmRDb2xvcn0iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIFRleHRXcmFwcGluZz0iV3JhcCIgTWFyZ2luPSIwLDAsMCw4Ij4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8UnVuIEZvbnRXZWlnaHQ9IkJvbGQiIEZvcmVncm91bmQ9Ik9yYW5nZVJlZCI+ISEgQWxsIGRhdGEgb24gdGhlIHNlbGVjdGVkIFVTQiBkcml2ZSB3aWxsIGJlIHBlcm1hbmVudGx5IGVyYXNlZCAhITwvUnVuPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxMaW5lQnJlYWsvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIFNlbGVjdCBhIHJlbW92YWJsZSBVU0IgZHJpdmUgYmVsb3csIHRoZW4gY2xpY2sgRXJhc2UgJmFtcDsgV3JpdGUuCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L1RleHRCbG9jaz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwhLS0gVVNCIGRyaXZlIHNlbGVjdG9yIHJvdyAtLT4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxHcmlkIE1hcmdpbj0iMCwwLDAsOCI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPEdyaWQuQ29sdW1uRGVmaW5pdGlvbnM+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxDb2x1bW5EZWZpbml0aW9uIFdpZHRoPSIqIi8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxDb2x1bW5EZWZpbml0aW9uIFdpZHRoPSJBdXRvIi8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9HcmlkLkNvbHVtbkRlZmluaXRpb25zPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxDb21ib0JveCBHcmlkLkNvbHVtbj0iMCIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgTmFtZT0iV1BGV2luMTFJU09VU0JEcml2ZUNvbWJvQm94IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBGb3JlZ3JvdW5kPSJ7RHluYW1pY1Jlc291cmNlIE1haW5Gb3JlZ3JvdW5kQ29sb3J9IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBCYWNrZ3JvdW5kPSJ7RHluYW1pY1Jlc291cmNlIE1haW5CYWNrZ3JvdW5kQ29sb3J9IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBWZXJ0aWNhbEFsaWdubWVudD0iQ2VudGVyIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBNYXJnaW49IjAsMCw2LDAiLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8QnV0dG9uIEdyaWQuQ29sdW1uPSIxIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgTmFtZT0iV1BGV2luMTFJU09SZWZyZXNoVVNCQnV0dG9uIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgQ29udGVudD0i5Yi35pawIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgV2lkdGg9IkF1dG8iIFBhZGRpbmc9IjgsMCIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEhlaWdodD0ie0R5bmFtaWNSZXNvdXJjZSBCdXR0b25IZWlnaHR9Ii8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L0dyaWQ+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8QnV0dG9uIE5hbWU9IldQRldpbjExSVNPV3JpdGVVU0JCdXR0b24iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIENvbnRlbnQ9IuaTpumZpOW5tuWGmeWFpSBVU0IiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEZvcmVncm91bmQ9Ik9yYW5nZVJlZCIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgSG9yaXpvbnRhbEFsaWdubWVudD0iU3RyZXRjaCIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgV2lkdGg9IkF1dG8iIFBhZGRpbmc9IjEyLDAiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEhlaWdodD0ie0R5bmFtaWNSZXNvdXJjZSBCdXR0b25IZWlnaHR9IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBNYXJnaW49IjAsMCwwLDEwIi8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvU3RhY2tQYW5lbD4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L0JvcmRlcj4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvU3RhY2tQYW5lbD4KCiAgICAgICAgICAgICAgICAgICAgPC9TdGFja1BhbmVsPgoKICAgICAgICAgICAgICAgICAgICA8IS0tIFN0YXR1cyBMb2cgKGZpbGxzIHJlbWFpbmluZyBoZWlnaHQpIC0tPgogICAgICAgICAgICAgICAgICAgIDxHcmlkIEdyaWQuUm93PSIxIiBNYXJnaW49IjUiPgogICAgICAgICAgICAgICAgICAgICAgICA8R3JpZC5Sb3dEZWZpbml0aW9ucz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxSb3dEZWZpbml0aW9uIEhlaWdodD0iQXV0byIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPFJvd0RlZmluaXRpb24gSGVpZ2h0PSIqIi8+CiAgICAgICAgICAgICAgICAgICAgICAgIDwvR3JpZC5Sb3dEZWZpbml0aW9ucz4KICAgICAgICAgICAgICAgICAgICAgICAgPFRleHRCbG9jayBHcmlkLlJvdz0iMCIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBGb250U2l6ZT0ie0R5bmFtaWNSZXNvdXJjZSBGb250U2l6ZX0iIEZvbnRXZWlnaHQ9IkJvbGQiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgRm9yZWdyb3VuZD0ie0R5bmFtaWNSZXNvdXJjZSBNYWluRm9yZWdyb3VuZENvbG9yfSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBNYXJnaW49IjAsMCwwLDQiPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgU3RhdHVzIExvZwogICAgICAgICAgICAgICAgICAgICAgICA8L1RleHRCbG9jaz4KICAgICAgICAgICAgICAgICAgICAgICAgPFRleHRCb3ggR3JpZC5Sb3c9IjEiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIE5hbWU9IldQRldpbjExSVNPU3RhdHVzTG9nIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBJc1JlYWRPbmx5PSJUcnVlIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBUZXh0V3JhcHBpbmc9IldyYXAiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIFZlcnRpY2FsU2Nyb2xsQmFyVmlzaWJpbGl0eT0iVmlzaWJsZSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgVmVydGljYWxBbGlnbm1lbnQ9IlN0cmV0Y2giCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIFBhZGRpbmc9IjYiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEJhY2tncm91bmQ9IntEeW5hbWljUmVzb3VyY2UgTWFpbkJhY2tncm91bmRDb2xvcn0iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEZvcmVncm91bmQ9IntEeW5hbWljUmVzb3VyY2UgTWFpbkZvcmVncm91bmRDb2xvcn0iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEJvcmRlckJydXNoPSJ7RHluYW1pY1Jlc291cmNlIEJvcmRlckNvbG9yfSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgQm9yZGVyVGhpY2tuZXNzPSIxIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBUZXh0PSJSZWFkeS4gUGxlYXNlIHNlbGVjdCBhIFdpbmRvd3MgMTEgSVNPIHRvIGJlZ2luLiIvPgogICAgICAgICAgICAgICAgICAgIDwvR3JpZD4KCiAgICAgICAgICAgICAgICA8L0dyaWQ+CiAgICAgICAgICAgIDwvVGFiSXRlbT4KICAgICAgICAgICAgPFRhYkl0ZW0gSGVhZGVyPSJBcHBYIiBWaXNpYmlsaXR5PSJDb2xsYXBzZWQiIE5hbWU9IldQRlRhYjYiPgogICAgICAgICAgICAgICAgPEdyaWQ+CiAgICAgICAgICAgICAgICAgICAgPEdyaWQuUm93RGVmaW5pdGlvbnM+CiAgICAgICAgICAgICAgICAgICAgICAgIDxSb3dEZWZpbml0aW9uIEhlaWdodD0iKiIgLz4KICAgICAgICAgICAgICAgICAgICAgICAgPFJvd0RlZmluaXRpb24gSGVpZ2h0PSJBdXRvIiAvPgogICAgICAgICAgICAgICAgICAgIDwvR3JpZC5Sb3dEZWZpbml0aW9ucz4KCiAgICAgICAgICAgICAgICAgICAgPFNjcm9sbFZpZXdlciBWZXJ0aWNhbFNjcm9sbEJhclZpc2liaWxpdHk9IkF1dG8iIEhvcml6b250YWxTY3JvbGxCYXJWaXNpYmlsaXR5PSJEaXNhYmxlZCIgR3JpZC5Sb3c9IjAiIE1hcmdpbj0ie0R5bmFtaWNSZXNvdXJjZSBUYWJDb250ZW50TWFyZ2lufSI+CiAgICAgICAgICAgICAgICAgICAgICAgIDxHcmlkIEJhY2tncm91bmQ9IlRyYW5zcGFyZW50Ij4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxHcmlkLlJvd0RlZmluaXRpb25zPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxSb3dEZWZpbml0aW9uIEhlaWdodD0iQXV0byIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxSb3dEZWZpbml0aW9uIEhlaWdodD0iKiIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxSb3dEZWZpbml0aW9uIEhlaWdodD0iQXV0byIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9HcmlkLlJvd0RlZmluaXRpb25zPgoKICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxTdGFja1BhbmVsIEJhY2tncm91bmQ9IntEeW5hbWljUmVzb3VyY2UgTWFpbkJhY2tncm91bmRDb2xvcn0iIE9yaWVudGF0aW9uPSJWZXJ0aWNhbCIgR3JpZC5Sb3c9IjAiIEdyaWQuQ29sdW1uPSIwIiBNYXJnaW49IjUiPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxMYWJlbCBDb250ZW50PSLpgInmi6nvvJoiIEZvbnRTaXplPSJ7RHluYW1pY1Jlc291cmNlIEZvbnRTaXplfSIgVmVydGljYWxBbGlnbm1lbnQ9IkNlbnRlciIgTWFyZ2luPSIyIi8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPFN0YWNrUGFuZWwgT3JpZW50YXRpb249Ikhvcml6b250YWwiIEhvcml6b250YWxBbGlnbm1lbnQ9IkxlZnQiIE1hcmdpbj0iMCwyLDAsMCI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxCdXR0b24gTmFtZT0iV1BGRGVmYXVsdEFwcHhTZWxlY3Rpb24iIENvbnRlbnQ9Ium7mOiupCIgTWFyZ2luPSIyIiBXaWR0aD0ie0R5bmFtaWNSZXNvdXJjZSBCdXR0b25XaWR0aH0iIEhlaWdodD0ie0R5bmFtaWNSZXNvdXJjZSBCdXR0b25IZWlnaHR9Ii8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxCdXR0b24gTmFtZT0iV1BGR2V0SW5zdGFsbGVkQXBweCIgQ29udGVudD0i5bey5a6J6KOF5YiX6KGoIiBNYXJnaW49IjIiIFdpZHRoPSJ7RHluYW1pY1Jlc291cmNlIEJ1dHRvbldpZHRofSIgSGVpZ2h0PSJ7RHluYW1pY1Jlc291cmNlIEJ1dHRvbkhlaWdodH0iLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPEJ1dHRvbiBOYW1lPSJXUEZTZWxlY3RBbGxBcHB4IiBDb250ZW50PSLlhajpgIkiIE1hcmdpbj0iMiIgV2lkdGg9IntEeW5hbWljUmVzb3VyY2UgQnV0dG9uV2lkdGh9IiBIZWlnaHQ9IntEeW5hbWljUmVzb3VyY2UgQnV0dG9uSGVpZ2h0fSIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8QnV0dG9uIE5hbWU9IldQRkNsZWFyQXBweFNlbGVjdGlvbiIgQ29udGVudD0i5riF6Zmk6YCJ5oupIiBNYXJnaW49IjIiIFdpZHRoPSJ7RHluYW1pY1Jlc291cmNlIEJ1dHRvbldpZHRofSIgSGVpZ2h0PSJ7RHluYW1pY1Jlc291cmNlIEJ1dHRvbkhlaWdodH0iLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L1N0YWNrUGFuZWw+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L1N0YWNrUGFuZWw+CgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPEdyaWQgTmFtZT0iYXBweHBhbmVsIiBHcmlkLlJvdz0iMSI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L0dyaWQ+CgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPEJvcmRlciBHcmlkLlJvdz0iMiIgU3R5bGU9IntTdGF0aWNSZXNvdXJjZSBCb3JkZXJTdHlsZX0iIE1hcmdpbj0iNSwxNSw1LDUiPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxTdGFja1BhbmVsIEJhY2tncm91bmQ9IntEeW5hbWljUmVzb3VyY2UgTWFpbkJhY2tncm91bmRDb2xvcn0iIE9yaWVudGF0aW9uPSJIb3Jpem9udGFsIiBIb3Jpem9udGFsQWxpZ25tZW50PSJMZWZ0Ij4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPFRleHRCbG9jayBQYWRkaW5nPSIxMCIgVGV4dFdyYXBwaW5nPSJXcmFwIiBGb3JlZ3JvdW5kPSJ7RHluYW1pY1Jlc291cmNlIE1haW5Gb3JlZ3JvdW5kQ29sb3J9Ij4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIE5vdGU6IFNlbGVjdCB0aGUgV2luZG93cyBBcHBYIHBhY2thZ2VzIHlvdSB3aXNoIHRvIGluc3RhbGwgb3IgcmVtb3ZlLgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPExpbmVCcmVhay8+SW5zdGFsbCBTZWxlY3RlZCByZWdpc3RlcnMgYSBsb2NhbCBtYW5pZmVzdCB3aGVuIGF2YWlsYWJsZSwgdGhlbiBmYWxscyBiYWNrIHRvIHRoZSBNaWNyb3NvZnQgU3RvcmUuCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8TGluZUJyZWFrLz5SZW1vdmUgU2VsZWN0ZWQgcmVtb3ZlcyBwYWNrYWdlcyBmb3IgdGhlIGN1cnJlbnQgdXNlciBhbmQgYWxsIG5ldyB1c2VyIHByb2ZpbGVzLgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L1RleHRCbG9jaz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L1N0YWNrUGFuZWw+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L0JvcmRlcj4KICAgICAgICAgICAgICAgICAgICAgICAgPC9HcmlkPgogICAgICAgICAgICAgICAgICAgIDwvU2Nyb2xsVmlld2VyPgoKICAgICAgICAgICAgICAgICAgICA8Qm9yZGVyIEdyaWQuUm93PSIxIiBCYWNrZ3JvdW5kPSJ7RHluYW1pY1Jlc291cmNlIE1haW5CYWNrZ3JvdW5kQ29sb3J9IiBCb3JkZXJCcnVzaD0ie0R5bmFtaWNSZXNvdXJjZSBCb3JkZXJDb2xvcn0iIEJvcmRlclRoaWNrbmVzcz0iMSIgQ29ybmVyUmFkaXVzPSI1IiBIb3Jpem9udGFsQWxpZ25tZW50PSJTdHJldGNoIiBQYWRkaW5nPSIxMCI+CiAgICAgICAgICAgICAgICAgICAgICAgIDxXcmFwUGFuZWwgT3JpZW50YXRpb249Ikhvcml6b250YWwiIEhvcml6b250YWxBbGlnbm1lbnQ9IkxlZnQiIFZlcnRpY2FsQWxpZ25tZW50PSJDZW50ZXIiPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPEJ1dHRvbiBOYW1lPSJXUEZCYWNrVG9Ud2Vha3MiIENvbnRlbnQ9Iui/lOWbnuS8mOWMliIgTWFyZ2luPSI1IiBXaWR0aD0ie0R5bmFtaWNSZXNvdXJjZSBCdXR0b25XaWR0aH0iIEhlaWdodD0ie0R5bmFtaWNSZXNvdXJjZSBCdXR0b25IZWlnaHR9Ii8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8QnV0dG9uIE5hbWU9IldQRkluc3RhbGxTZWxlY3RlZEFwcHgiIENvbnRlbnQ9IuWuieijhemAieS4rSIgTWFyZ2luPSI1IiBXaWR0aD0ie0R5bmFtaWNSZXNvdXJjZSBCdXR0b25XaWR0aH0iIEhlaWdodD0ie0R5bmFtaWNSZXNvdXJjZSBCdXR0b25IZWlnaHR9Ii8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8QnV0dG9uIE5hbWU9IldQRlJlbW92ZVNlbGVjdGVkQXBweCIgQ29udGVudD0i56e76Zmk6YCJ5LitIiBNYXJnaW49IjUiIFdpZHRoPSJ7RHluYW1pY1Jlc291cmNlIEJ1dHRvbldpZHRofSIgSGVpZ2h0PSJ7RHluYW1pY1Jlc291cmNlIEJ1dHRvbkhlaWdodH0iLz4KICAgICAgICAgICAgICAgICAgICAgICAgPC9XcmFwUGFuZWw+CiAgICAgICAgICAgICAgICAgICAgPC9Cb3JkZXI+CiAgICAgICAgICAgICAgICA8L0dyaWQ+CiAgICAgICAgICAgIDwvVGFiSXRlbT4KICAgICAgICA8L1RhYkNvbnRyb2w+CgogICAgICAgIDwhLS0gV2luZG93LWxldmVsIHByb2dyZXNzIGluZGljYXRvciAtIHZpc2libGUgcmVnYXJkbGVzcyBvZiBhY3RpdmUgdGFiIC0tPgogICAgICAgIDxCb3JkZXIgTmFtZT0iV1BGVHdlYWtzUHJvZ3Jlc3NCYXIiIEdyaWQuUm93PSIzIiBCYWNrZ3JvdW5kPSJ7RHluYW1pY1Jlc291cmNlIE1haW5CYWNrZ3JvdW5kQ29sb3J9IiBWaXNpYmlsaXR5PSJDb2xsYXBzZWQiIFBhZGRpbmc9IjEwLDYiPgogICAgICAgICAgICA8U3RhY2tQYW5lbCBPcmllbnRhdGlvbj0iVmVydGljYWwiPgogICAgICAgICAgICAgICAgPFRleHRCbG9jayBOYW1lPSJXUEZUd2Vha3NQcm9ncmVzc0xhYmVsIiBUZXh0PSIiIEZvcmVncm91bmQ9IntEeW5hbWljUmVzb3VyY2UgTWFpbkZvcmVncm91bmRDb2xvcn0iIEZvbnRTaXplPSIxMyIgQmFja2dyb3VuZD0iVHJhbnNwYXJlbnQiIE1hcmdpbj0iMCwwLDAsNCIvPgogICAgICAgICAgICAgICAgPFByb2dyZXNzQmFyIE5hbWU9IldQRlR3ZWFrc1Byb2dyZXNzVmFsdWUiIEhlaWdodD0iNiIgTWluaW11bT0iMCIgTWF4aW11bT0iMTAwIiBWYWx1ZT0iMCIgU3R5bGU9IntTdGF0aWNSZXNvdXJjZSBSb3VuZGVkUHJvZ3Jlc3NCYXJTdHlsZX0iLz4KICAgICAgICAgICAgPC9TdGFja1BhbmVsPgogICAgICAgIDwvQm9yZGVyPgogICAgPC9HcmlkPgo8L1dpbmRvdz4K'))
-
+$inputXML = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String('PFdpbmRvdwogICAgICAgIHhtbG5zPSJodHRwOi8vc2NoZW1hcy5taWNyb3NvZnQuY29tL3dpbmZ4LzIwMDYveGFtbC9wcmVzZW50YXRpb24iCiAgICAgICAgeG1sbnM6eD0iaHR0cDovL3NjaGVtYXMubWljcm9zb2Z0LmNvbS93aW5meC8yMDA2L3hhbWwiCiAgICAgICAgeG1sbnM6ZD0iaHR0cDovL3NjaGVtYXMubWljcm9zb2Z0LmNvbS9leHByZXNzaW9uL2JsZW5kLzIwMDgiCiAgICAgICAgeG1sbnM6bWM9Imh0dHA6Ly9zY2hlbWFzLm9wZW54bWxmb3JtYXRzLm9yZy9tYXJrdXAtY29tcGF0aWJpbGl0eS8yMDA2IgogICAgICAgIHhtbG5zOmxvY2FsPSJjbHItbmFtZXNwYWNlOldpblV0aWxpdHkiCiAgICAgICAgV2luZG93U3RhcnR1cExvY2F0aW9uPSJDZW50ZXJTY3JlZW4iCiAgICAgICAgVXNlTGF5b3V0Um91bmRpbmc9IlRydWUiCiAgICAgICAgV2luZG93U3R5bGU9IlNpbmdsZUJvcmRlcldpbmRvdyIKICAgICAgICBXaWR0aD0iQXV0byIKICAgICAgICBIZWlnaHQ9IkF1dG8iCiAgICAgICAgTWluV2lkdGg9IjgwMCIKICAgICAgICBNaW5IZWlnaHQ9IjYwMCIKICAgICAgICBUaXRsZT0iV2luVXRpbCI+CiAgICA8V2luZG93Q2hyb21lLldpbmRvd0Nocm9tZT4KICAgICAgICA8V2luZG93Q2hyb21lIENhcHRpb25IZWlnaHQ9IjAiIENvcm5lclJhZGl1cz0iMTAiLz4KICAgIDwvV2luZG93Q2hyb21lLldpbmRvd0Nocm9tZT4KICAgIDxXaW5kb3cuUmVzb3VyY2VzPgogICAgPFN0eWxlIFRhcmdldFR5cGU9IlRvb2xUaXAiPgogICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IkJhY2tncm91bmQiIFZhbHVlPSJ7RHluYW1pY1Jlc291cmNlIFRvb2xUaXBCYWNrZ3JvdW5kQ29sb3J9Ii8+CiAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iRm9yZWdyb3VuZCIgVmFsdWU9IntEeW5hbWljUmVzb3VyY2UgTWFpbkZvcmVncm91bmRDb2xvcn0iLz4KICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJCb3JkZXJCcnVzaCIgVmFsdWU9IntEeW5hbWljUmVzb3VyY2UgQm9yZGVyQ29sb3J9Ii8+CiAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iTWF4V2lkdGgiIFZhbHVlPSJ7RHluYW1pY1Jlc291cmNlIFRvb2xUaXBXaWR0aH0iLz4KICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJCb3JkZXJUaGlja25lc3MiIFZhbHVlPSIxIi8+CiAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iUGFkZGluZyIgVmFsdWU9IjIiLz4KICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJGb250U2l6ZSIgVmFsdWU9IntEeW5hbWljUmVzb3VyY2UgRm9udFNpemV9Ii8+CiAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iRm9udEZhbWlseSIgVmFsdWU9IntEeW5hbWljUmVzb3VyY2UgRm9udEZhbWlseX0iLz4KICAgICAgICA8IS0tIFRoaXMgQ29udGVudFRlbXBsYXRlIGVuc3VyZXMgdGhhdCB0aGUgY29udGVudCBvZiB0aGUgVG9vbFRpcCB3cmFwcyB0ZXh0IHByb3Blcmx5IGZvciBiZXR0ZXIgcmVhZGFiaWxpdHkgLS0+CiAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iQ29udGVudFRlbXBsYXRlIj4KICAgICAgICAgICAgPFNldHRlci5WYWx1ZT4KICAgICAgICAgICAgICAgIDxEYXRhVGVtcGxhdGU+CiAgICAgICAgICAgICAgICAgICAgPENvbnRlbnRQcmVzZW50ZXIgQ29udGVudD0ie1RlbXBsYXRlQmluZGluZyBDb250ZW50fSI+CiAgICAgICAgICAgICAgICAgICAgICAgIDxDb250ZW50UHJlc2VudGVyLlJlc291cmNlcz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxTdHlsZSBUYXJnZXRUeXBlPSJUZXh0QmxvY2siPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IlRleHRXcmFwcGluZyIgVmFsdWU9IldyYXAiLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvU3R5bGU+CiAgICAgICAgICAgICAgICAgICAgICAgIDwvQ29udGVudFByZXNlbnRlci5SZXNvdXJjZXM+CiAgICAgICAgICAgICAgICAgICAgPC9Db250ZW50UHJlc2VudGVyPgogICAgICAgICAgICAgICAgPC9EYXRhVGVtcGxhdGU+CiAgICAgICAgICAgIDwvU2V0dGVyLlZhbHVlPgogICAgICAgIDwvU2V0dGVyPgogICAgPC9TdHlsZT4KCiAgICA8U3R5bGUgVGFyZ2V0VHlwZT0ie3g6VHlwZSBNZW51SXRlbX0iPgogICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IkJhY2tncm91bmQiIFZhbHVlPSJ7RHluYW1pY1Jlc291cmNlIE1haW5CYWNrZ3JvdW5kQ29sb3J9Ii8+CiAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iRm9yZWdyb3VuZCIgVmFsdWU9IntEeW5hbWljUmVzb3VyY2UgTWFpbkZvcmVncm91bmRDb2xvcn0iLz4KICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJGb250U2l6ZSIgVmFsdWU9IntEeW5hbWljUmVzb3VyY2UgRm9udFNpemV9Ii8+CiAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iRm9udEZhbWlseSIgVmFsdWU9IntEeW5hbWljUmVzb3VyY2UgRm9udEZhbWlseX0iLz4KICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJQYWRkaW5nIiBWYWx1ZT0iNSwyLDUsMiIvPgogICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IkJvcmRlclRoaWNrbmVzcyIgVmFsdWU9IjAiLz4KICAgIDwvU3R5bGU+CgogICAgPCEtLVNjcm9sbGJhciBUaHVtYnMtLT4KICAgIDxTdHlsZSB4OktleT0iU2Nyb2xsVGh1bWJzIiBUYXJnZXRUeXBlPSJ7eDpUeXBlIFRodW1ifSI+CiAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iVGVtcGxhdGUiPgogICAgICAgICAgICA8U2V0dGVyLlZhbHVlPgogICAgICAgICAgICAgICAgPENvbnRyb2xUZW1wbGF0ZSBUYXJnZXRUeXBlPSJ7eDpUeXBlIFRodW1ifSI+CiAgICAgICAgICAgICAgICAgICAgPEdyaWQgTmFtZT0iR3JpZCI+CiAgICAgICAgICAgICAgICAgICAgICAgIDxSZWN0YW5nbGUgSG9yaXpvbnRhbEFsaWdubWVudD0iU3RyZXRjaCIgVmVydGljYWxBbGlnbm1lbnQ9IlN0cmV0Y2giIFdpZHRoPSJBdXRvIiBIZWlnaHQ9IkF1dG8iIEZpbGw9IlRyYW5zcGFyZW50IiAvPgogICAgICAgICAgICAgICAgICAgICAgICA8Qm9yZGVyIE5hbWU9IlJlY3RhbmdsZTEiIENvcm5lclJhZGl1cz0iNSIgSG9yaXpvbnRhbEFsaWdubWVudD0iU3RyZXRjaCIgVmVydGljYWxBbGlnbm1lbnQ9IlN0cmV0Y2giIFdpZHRoPSJBdXRvIiBIZWlnaHQ9IkF1dG8iICBCYWNrZ3JvdW5kPSJ7VGVtcGxhdGVCaW5kaW5nIEJhY2tncm91bmR9IiAvPgogICAgICAgICAgICAgICAgICAgIDwvR3JpZD4KICAgICAgICAgICAgICAgICAgICA8Q29udHJvbFRlbXBsYXRlLlRyaWdnZXJzPgogICAgICAgICAgICAgICAgICAgICAgICA8VHJpZ2dlciBQcm9wZXJ0eT0iVGFnIiBWYWx1ZT0iSG9yaXpvbnRhbCI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8U2V0dGVyIFRhcmdldE5hbWU9IlJlY3RhbmdsZTEiIFByb3BlcnR5PSJXaWR0aCIgVmFsdWU9IkF1dG8iIC8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8U2V0dGVyIFRhcmdldE5hbWU9IlJlY3RhbmdsZTEiIFByb3BlcnR5PSJIZWlnaHQiIFZhbHVlPSI3IiAvPgogICAgICAgICAgICAgICAgICAgICAgICA8L1RyaWdnZXI+CiAgICAgICAgICAgICAgICAgICAgPC9Db250cm9sVGVtcGxhdGUuVHJpZ2dlcnM+CiAgICAgICAgICAgICAgICA8L0NvbnRyb2xUZW1wbGF0ZT4KICAgICAgICAgICAgPC9TZXR0ZXIuVmFsdWU+CiAgICAgICAgPC9TZXR0ZXI+CiAgICA8L1N0eWxlPgoKICAgIDxTdHlsZSBUYXJnZXRUeXBlPSJUZXh0QmxvY2siIHg6S2V5PSJIb3ZlclRleHRCbG9ja1N0eWxlIj4KICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJGb3JlZ3JvdW5kIiBWYWx1ZT0ie0R5bmFtaWNSZXNvdXJjZSBMaW5rRm9yZWdyb3VuZENvbG9yfSIgLz4KICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJUZXh0RGVjb3JhdGlvbnMiIFZhbHVlPSJVbmRlcmxpbmUiIC8+CiAgICAgICAgPFN0eWxlLlRyaWdnZXJzPgogICAgICAgICAgICA8VHJpZ2dlciBQcm9wZXJ0eT0iSXNNb3VzZU92ZXIiIFZhbHVlPSJUcnVlIj4KICAgICAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IkZvcmVncm91bmQiIFZhbHVlPSJ7RHluYW1pY1Jlc291cmNlIExpbmtIb3ZlckZvcmVncm91bmRDb2xvcn0iIC8+CiAgICAgICAgICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJUZXh0RGVjb3JhdGlvbnMiIFZhbHVlPSJVbmRlcmxpbmUiIC8+CiAgICAgICAgICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJDdXJzb3IiIFZhbHVlPSJIYW5kIiAvPgogICAgICAgICAgICA8L1RyaWdnZXI+CiAgICAgICAgPC9TdHlsZS5UcmlnZ2Vycz4KICAgIDwvU3R5bGU+CiAgICA8U3R5bGUgeDpLZXk9IkFwcEVudHJ5Qm9yZGVyU3R5bGUiIFRhcmdldFR5cGU9IkJvcmRlciI+CiAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iQm9yZGVyQnJ1c2giIFZhbHVlPSJHcmF5Ii8+CiAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iQm9yZGVyVGhpY2tuZXNzIiBWYWx1ZT0ie0R5bmFtaWNSZXNvdXJjZSBBcHBFbnRyeUJvcmRlclRoaWNrbmVzc30iLz4KICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJDb3JuZXJSYWRpdXMiIFZhbHVlPSI1Ii8+CiAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iUGFkZGluZyIgVmFsdWU9IjYsNCIvPgogICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IldpZHRoIiBWYWx1ZT0ie0R5bmFtaWNSZXNvdXJjZSBBcHBFbnRyeVdpZHRofSIvPgogICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IlZlcnRpY2FsQWxpZ25tZW50IiBWYWx1ZT0iVG9wIi8+CiAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iTWFyZ2luIiBWYWx1ZT0ie0R5bmFtaWNSZXNvdXJjZSBBcHBFbnRyeU1hcmdpbn0iLz4KICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJDdXJzb3IiIFZhbHVlPSJIYW5kIi8+CiAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iQmFja2dyb3VuZCIgVmFsdWU9IntEeW5hbWljUmVzb3VyY2UgQXBwSW5zdGFsbFVuc2VsZWN0ZWRDb2xvcn0iLz4KICAgIDwvU3R5bGU+CiAgICA8U3R5bGUgeDpLZXk9IkFwcEVudHJ5Q2hlY2tib3hTdHlsZSIgVGFyZ2V0VHlwZT0iQ2hlY2tCb3giPgogICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IkJhY2tncm91bmQiIFZhbHVlPSJUcmFuc3BhcmVudCIvPgogICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9Ikhvcml6b250YWxBbGlnbm1lbnQiIFZhbHVlPSJMZWZ0Ii8+CiAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iVmVydGljYWxBbGlnbm1lbnQiIFZhbHVlPSJDZW50ZXIiLz4KICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJNYXJnaW4iIFZhbHVlPSJ7RHluYW1pY1Jlc291cmNlIEFwcEVudHJ5TWFyZ2lufSIvPgogICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IlRlbXBsYXRlIj4KICAgICAgICAgICAgPFNldHRlci5WYWx1ZT4KICAgICAgICAgICAgICAgIDxDb250cm9sVGVtcGxhdGUgVGFyZ2V0VHlwZT0iQ2hlY2tCb3giPgogICAgICAgICAgICAgICAgICAgIDxDb250ZW50UHJlc2VudGVyIENvbnRlbnQ9IntUZW1wbGF0ZUJpbmRpbmcgQ29udGVudH0iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgVmVydGljYWxBbGlnbm1lbnQ9IkNlbnRlciIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBIb3Jpem9udGFsQWxpZ25tZW50PSJMZWZ0Ii8+CiAgICAgICAgICAgICAgICA8L0NvbnRyb2xUZW1wbGF0ZT4KICAgICAgICAgICAgPC9TZXR0ZXIuVmFsdWU+CiAgICAgICAgPC9TZXR0ZXI+CiAgICA8L1N0eWxlPgogICAgPFN0eWxlIHg6S2V5PSJBcHBFbnRyeU5hbWVTdHlsZSIgVGFyZ2V0VHlwZT0iVGV4dEJsb2NrIj4KICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJGb250U2l6ZSIgVmFsdWU9IntEeW5hbWljUmVzb3VyY2UgQXBwRW50cnlGb250U2l6ZX0iLz4KICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJGb250V2VpZ2h0IiBWYWx1ZT0iQm9sZCIvPgogICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IkZvcmVncm91bmQiIFZhbHVlPSJ7RHluYW1pY1Jlc291cmNlIE1haW5Gb3JlZ3JvdW5kQ29sb3J9Ii8+CiAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iVmVydGljYWxBbGlnbm1lbnQiIFZhbHVlPSJDZW50ZXIiLz4KICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJNYXJnaW4iIFZhbHVlPSJ7RHluYW1pY1Jlc291cmNlIEFwcEVudHJ5TWFyZ2lufSIvPgogICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IkJhY2tncm91bmQiIFZhbHVlPSJUcmFuc3BhcmVudCIvPgogICAgPC9TdHlsZT4KICAgIDxTdHlsZSB4OktleT0iQXBwRW50cnlCdXR0b25TdHlsZSIgVGFyZ2V0VHlwZT0iQnV0dG9uIj4KICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJXaWR0aCIgVmFsdWU9IntEeW5hbWljUmVzb3VyY2UgSWNvbkJ1dHRvblNpemV9Ii8+CiAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iSGVpZ2h0IiBWYWx1ZT0ie0R5bmFtaWNSZXNvdXJjZSBJY29uQnV0dG9uU2l6ZX0iLz4KICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJNYXJnaW4iIFZhbHVlPSJ7RHluYW1pY1Jlc291cmNlIEFwcEVudHJ5TWFyZ2lufSIvPgogICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IkZvcmVncm91bmQiIFZhbHVlPSJ7RHluYW1pY1Jlc291cmNlIEJ1dHRvbkZvcmVncm91bmRDb2xvcn0iLz4KICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJCYWNrZ3JvdW5kIiBWYWx1ZT0ie0R5bmFtaWNSZXNvdXJjZSBCdXR0b25CYWNrZ3JvdW5kQ29sb3J9Ii8+CiAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iSG9yaXpvbnRhbEFsaWdubWVudCIgVmFsdWU9IkNlbnRlciIvPgogICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IlZlcnRpY2FsQWxpZ25tZW50IiBWYWx1ZT0iQ2VudGVyIi8+CiAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iQ29udGVudFRlbXBsYXRlIj4KICAgICAgICAgICAgPFNldHRlci5WYWx1ZT4KICAgICAgICAgICAgICAgIDxEYXRhVGVtcGxhdGU+CiAgICAgICAgICAgICAgICAgICAgPFRleHRCbG9jayAgVGV4dD0ie0JpbmRpbmd9IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEZvbnRGYW1pbHk9IlNlZ29lIE1ETDIgQXNzZXRzIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEZvbnRTaXplPSJ7RHluYW1pY1Jlc291cmNlIEljb25Gb250U2l6ZX0iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgQmFja2dyb3VuZD0iVHJhbnNwYXJlbnQiLz4KICAgICAgICAgICAgICAgIDwvRGF0YVRlbXBsYXRlPgogICAgICAgICAgICA8L1NldHRlci5WYWx1ZT4KICAgICAgICA8L1NldHRlcj4KICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJUZW1wbGF0ZSI+CiAgICAgICAgICAgICAgICA8U2V0dGVyLlZhbHVlPgogICAgICAgICAgICAgICAgICAgIDxDb250cm9sVGVtcGxhdGUgVGFyZ2V0VHlwZT0iQnV0dG9uIj4KICAgICAgICAgICAgICAgICAgICAgICAgPEdyaWQ+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8Qm9yZGVyIE5hbWU9IkJhY2tncm91bmRCb3JkZXIiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEJhY2tncm91bmQ9IntUZW1wbGF0ZUJpbmRpbmcgQmFja2dyb3VuZH0iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEJvcmRlckJydXNoPSJ7VGVtcGxhdGVCaW5kaW5nIEJvcmRlckJydXNofSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgQm9yZGVyVGhpY2tuZXNzPSJ7RHluYW1pY1Jlc291cmNlIEJ1dHRvbkJvcmRlclRoaWNrbmVzc30iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIENvcm5lclJhZGl1cz0ie0R5bmFtaWNSZXNvdXJjZSBCdXR0b25Db3JuZXJSYWRpdXN9Ij4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8Q29udGVudFByZXNlbnRlciBIb3Jpem9udGFsQWxpZ25tZW50PSJDZW50ZXIiIFZlcnRpY2FsQWxpZ25tZW50PSJDZW50ZXIiLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvQm9yZGVyPgogICAgICAgICAgICAgICAgICAgICAgICA8L0dyaWQ+CiAgICAgICAgICAgICAgICAgICAgICAgIDxDb250cm9sVGVtcGxhdGUuVHJpZ2dlcnM+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8VHJpZ2dlciBQcm9wZXJ0eT0iSXNQcmVzc2VkIiBWYWx1ZT0iVHJ1ZSI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPFNldHRlciBUYXJnZXROYW1lPSJCYWNrZ3JvdW5kQm9yZGVyIiBQcm9wZXJ0eT0iQmFja2dyb3VuZCIgVmFsdWU9IntEeW5hbWljUmVzb3VyY2UgQnV0dG9uQmFja2dyb3VuZFByZXNzZWRDb2xvcn0iLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvVHJpZ2dlcj4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxUcmlnZ2VyIFByb3BlcnR5PSJJc01vdXNlT3ZlciIgVmFsdWU9IlRydWUiPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IkN1cnNvciIgVmFsdWU9IkhhbmQiLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8U2V0dGVyIFRhcmdldE5hbWU9IkJhY2tncm91bmRCb3JkZXIiIFByb3BlcnR5PSJCYWNrZ3JvdW5kIiBWYWx1ZT0ie0R5bmFtaWNSZXNvdXJjZSBCdXR0b25CYWNrZ3JvdW5kTW91c2VvdmVyQ29sb3J9Ii8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L1RyaWdnZXI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8VHJpZ2dlciBQcm9wZXJ0eT0iSXNFbmFibGVkIiBWYWx1ZT0iRmFsc2UiPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxTZXR0ZXIgVGFyZ2V0TmFtZT0iQmFja2dyb3VuZEJvcmRlciIgUHJvcGVydHk9IkJhY2tncm91bmQiIFZhbHVlPSJ7RHluYW1pY1Jlc291cmNlIEJ1dHRvbkJhY2tncm91bmRTZWxlY3RlZENvbG9yfSIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IkZvcmVncm91bmQiIFZhbHVlPSJEaW1HcmF5Ii8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L1RyaWdnZXI+CiAgICAgICAgICAgICAgICAgICAgICAgIDwvQ29udHJvbFRlbXBsYXRlLlRyaWdnZXJzPgogICAgICAgICAgICAgICAgICAgIDwvQ29udHJvbFRlbXBsYXRlPgogICAgICAgICAgICAgICAgPC9TZXR0ZXIuVmFsdWU+CiAgICAgICAgICAgIDwvU2V0dGVyPgoKCiAgICA8L1N0eWxlPgogICAgPFN0eWxlIFRhcmdldFR5cGU9IkJ1dHRvbiIgeDpLZXk9IkhvdmVyQnV0dG9uU3R5bGUiPgogICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IkZvcmVncm91bmQiIFZhbHVlPSJ7RHluYW1pY1Jlc291cmNlIE1haW5Gb3JlZ3JvdW5kQ29sb3J9IiAvPgogICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IkZvbnRXZWlnaHQiIFZhbHVlPSJOb3JtYWwiIC8+CiAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iRm9udFNpemUiIFZhbHVlPSJ7RHluYW1pY1Jlc291cmNlIEJ1dHRvbkZvbnRTaXplfSIgLz4KICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJUZXh0RWxlbWVudC5Gb250RmFtaWx5IiBWYWx1ZT0ie0R5bmFtaWNSZXNvdXJjZSBCdXR0b25Gb250RmFtaWx5fSIvPgogICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IkJhY2tncm91bmQiIFZhbHVlPSJ7RHluYW1pY1Jlc291cmNlIE1haW5CYWNrZ3JvdW5kQ29sb3J9IiAvPgogICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IlRlbXBsYXRlIj4KICAgICAgICAgICAgPFNldHRlci5WYWx1ZT4KICAgICAgICAgICAgICAgIDxDb250cm9sVGVtcGxhdGUgVGFyZ2V0VHlwZT0iQnV0dG9uIj4KICAgICAgICAgICAgICAgICAgICA8Qm9yZGVyIEJhY2tncm91bmQ9IntUZW1wbGF0ZUJpbmRpbmcgQmFja2dyb3VuZH0iPgogICAgICAgICAgICAgICAgICAgICAgICA8Q29udGVudFByZXNlbnRlciBIb3Jpem9udGFsQWxpZ25tZW50PSJDZW50ZXIiIFZlcnRpY2FsQWxpZ25tZW50PSJDZW50ZXIiLz4KICAgICAgICAgICAgICAgICAgICA8L0JvcmRlcj4KICAgICAgICAgICAgICAgICAgICA8Q29udHJvbFRlbXBsYXRlLlRyaWdnZXJzPgogICAgICAgICAgICAgICAgICAgICAgICA8VHJpZ2dlciBQcm9wZXJ0eT0iSXNNb3VzZU92ZXIiIFZhbHVlPSJUcnVlIj4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IkZvbnRXZWlnaHQiIFZhbHVlPSJCb2xkIiAvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iRm9yZWdyb3VuZCIgVmFsdWU9IntEeW5hbWljUmVzb3VyY2UgTWFpbkZvcmVncm91bmRDb2xvcn0iIC8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJDdXJzb3IiIFZhbHVlPSJIYW5kIiAvPgogICAgICAgICAgICAgICAgICAgICAgICA8L1RyaWdnZXI+CiAgICAgICAgICAgICAgICAgICAgPC9Db250cm9sVGVtcGxhdGUuVHJpZ2dlcnM+CiAgICAgICAgICAgICAgICA8L0NvbnRyb2xUZW1wbGF0ZT4KICAgICAgICAgICAgPC9TZXR0ZXIuVmFsdWU+CiAgICAgICAgPC9TZXR0ZXI+CiAgICA8L1N0eWxlPgoKICAgIDwhLS1TY3JvbGxCYXJzLS0+CiAgICA8U3R5bGUgeDpLZXk9Int4OlR5cGUgU2Nyb2xsQmFyfSIgVGFyZ2V0VHlwZT0ie3g6VHlwZSBTY3JvbGxCYXJ9Ij4KICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJTdHlsdXMuSXNGbGlja3NFbmFibGVkIiBWYWx1ZT0iZmFsc2UiIC8+CiAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iRm9yZWdyb3VuZCIgVmFsdWU9IntEeW5hbWljUmVzb3VyY2UgU2Nyb2xsQmFyQmFja2dyb3VuZENvbG9yfSIgLz4KICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJCYWNrZ3JvdW5kIiBWYWx1ZT0ie0R5bmFtaWNSZXNvdXJjZSBNYWluQmFja2dyb3VuZENvbG9yfSIgLz4KICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJXaWR0aCIgVmFsdWU9IjYiIC8+CiAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iVGVtcGxhdGUiPgogICAgICAgICAgICA8U2V0dGVyLlZhbHVlPgogICAgICAgICAgICAgICAgPENvbnRyb2xUZW1wbGF0ZSBUYXJnZXRUeXBlPSJ7eDpUeXBlIFNjcm9sbEJhcn0iPgogICAgICAgICAgICAgICAgICAgIDxHcmlkIE5hbWU9IkdyaWRSb290IiBXaWR0aD0iNyIgQmFja2dyb3VuZD0ie1RlbXBsYXRlQmluZGluZyBCYWNrZ3JvdW5kfSIgPgogICAgICAgICAgICAgICAgICAgICAgICA8R3JpZC5Sb3dEZWZpbml0aW9ucz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxSb3dEZWZpbml0aW9uIEhlaWdodD0iMC4wMDAwMSoiIC8+CiAgICAgICAgICAgICAgICAgICAgICAgIDwvR3JpZC5Sb3dEZWZpbml0aW9ucz4KCiAgICAgICAgICAgICAgICAgICAgICAgIDxUcmFjayBOYW1lPSJQQVJUX1RyYWNrIiBHcmlkLlJvdz0iMCIgSXNEaXJlY3Rpb25SZXZlcnNlZD0idHJ1ZSIgRm9jdXNhYmxlPSJmYWxzZSI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8VHJhY2suVGh1bWI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPFRodW1iIE5hbWU9IlRodW1iIiBCYWNrZ3JvdW5kPSJ7VGVtcGxhdGVCaW5kaW5nIEZvcmVncm91bmR9IiBTdHlsZT0ie0R5bmFtaWNSZXNvdXJjZSBTY3JvbGxUaHVtYnN9IiAvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9UcmFjay5UaHVtYj4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxUcmFjay5JbmNyZWFzZVJlcGVhdEJ1dHRvbj4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8UmVwZWF0QnV0dG9uIE5hbWU9IlBhZ2VVcCIgQ29tbWFuZD0iU2Nyb2xsQmFyLlBhZ2VEb3duQ29tbWFuZCIgT3BhY2l0eT0iMCIgRm9jdXNhYmxlPSJmYWxzZSIgLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvVHJhY2suSW5jcmVhc2VSZXBlYXRCdXR0b24+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8VHJhY2suRGVjcmVhc2VSZXBlYXRCdXR0b24+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPFJlcGVhdEJ1dHRvbiBOYW1lPSJQYWdlRG93biIgQ29tbWFuZD0iU2Nyb2xsQmFyLlBhZ2VVcENvbW1hbmQiIE9wYWNpdHk9IjAiIEZvY3VzYWJsZT0iZmFsc2UiIC8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L1RyYWNrLkRlY3JlYXNlUmVwZWF0QnV0dG9uPgogICAgICAgICAgICAgICAgICAgICAgICA8L1RyYWNrPgogICAgICAgICAgICAgICAgICAgIDwvR3JpZD4KCiAgICAgICAgICAgICAgICAgICAgPENvbnRyb2xUZW1wbGF0ZS5UcmlnZ2Vycz4KICAgICAgICAgICAgICAgICAgICAgICAgPFRyaWdnZXIgU291cmNlTmFtZT0iVGh1bWIiIFByb3BlcnR5PSJJc01vdXNlT3ZlciIgVmFsdWU9InRydWUiPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPFNldHRlciBWYWx1ZT0ie0R5bmFtaWNSZXNvdXJjZSBTY3JvbGxCYXJIb3ZlckNvbG9yfSIgVGFyZ2V0TmFtZT0iVGh1bWIiIFByb3BlcnR5PSJCYWNrZ3JvdW5kIiAvPgogICAgICAgICAgICAgICAgICAgICAgICA8L1RyaWdnZXI+CiAgICAgICAgICAgICAgICAgICAgICAgIDxUcmlnZ2VyIFNvdXJjZU5hbWU9IlRodW1iIiBQcm9wZXJ0eT0iSXNEcmFnZ2luZyIgVmFsdWU9InRydWUiPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPFNldHRlciBWYWx1ZT0ie0R5bmFtaWNSZXNvdXJjZSBTY3JvbGxCYXJEcmFnZ2luZ0NvbG9yfSIgVGFyZ2V0TmFtZT0iVGh1bWIiIFByb3BlcnR5PSJCYWNrZ3JvdW5kIiAvPgogICAgICAgICAgICAgICAgICAgICAgICA8L1RyaWdnZXI+CgogICAgICAgICAgICAgICAgICAgICAgICA8VHJpZ2dlciBQcm9wZXJ0eT0iSXNFbmFibGVkIiBWYWx1ZT0iZmFsc2UiPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPFNldHRlciBUYXJnZXROYW1lPSJUaHVtYiIgUHJvcGVydHk9IlZpc2liaWxpdHkiIFZhbHVlPSJDb2xsYXBzZWQiIC8+CiAgICAgICAgICAgICAgICAgICAgICAgIDwvVHJpZ2dlcj4KICAgICAgICAgICAgICAgICAgICAgICAgPFRyaWdnZXIgUHJvcGVydHk9Ik9yaWVudGF0aW9uIiBWYWx1ZT0iSG9yaXpvbnRhbCI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8U2V0dGVyIFRhcmdldE5hbWU9IkdyaWRSb290IiBQcm9wZXJ0eT0iTGF5b3V0VHJhbnNmb3JtIj4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8U2V0dGVyLlZhbHVlPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8Um90YXRlVHJhbnNmb3JtIEFuZ2xlPSItOTAiIC8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9TZXR0ZXIuVmFsdWU+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L1NldHRlcj4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxTZXR0ZXIgVGFyZ2V0TmFtZT0iUEFSVF9UcmFjayIgUHJvcGVydHk9IkxheW91dFRyYW5zZm9ybSI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPFNldHRlci5WYWx1ZT4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPFJvdGF0ZVRyYW5zZm9ybSBBbmdsZT0iLTkwIiAvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvU2V0dGVyLlZhbHVlPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9TZXR0ZXI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJXaWR0aCIgVmFsdWU9IkF1dG8iIC8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJIZWlnaHQiIFZhbHVlPSI4IiAvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPFNldHRlciBUYXJnZXROYW1lPSJUaHVtYiIgUHJvcGVydHk9IlRhZyIgVmFsdWU9Ikhvcml6b250YWwiIC8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8U2V0dGVyIFRhcmdldE5hbWU9IlBhZ2VEb3duIiBQcm9wZXJ0eT0iQ29tbWFuZCIgVmFsdWU9IlNjcm9sbEJhci5QYWdlTGVmdENvbW1hbmQiIC8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8U2V0dGVyIFRhcmdldE5hbWU9IlBhZ2VVcCIgUHJvcGVydHk9IkNvbW1hbmQiIFZhbHVlPSJTY3JvbGxCYXIuUGFnZVJpZ2h0Q29tbWFuZCIgLz4KICAgICAgICAgICAgICAgICAgICAgICAgPC9UcmlnZ2VyPgogICAgICAgICAgICAgICAgICAgIDwvQ29udHJvbFRlbXBsYXRlLlRyaWdnZXJzPgogICAgICAgICAgICAgICAgPC9Db250cm9sVGVtcGxhdGU+CiAgICAgICAgICAgIDwvU2V0dGVyLlZhbHVlPgogICAgICAgIDwvU2V0dGVyPgogICAgICAgIDwvU3R5bGU+CiAgICAgICAgPFN0eWxlIHg6S2V5PSJDb21ib0JveFRvZ2dsZUJ1dHRvblN0eWxlIiBUYXJnZXRUeXBlPSJUb2dnbGVCdXR0b24iPgogICAgICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJUZW1wbGF0ZSI+CiAgICAgICAgICAgICAgICA8U2V0dGVyLlZhbHVlPgogICAgICAgICAgICAgICAgICAgIDxDb250cm9sVGVtcGxhdGUgVGFyZ2V0VHlwZT0iVG9nZ2xlQnV0dG9uIj4KICAgICAgICAgICAgICAgICAgICAgICAgPEJvcmRlciBCYWNrZ3JvdW5kPSJ7VGVtcGxhdGVCaW5kaW5nIEJhY2tncm91bmR9IiBCb3JkZXJUaGlja25lc3M9IjAiPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPENvbnRlbnRQcmVzZW50ZXIvPgogICAgICAgICAgICAgICAgICAgICAgICA8L0JvcmRlcj4KICAgICAgICAgICAgICAgICAgICA8L0NvbnRyb2xUZW1wbGF0ZT4KICAgICAgICAgICAgICAgIDwvU2V0dGVyLlZhbHVlPgogICAgICAgICAgICA8L1NldHRlcj4KICAgICAgICA8L1N0eWxlPgogICAgICAgIDxTdHlsZSBUYXJnZXRUeXBlPSJDb21ib0JveCI+CiAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IkZvcmVncm91bmQiIFZhbHVlPSJ7RHluYW1pY1Jlc291cmNlIENvbWJvQm94Rm9yZWdyb3VuZENvbG9yfSIgLz4KICAgICAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iQmFja2dyb3VuZCIgVmFsdWU9IntEeW5hbWljUmVzb3VyY2UgQ29tYm9Cb3hCYWNrZ3JvdW5kQ29sb3J9IiAvPgogICAgICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJNaW5XaWR0aCIgICBWYWx1ZT0ie0R5bmFtaWNSZXNvdXJjZSBCdXR0b25XaWR0aH0iIC8+CiAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IlRlbXBsYXRlIj4KICAgICAgICAgICAgICAgIDxTZXR0ZXIuVmFsdWU+CiAgICAgICAgICAgICAgICAgICAgPENvbnRyb2xUZW1wbGF0ZSBUYXJnZXRUeXBlPSJDb21ib0JveCI+CiAgICAgICAgICAgICAgICAgICAgICAgIDxHcmlkPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPEJvcmRlciBOYW1lPSJPdXRlckJvcmRlciIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgQm9yZGVyQnJ1c2g9IntEeW5hbWljUmVzb3VyY2UgQm9yZGVyQ29sb3J9IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBCb3JkZXJUaGlja25lc3M9IjEiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIENvcm5lclJhZGl1cz0ie0R5bmFtaWNSZXNvdXJjZSBCdXR0b25Db3JuZXJSYWRpdXN9IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBCYWNrZ3JvdW5kPSJ7VGVtcGxhdGVCaW5kaW5nIEJhY2tncm91bmR9Ij4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8VG9nZ2xlQnV0dG9uIE5hbWU9IlRvZ2dsZUJ1dHRvbiIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIFN0eWxlPSJ7U3RhdGljUmVzb3VyY2UgQ29tYm9Cb3hUb2dnbGVCdXR0b25TdHlsZX0iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBCYWNrZ3JvdW5kPSJUcmFuc3BhcmVudCIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEJvcmRlclRoaWNrbmVzcz0iMCIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIElzQ2hlY2tlZD0ie0JpbmRpbmcgSXNEcm9wRG93bk9wZW4sIE1vZGU9VHdvV2F5LCBSZWxhdGl2ZVNvdXJjZT17UmVsYXRpdmVTb3VyY2UgVGVtcGxhdGVkUGFyZW50fX0iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBDbGlja01vZGU9IlByZXNzIj4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPEdyaWQ+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8R3JpZC5Db2x1bW5EZWZpbml0aW9ucz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8Q29sdW1uRGVmaW5pdGlvbiBXaWR0aD0iKiIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxDb2x1bW5EZWZpbml0aW9uIFdpZHRoPSJBdXRvIi8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L0dyaWQuQ29sdW1uRGVmaW5pdGlvbnM+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8VGV4dEJsb2NrIEdyaWQuQ29sdW1uPSIwIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBUZXh0PSJ7VGVtcGxhdGVCaW5kaW5nIFNlbGVjdGlvbkJveEl0ZW19IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBGb3JlZ3JvdW5kPSJ7VGVtcGxhdGVCaW5kaW5nIEZvcmVncm91bmR9IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBCYWNrZ3JvdW5kPSJUcmFuc3BhcmVudCIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgSG9yaXpvbnRhbEFsaWdubWVudD0iTGVmdCIgVmVydGljYWxBbGlnbm1lbnQ9IkNlbnRlciIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgTWFyZ2luPSI2LDMsMiwzIi8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8UGF0aCBHcmlkLkNvbHVtbj0iMSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIERhdGE9Ik0gMCwwIEwgOCwwIEwgNCw1IFoiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBGaWxsPSJ7VGVtcGxhdGVCaW5kaW5nIEZvcmVncm91bmR9IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgV2lkdGg9IjgiIEhlaWdodD0iNSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIFZlcnRpY2FsQWxpZ25tZW50PSJDZW50ZXIiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBIb3Jpem9udGFsQWxpZ25tZW50PSJDZW50ZXIiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBTdHJldGNoPSJVbmlmb3JtIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgTWFyZ2luPSI0LDAsNiwwIi8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvR3JpZD4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L1RvZ2dsZUJ1dHRvbj4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvQm9yZGVyPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPFBvcHVwIE5hbWU9IlBvcHVwIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIElzT3Blbj0ie1RlbXBsYXRlQmluZGluZyBJc0Ryb3BEb3duT3Blbn0iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgUGxhY2VtZW50PSJCb3R0b20iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgRm9jdXNhYmxlPSJGYWxzZSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBBbGxvd3NUcmFuc3BhcmVuY3k9IlRydWUiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgUG9wdXBBbmltYXRpb249IlNsaWRlIj4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8Qm9yZGVyIE5hbWU9IkRyb3BEb3duQm9yZGVyIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgQmFja2dyb3VuZD0ie1RlbXBsYXRlQmluZGluZyBCYWNrZ3JvdW5kfSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEJvcmRlckJydXNoPSJ7RHluYW1pY1Jlc291cmNlIEJvcmRlckNvbG9yfSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEJvcmRlclRoaWNrbmVzcz0iMSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIENvcm5lclJhZGl1cz0iNCI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxTY3JvbGxWaWV3ZXI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8SXRlbXNQcmVzZW50ZXIgSG9yaXpvbnRhbEFsaWdubWVudD0iTGVmdCIgVmVydGljYWxBbGlnbm1lbnQ9IkNlbnRlciIgTWFyZ2luPSI0LDIiLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9TY3JvbGxWaWV3ZXI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9Cb3JkZXI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L1BvcHVwPgogICAgICAgICAgICAgICAgICAgICAgICA8L0dyaWQ+CiAgICAgICAgICAgICAgICAgICAgPC9Db250cm9sVGVtcGxhdGU+CiAgICAgICAgICAgICAgICA8L1NldHRlci5WYWx1ZT4KICAgICAgICAgICAgPC9TZXR0ZXI+CiAgICAgICAgPC9TdHlsZT4KICAgICAgICA8U3R5bGUgVGFyZ2V0VHlwZT0iQ29tYm9Cb3hJdGVtIj4KICAgICAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iQmFja2dyb3VuZCIgVmFsdWU9IntEeW5hbWljUmVzb3VyY2UgQ29tYm9Cb3hCYWNrZ3JvdW5kQ29sb3J9Ii8+CiAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IkZvcmVncm91bmQiIFZhbHVlPSJ7RHluYW1pY1Jlc291cmNlIENvbWJvQm94Rm9yZWdyb3VuZENvbG9yfSIvPgogICAgICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJQYWRkaW5nIiBWYWx1ZT0iNiwzIi8+CiAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IkNvbnRlbnRUZW1wbGF0ZSI+CiAgICAgICAgICAgICAgICA8U2V0dGVyLlZhbHVlPgogICAgICAgICAgICAgICAgICAgIDxEYXRhVGVtcGxhdGU+CiAgICAgICAgICAgICAgICAgICAgICAgIDxUZXh0QmxvY2sgVGV4dD0ie0JpbmRpbmd9IiBCYWNrZ3JvdW5kPSJUcmFuc3BhcmVudCIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBGb3JlZ3JvdW5kPSJ7QmluZGluZyBGb3JlZ3JvdW5kLCBSZWxhdGl2ZVNvdXJjZT17UmVsYXRpdmVTb3VyY2UgQW5jZXN0b3JUeXBlPUNvbWJvQm94SXRlbX19Ii8+CiAgICAgICAgICAgICAgICAgICAgPC9EYXRhVGVtcGxhdGU+CiAgICAgICAgICAgICAgICA8L1NldHRlci5WYWx1ZT4KICAgICAgICAgICAgPC9TZXR0ZXI+CiAgICAgICAgICAgIDxTdHlsZS5UcmlnZ2Vycz4KICAgICAgICAgICAgICAgIDxUcmlnZ2VyIFByb3BlcnR5PSJJc0hpZ2hsaWdodGVkIiBWYWx1ZT0iVHJ1ZSI+CiAgICAgICAgICAgICAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iQmFja2dyb3VuZCIgVmFsdWU9IntEeW5hbWljUmVzb3VyY2UgQnV0dG9uQmFja2dyb3VuZE1vdXNlb3ZlckNvbG9yfSIvPgogICAgICAgICAgICAgICAgPC9UcmlnZ2VyPgogICAgICAgICAgICAgICAgPFRyaWdnZXIgUHJvcGVydHk9IklzU2VsZWN0ZWQiIFZhbHVlPSJUcnVlIj4KICAgICAgICAgICAgICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJCYWNrZ3JvdW5kIiBWYWx1ZT0ie0R5bmFtaWNSZXNvdXJjZSBCdXR0b25CYWNrZ3JvdW5kU2VsZWN0ZWRDb2xvcn0iLz4KICAgICAgICAgICAgICAgIDwvVHJpZ2dlcj4KICAgICAgICAgICAgPC9TdHlsZS5UcmlnZ2Vycz4KICAgICAgICA8L1N0eWxlPgogICAgICAgIDxTdHlsZSBUYXJnZXRUeXBlPSJMYWJlbCI+CiAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IkZvcmVncm91bmQiIFZhbHVlPSJ7RHluYW1pY1Jlc291cmNlIExhYmVsYm94Rm9yZWdyb3VuZENvbG9yfSIvPgogICAgICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJCYWNrZ3JvdW5kIiBWYWx1ZT0ie0R5bmFtaWNSZXNvdXJjZSBMYWJlbEJhY2tncm91bmRDb2xvcn0iLz4KICAgICAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iRm9udEZhbWlseSIgVmFsdWU9IntEeW5hbWljUmVzb3VyY2UgRm9udEZhbWlseX0iLz4KICAgICAgICA8L1N0eWxlPgoKICAgICAgICA8IS0tIFRleHRCbG9jayB0ZW1wbGF0ZSAtLT4KICAgICAgICA8U3R5bGUgVGFyZ2V0VHlwZT0iVGV4dEJsb2NrIj4KICAgICAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iRm9udFNpemUiIFZhbHVlPSJ7RHluYW1pY1Jlc291cmNlIEZvbnRTaXplfSIvPgogICAgICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJGb3JlZ3JvdW5kIiBWYWx1ZT0ie0R5bmFtaWNSZXNvdXJjZSBMYWJlbGJveEZvcmVncm91bmRDb2xvcn0iLz4KICAgICAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iQmFja2dyb3VuZCIgVmFsdWU9IntEeW5hbWljUmVzb3VyY2UgTGFiZWxCYWNrZ3JvdW5kQ29sb3J9Ii8+CiAgICAgICAgPC9TdHlsZT4KICAgICAgICA8U3R5bGUgeDpLZXk9IlRhYlRvZ2dsZUJ1dHRvbiIgVGFyZ2V0VHlwZT0ie3g6VHlwZSBUb2dnbGVCdXR0b259Ij4KICAgICAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iTWFyZ2luIiBWYWx1ZT0ie0R5bmFtaWNSZXNvdXJjZSBCdXR0b25NYXJnaW59Ii8+CiAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IkNvbnRlbnQiIFZhbHVlPSIiLz4KICAgICAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iRm9udEZhbWlseSIgVmFsdWU9IntEeW5hbWljUmVzb3VyY2UgRm9udEZhbWlseX0iLz4KICAgICAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iVGVtcGxhdGUiPgogICAgICAgICAgICAgICAgPFNldHRlci5WYWx1ZT4KICAgICAgICAgICAgICAgICAgICA8Q29udHJvbFRlbXBsYXRlIFRhcmdldFR5cGU9IlRvZ2dsZUJ1dHRvbiI+CiAgICAgICAgICAgICAgICAgICAgICAgIDxHcmlkPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPEJvcmRlciBOYW1lPSJCdXR0b25HbG93IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgQmFja2dyb3VuZD0ie1RlbXBsYXRlQmluZGluZyBCYWNrZ3JvdW5kfSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEJvcmRlckJydXNoPSJ7RHluYW1pY1Jlc291cmNlIEJ1dHRvbkZvcmVncm91bmRDb2xvcn0iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBCb3JkZXJUaGlja25lc3M9IntEeW5hbWljUmVzb3VyY2UgQnV0dG9uQm9yZGVyVGhpY2tuZXNzfSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIENvcm5lclJhZGl1cz0ie0R5bmFtaWNSZXNvdXJjZSBCdXR0b25Db3JuZXJSYWRpdXN9Ij4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8R3JpZD4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPEJvcmRlciBOYW1lPSJCYWNrZ3JvdW5kQm9yZGVyIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgQmFja2dyb3VuZD0ie1RlbXBsYXRlQmluZGluZyBCYWNrZ3JvdW5kfSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEJvcmRlckJydXNoPSJ7RHluYW1pY1Jlc291cmNlIEJ1dHRvbkJhY2tncm91bmRDb2xvcn0iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBCb3JkZXJUaGlja25lc3M9IntEeW5hbWljUmVzb3VyY2UgQnV0dG9uQm9yZGVyVGhpY2tuZXNzfSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIENvcm5lclJhZGl1cz0ie0R5bmFtaWNSZXNvdXJjZSBCdXR0b25Db3JuZXJSYWRpdXN9Ij4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxDb250ZW50UHJlc2VudGVyCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgSG9yaXpvbnRhbEFsaWdubWVudD0iQ2VudGVyIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIFZlcnRpY2FsQWxpZ25tZW50PSJDZW50ZXIiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgTWFyZ2luPSIxMCwyLDEwLDIiLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9Cb3JkZXI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9HcmlkPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9Cb3JkZXI+CiAgICAgICAgICAgICAgICAgICAgICAgIDwvR3JpZD4KICAgICAgICAgICAgICAgICAgICAgICAgPENvbnRyb2xUZW1wbGF0ZS5UcmlnZ2Vycz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxUcmlnZ2VyIFByb3BlcnR5PSJJc01vdXNlT3ZlciIgVmFsdWU9IlRydWUiPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxTZXR0ZXIgVGFyZ2V0TmFtZT0iQmFja2dyb3VuZEJvcmRlciIgUHJvcGVydHk9IkJhY2tncm91bmQiIFZhbHVlPSJ7RHluYW1pY1Jlc291cmNlIEJ1dHRvbkJhY2tncm91bmRNb3VzZW92ZXJDb2xvcn0iLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJFZmZlY3QiPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8U2V0dGVyLlZhbHVlPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPERyb3BTaGFkb3dFZmZlY3QgT3BhY2l0eT0iMSIgU2hhZG93RGVwdGg9IjUiIENvbG9yPSJ7RHluYW1pY1Jlc291cmNlIENCdXR0b25CYWNrZ3JvdW5kTW91c2VvdmVyQ29sb3J9IiBEaXJlY3Rpb249Ii0xMDAiIEJsdXJSYWRpdXM9IjE1Ii8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvU2V0dGVyLlZhbHVlPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvU2V0dGVyPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IlBhbmVsLlpJbmRleCIgVmFsdWU9IjIwMDAiLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvVHJpZ2dlcj4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxUcmlnZ2VyIFByb3BlcnR5PSJJc0NoZWNrZWQiIFZhbHVlPSJUcnVlIj4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJCb3JkZXJCcnVzaCIgVmFsdWU9IlBpbmsiLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJCb3JkZXJUaGlja25lc3MiIFZhbHVlPSIyIi8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPFNldHRlciBUYXJnZXROYW1lPSJCYWNrZ3JvdW5kQm9yZGVyIiBQcm9wZXJ0eT0iQmFja2dyb3VuZCIgVmFsdWU9IntEeW5hbWljUmVzb3VyY2UgQnV0dG9uQmFja2dyb3VuZFNlbGVjdGVkQ29sb3J9Ii8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iRWZmZWN0Ij4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPFNldHRlci5WYWx1ZT4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxEcm9wU2hhZG93RWZmZWN0IE9wYWNpdHk9IjEiIFNoYWRvd0RlcHRoPSIyIiBDb2xvcj0ie0R5bmFtaWNSZXNvdXJjZSBDQnV0dG9uQmFja2dyb3VuZE1vdXNlb3ZlckNvbG9yfSIgRGlyZWN0aW9uPSItMTExIiBCbHVyUmFkaXVzPSIxMCIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L1NldHRlci5WYWx1ZT4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L1NldHRlcj4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvVHJpZ2dlcj4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxUcmlnZ2VyIFByb3BlcnR5PSJJc0NoZWNrZWQiIFZhbHVlPSJGYWxzZSI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iQm9yZGVyQnJ1c2giIFZhbHVlPSJUcmFuc3BhcmVudCIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IkJvcmRlclRoaWNrbmVzcyIgVmFsdWU9IntEeW5hbWljUmVzb3VyY2UgQnV0dG9uQm9yZGVyVGhpY2tuZXNzfSIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9UcmlnZ2VyPgogICAgICAgICAgICAgICAgICAgICAgICA8L0NvbnRyb2xUZW1wbGF0ZS5UcmlnZ2Vycz4KICAgICAgICAgICAgICAgICAgICA8L0NvbnRyb2xUZW1wbGF0ZT4KICAgICAgICAgICAgICAgIDwvU2V0dGVyLlZhbHVlPgogICAgICAgICAgICA8L1NldHRlcj4KICAgICAgICA8L1N0eWxlPgogICAgICAgIDwhLS0gQnV0dG9uIFRlbXBsYXRlIC0tPgogICAgICAgIDxTdHlsZSBUYXJnZXRUeXBlPSJCdXR0b24iPgogICAgICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJNYXJnaW4iIFZhbHVlPSJ7RHluYW1pY1Jlc291cmNlIEJ1dHRvbk1hcmdpbn0iLz4KICAgICAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iRm9yZWdyb3VuZCIgVmFsdWU9IntEeW5hbWljUmVzb3VyY2UgQnV0dG9uRm9yZWdyb3VuZENvbG9yfSIvPgogICAgICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJCYWNrZ3JvdW5kIiBWYWx1ZT0ie0R5bmFtaWNSZXNvdXJjZSBCdXR0b25CYWNrZ3JvdW5kQ29sb3J9Ii8+CiAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IkhlaWdodCIgVmFsdWU9IntEeW5hbWljUmVzb3VyY2UgQnV0dG9uSGVpZ2h0fSIvPgogICAgICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJXaWR0aCIgVmFsdWU9IntEeW5hbWljUmVzb3VyY2UgQnV0dG9uV2lkdGh9Ii8+CiAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IkZvbnRTaXplIiBWYWx1ZT0ie0R5bmFtaWNSZXNvdXJjZSBCdXR0b25Gb250U2l6ZX0iLz4KICAgICAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iRm9udEZhbWlseSIgVmFsdWU9IntEeW5hbWljUmVzb3VyY2UgRm9udEZhbWlseX0iLz4KICAgICAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iVGVtcGxhdGUiPgogICAgICAgICAgICAgICAgPFNldHRlci5WYWx1ZT4KICAgICAgICAgICAgICAgICAgICA8Q29udHJvbFRlbXBsYXRlIFRhcmdldFR5cGU9IkJ1dHRvbiI+CiAgICAgICAgICAgICAgICAgICAgICAgIDxHcmlkPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPEJvcmRlciBOYW1lPSJCYWNrZ3JvdW5kQm9yZGVyIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBCYWNrZ3JvdW5kPSJ7VGVtcGxhdGVCaW5kaW5nIEJhY2tncm91bmR9IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBCb3JkZXJCcnVzaD0ie1RlbXBsYXRlQmluZGluZyBCb3JkZXJCcnVzaH0iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEJvcmRlclRoaWNrbmVzcz0ie0R5bmFtaWNSZXNvdXJjZSBCdXR0b25Cb3JkZXJUaGlja25lc3N9IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBDb3JuZXJSYWRpdXM9IntEeW5hbWljUmVzb3VyY2UgQnV0dG9uQ29ybmVyUmFkaXVzfSI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPENvbnRlbnRQcmVzZW50ZXIgSG9yaXpvbnRhbEFsaWdubWVudD0iQ2VudGVyIiBWZXJ0aWNhbEFsaWdubWVudD0iQ2VudGVyIiBNYXJnaW49IjEwLDIsMTAsMiIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9Cb3JkZXI+CiAgICAgICAgICAgICAgICAgICAgICAgIDwvR3JpZD4KICAgICAgICAgICAgICAgICAgICAgICAgPENvbnRyb2xUZW1wbGF0ZS5UcmlnZ2Vycz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxUcmlnZ2VyIFByb3BlcnR5PSJJc1ByZXNzZWQiIFZhbHVlPSJUcnVlIj4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8U2V0dGVyIFRhcmdldE5hbWU9IkJhY2tncm91bmRCb3JkZXIiIFByb3BlcnR5PSJCYWNrZ3JvdW5kIiBWYWx1ZT0ie0R5bmFtaWNSZXNvdXJjZSBCdXR0b25CYWNrZ3JvdW5kUHJlc3NlZENvbG9yfSIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9UcmlnZ2VyPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPFRyaWdnZXIgUHJvcGVydHk9IklzTW91c2VPdmVyIiBWYWx1ZT0iVHJ1ZSI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPFNldHRlciBUYXJnZXROYW1lPSJCYWNrZ3JvdW5kQm9yZGVyIiBQcm9wZXJ0eT0iQmFja2dyb3VuZCIgVmFsdWU9IntEeW5hbWljUmVzb3VyY2UgQnV0dG9uQmFja2dyb3VuZE1vdXNlb3ZlckNvbG9yfSIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9UcmlnZ2VyPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPFRyaWdnZXIgUHJvcGVydHk9IklzRW5hYmxlZCIgVmFsdWU9IkZhbHNlIj4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8U2V0dGVyIFRhcmdldE5hbWU9IkJhY2tncm91bmRCb3JkZXIiIFByb3BlcnR5PSJCYWNrZ3JvdW5kIiBWYWx1ZT0ie0R5bmFtaWNSZXNvdXJjZSBCdXR0b25CYWNrZ3JvdW5kU2VsZWN0ZWRDb2xvcn0iLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJGb3JlZ3JvdW5kIiBWYWx1ZT0iRGltR3JheSIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9UcmlnZ2VyPgogICAgICAgICAgICAgICAgICAgICAgICA8L0NvbnRyb2xUZW1wbGF0ZS5UcmlnZ2Vycz4KICAgICAgICAgICAgICAgICAgICA8L0NvbnRyb2xUZW1wbGF0ZT4KICAgICAgICAgICAgICAgIDwvU2V0dGVyLlZhbHVlPgogICAgICAgICAgICA8L1NldHRlcj4KICAgICAgICA8L1N0eWxlPgoKICAgICAgICA8U3R5bGUgeDpLZXk9IlRvZ2dsZUJ1dHRvblN0eWxlIiBUYXJnZXRUeXBlPSJUb2dnbGVCdXR0b24iPgogICAgICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJNYXJnaW4iIFZhbHVlPSJ7RHluYW1pY1Jlc291cmNlIEJ1dHRvbk1hcmdpbn0iLz4KICAgICAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iRm9yZWdyb3VuZCIgVmFsdWU9IntEeW5hbWljUmVzb3VyY2UgQnV0dG9uRm9yZWdyb3VuZENvbG9yfSIvPgogICAgICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJCYWNrZ3JvdW5kIiBWYWx1ZT0ie0R5bmFtaWNSZXNvdXJjZSBCdXR0b25CYWNrZ3JvdW5kQ29sb3J9Ii8+CiAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IkhlaWdodCIgVmFsdWU9IntEeW5hbWljUmVzb3VyY2UgQnV0dG9uSGVpZ2h0fSIvPgogICAgICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJXaWR0aCIgVmFsdWU9IntEeW5hbWljUmVzb3VyY2UgQnV0dG9uV2lkdGh9Ii8+CiAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IkZvbnRTaXplIiBWYWx1ZT0ie0R5bmFtaWNSZXNvdXJjZSBCdXR0b25Gb250U2l6ZX0iLz4KICAgICAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iRm9udEZhbWlseSIgVmFsdWU9IntEeW5hbWljUmVzb3VyY2UgRm9udEZhbWlseX0iLz4KICAgICAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iVGVtcGxhdGUiPgogICAgICAgICAgICAgICAgPFNldHRlci5WYWx1ZT4KICAgICAgICAgICAgICAgICAgICA8Q29udHJvbFRlbXBsYXRlIFRhcmdldFR5cGU9IlRvZ2dsZUJ1dHRvbiI+CiAgICAgICAgICAgICAgICAgICAgICAgIDxHcmlkPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPEJvcmRlciBOYW1lPSJCYWNrZ3JvdW5kQm9yZGVyIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBCYWNrZ3JvdW5kPSJ7VGVtcGxhdGVCaW5kaW5nIEJhY2tncm91bmR9IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBCb3JkZXJCcnVzaD0ie1RlbXBsYXRlQmluZGluZyBCb3JkZXJCcnVzaH0iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEJvcmRlclRoaWNrbmVzcz0ie0R5bmFtaWNSZXNvdXJjZSBCdXR0b25Cb3JkZXJUaGlja25lc3N9IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBDb3JuZXJSYWRpdXM9IntEeW5hbWljUmVzb3VyY2UgQnV0dG9uQ29ybmVyUmFkaXVzfSI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPEdyaWQ+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwhLS0gVG9nZ2xlIERvdCBCYWNrZ3JvdW5kIC0tPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8RWxsaXBzZSBXaWR0aD0iOCIgSGVpZ2h0PSIxNiIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBGaWxsPSJ7RHluYW1pY1Jlc291cmNlIFRvZ2dsZUJ1dHRvbk9uQ29sb3J9IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEhvcml6b250YWxBbGlnbm1lbnQ9IlJpZ2h0IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIFZlcnRpY2FsQWxpZ25tZW50PSJUb3AiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgTWFyZ2luPSIwLDMsNSwwIiAvPgoKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPCEtLSBUb2dnbGUgRG90IHdpdGggaG92ZXIgZ3JvdyBlZmZlY3QgLS0+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxFbGxpcHNlIE5hbWU9IlRvZ2dsZURvdCIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBXaWR0aD0iOCIgSGVpZ2h0PSI4IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEZpbGw9IntEeW5hbWljUmVzb3VyY2UgQnV0dG9uRm9yZWdyb3VuZENvbG9yfSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBIb3Jpem9udGFsQWxpZ25tZW50PSJSaWdodCIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBWZXJ0aWNhbEFsaWdubWVudD0iVG9wIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIE1hcmdpbj0iMCwzLDUsMCIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBSZW5kZXJUcmFuc2Zvcm1PcmlnaW49IjAuNSwwLjUiPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPEVsbGlwc2UuUmVuZGVyVHJhbnNmb3JtPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxTY2FsZVRyYW5zZm9ybSBTY2FsZVg9IjEiIFNjYWxlWT0iMSIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9FbGxpcHNlLlJlbmRlclRyYW5zZm9ybT4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9FbGxpcHNlPgoKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPCEtLSBDb250ZW50IFByZXNlbnRlciAtLT4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPENvbnRlbnRQcmVzZW50ZXIgSG9yaXpvbnRhbEFsaWdubWVudD0iQ2VudGVyIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgVmVydGljYWxBbGlnbm1lbnQ9IkNlbnRlciIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIE1hcmdpbj0iMTAsMiwxMCwyIi8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9HcmlkPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9Cb3JkZXI+CiAgICAgICAgICAgICAgICAgICAgICAgIDwvR3JpZD4KCiAgICAgICAgICAgICAgICAgICAgICAgIDwhLS0gVHJpZ2dlcnMgZm9yIFRvZ2dsZUJ1dHRvbiBzdGF0ZXMgLS0+CiAgICAgICAgICAgICAgICAgICAgICAgIDxDb250cm9sVGVtcGxhdGUuVHJpZ2dlcnM+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8IS0tIEhvdmVyIGVmZmVjdCAtLT4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxUcmlnZ2VyIFByb3BlcnR5PSJJc01vdXNlT3ZlciIgVmFsdWU9IlRydWUiPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxTZXR0ZXIgVGFyZ2V0TmFtZT0iQmFja2dyb3VuZEJvcmRlciIgUHJvcGVydHk9IkJhY2tncm91bmQiIFZhbHVlPSJ7RHluYW1pY1Jlc291cmNlIEJ1dHRvbkJhY2tncm91bmRNb3VzZW92ZXJDb2xvcn0iLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8VHJpZ2dlci5FbnRlckFjdGlvbnM+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxCZWdpblN0b3J5Ym9hcmQ+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8U3Rvcnlib2FyZD4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8IS0tIEFuaW1hdGlvbiB0byBncm93IHRoZSBkb3Qgd2hlbiBob3ZlcmVkIC0tPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxEb3VibGVBbmltYXRpb24gU3Rvcnlib2FyZC5UYXJnZXROYW1lPSJUb2dnbGVEb3QiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIFN0b3J5Ym9hcmQuVGFyZ2V0UHJvcGVydHk9IihVSUVsZW1lbnQuUmVuZGVyVHJhbnNmb3JtKS4oU2NhbGVUcmFuc2Zvcm0uU2NhbGVYKSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgVG89IjEuMiIgRHVyYXRpb249IjA6MDowLjEiLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8RG91YmxlQW5pbWF0aW9uIFN0b3J5Ym9hcmQuVGFyZ2V0TmFtZT0iVG9nZ2xlRG90IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBTdG9yeWJvYXJkLlRhcmdldFByb3BlcnR5PSIoVUlFbGVtZW50LlJlbmRlclRyYW5zZm9ybSkuKFNjYWxlVHJhbnNmb3JtLlNjYWxlWSkiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIFRvPSIxLjIiIER1cmF0aW9uPSIwOjA6MC4xIi8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L1N0b3J5Ym9hcmQ+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvQmVnaW5TdG9yeWJvYXJkPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvVHJpZ2dlci5FbnRlckFjdGlvbnM+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPFRyaWdnZXIuRXhpdEFjdGlvbnM+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxCZWdpblN0b3J5Ym9hcmQ+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8U3Rvcnlib2FyZD4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8IS0tIEFuaW1hdGlvbiB0byBzaHJpbmsgdGhlIGRvdCBiYWNrIHRvIG9yaWdpbmFsIHNpemUgd2hlbiBub3QgaG92ZXJlZCAtLT4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8RG91YmxlQW5pbWF0aW9uIFN0b3J5Ym9hcmQuVGFyZ2V0TmFtZT0iVG9nZ2xlRG90IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBTdG9yeWJvYXJkLlRhcmdldFByb3BlcnR5PSIoVUlFbGVtZW50LlJlbmRlclRyYW5zZm9ybSkuKFNjYWxlVHJhbnNmb3JtLlNjYWxlWCkiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIFRvPSIxLjAiIER1cmF0aW9uPSIwOjA6MC4xIi8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPERvdWJsZUFuaW1hdGlvbiBTdG9yeWJvYXJkLlRhcmdldE5hbWU9IlRvZ2dsZURvdCIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgU3Rvcnlib2FyZC5UYXJnZXRQcm9wZXJ0eT0iKFVJRWxlbWVudC5SZW5kZXJUcmFuc2Zvcm0pLihTY2FsZVRyYW5zZm9ybS5TY2FsZVkpIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBUbz0iMS4wIiBEdXJhdGlvbj0iMDowOjAuMSIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9TdG9yeWJvYXJkPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L0JlZ2luU3Rvcnlib2FyZD4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L1RyaWdnZXIuRXhpdEFjdGlvbnM+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L1RyaWdnZXI+CgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPCEtLSBJc0NoZWNrZWQgc3RhdGUgLS0+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8VHJpZ2dlciBQcm9wZXJ0eT0iSXNDaGVja2VkIiBWYWx1ZT0iVHJ1ZSI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPFNldHRlciBUYXJnZXROYW1lPSJUb2dnbGVEb3QiIFByb3BlcnR5PSJWZXJ0aWNhbEFsaWdubWVudCIgVmFsdWU9IkJvdHRvbSIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxTZXR0ZXIgVGFyZ2V0TmFtZT0iVG9nZ2xlRG90IiBQcm9wZXJ0eT0iTWFyZ2luIiBWYWx1ZT0iMCwwLDUsMyIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9UcmlnZ2VyPgoKICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwhLS0gSXNFbmFibGVkIHN0YXRlIC0tPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPFRyaWdnZXIgUHJvcGVydHk9IklzRW5hYmxlZCIgVmFsdWU9IkZhbHNlIj4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8U2V0dGVyIFRhcmdldE5hbWU9IkJhY2tncm91bmRCb3JkZXIiIFByb3BlcnR5PSJCYWNrZ3JvdW5kIiBWYWx1ZT0ie0R5bmFtaWNSZXNvdXJjZSBCdXR0b25CYWNrZ3JvdW5kU2VsZWN0ZWRDb2xvcn0iLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJGb3JlZ3JvdW5kIiBWYWx1ZT0iRGltR3JheSIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9UcmlnZ2VyPgogICAgICAgICAgICAgICAgICAgICAgICA8L0NvbnRyb2xUZW1wbGF0ZS5UcmlnZ2Vycz4KICAgICAgICAgICAgICAgICAgICA8L0NvbnRyb2xUZW1wbGF0ZT4KICAgICAgICAgICAgICAgIDwvU2V0dGVyLlZhbHVlPgogICAgICAgICAgICA8L1NldHRlcj4KICAgICAgICA8L1N0eWxlPgoKICAgICAgICA8U3R5bGUgeDpLZXk9IlNlYXJjaEJhckNsZWFyQnV0dG9uU3R5bGUiIFRhcmdldFR5cGU9IkJ1dHRvbiI+CiAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IkZvbnRGYW1pbHkiIFZhbHVlPSJ7RHluYW1pY1Jlc291cmNlIEZvbnRGYW1pbHl9Ii8+CiAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IkZvbnRTaXplIiBWYWx1ZT0ie0R5bmFtaWNSZXNvdXJjZSBTZWFyY2hCYXJDbGVhckJ1dHRvbkZvbnRTaXplfSIvPgogICAgICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJDb250ZW50IiBWYWx1ZT0iWCIvPgogICAgICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJIZWlnaHQiIFZhbHVlPSJ7RHluYW1pY1Jlc291cmNlIFNlYXJjaEJhckNsZWFyQnV0dG9uRm9udFNpemV9Ii8+CiAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IldpZHRoIiBWYWx1ZT0ie0R5bmFtaWNSZXNvdXJjZSBTZWFyY2hCYXJDbGVhckJ1dHRvbkZvbnRTaXplfSIvPgogICAgICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJCYWNrZ3JvdW5kIiBWYWx1ZT0iVHJhbnNwYXJlbnQiLz4KICAgICAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iRm9yZWdyb3VuZCIgVmFsdWU9IntEeW5hbWljUmVzb3VyY2UgTWFpbkZvcmVncm91bmRDb2xvcn0iLz4KICAgICAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iUGFkZGluZyIgVmFsdWU9IjAiLz4KICAgICAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iQm9yZGVyQnJ1c2giIFZhbHVlPSJUcmFuc3BhcmVudCIvPgogICAgICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJCb3JkZXJUaGlja25lc3MiIFZhbHVlPSIwIi8+CiAgICAgICAgICAgIDxTdHlsZS5UcmlnZ2Vycz4KICAgICAgICAgICAgICAgIDxUcmlnZ2VyIFByb3BlcnR5PSJJc01vdXNlT3ZlciIgVmFsdWU9IlRydWUiPgogICAgICAgICAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IkZvcmVncm91bmQiIFZhbHVlPSJSZWQiLz4KICAgICAgICAgICAgICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJCYWNrZ3JvdW5kIiBWYWx1ZT0iVHJhbnNwYXJlbnQiLz4KICAgICAgICAgICAgICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJCb3JkZXJUaGlja25lc3MiIFZhbHVlPSIxMCIvPgogICAgICAgICAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IkN1cnNvciIgVmFsdWU9IkhhbmQiLz4KICAgICAgICAgICAgICAgIDwvVHJpZ2dlcj4KICAgICAgICAgICAgPC9TdHlsZS5UcmlnZ2Vycz4KICAgICAgICA8L1N0eWxlPgogICAgICAgIDwhLS0gQ2hlY2tib3ggdGVtcGxhdGUgLS0+CiAgICAgICAgPFN0eWxlIFRhcmdldFR5cGU9IkNoZWNrQm94Ij4KICAgICAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iRm9yZWdyb3VuZCIgVmFsdWU9IntEeW5hbWljUmVzb3VyY2UgTWFpbkZvcmVncm91bmRDb2xvcn0iLz4KICAgICAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iQmFja2dyb3VuZCIgVmFsdWU9IntEeW5hbWljUmVzb3VyY2UgTWFpbkJhY2tncm91bmRDb2xvcn0iLz4KICAgICAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iRm9udFNpemUiIFZhbHVlPSJ7RHluYW1pY1Jlc291cmNlIEZvbnRTaXplfSIgLz4KICAgICAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iRm9udEZhbWlseSIgVmFsdWU9IntEeW5hbWljUmVzb3VyY2UgRm9udEZhbWlseX0iLz4KICAgICAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iVGV4dEVsZW1lbnQuRm9udEZhbWlseSIgVmFsdWU9IntEeW5hbWljUmVzb3VyY2UgRm9udEZhbWlseX0iLz4KICAgICAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iVGVtcGxhdGUiPgogICAgICAgICAgICAgICAgPFNldHRlci5WYWx1ZT4KICAgICAgICAgICAgICAgICAgICA8Q29udHJvbFRlbXBsYXRlIFRhcmdldFR5cGU9IkNoZWNrQm94Ij4KICAgICAgICAgICAgICAgICAgICAgICAgPEdyaWQgQmFja2dyb3VuZD0ie1RlbXBsYXRlQmluZGluZyBCYWNrZ3JvdW5kfSIgTWFyZ2luPSJ7RHluYW1pY1Jlc291cmNlIENoZWNrQm94TWFyZ2lufSI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8QnVsbGV0RGVjb3JhdG9yIEJhY2tncm91bmQ9IlRyYW5zcGFyZW50Ij4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8QnVsbGV0RGVjb3JhdG9yLkJ1bGxldD4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPEdyaWQgV2lkdGg9IntEeW5hbWljUmVzb3VyY2UgQ2hlY2tCb3hCdWxsZXREZWNvcmF0b3JTaXplfSIgSGVpZ2h0PSJ7RHluYW1pY1Jlc291cmNlIENoZWNrQm94QnVsbGV0RGVjb3JhdG9yU2l6ZX0iPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPEJvcmRlciBOYW1lPSJCb3JkZXIiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEJvcmRlckJydXNoPSJ7VGVtcGxhdGVCaW5kaW5nIEJvcmRlckJydXNofSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgQmFja2dyb3VuZD0ie0R5bmFtaWNSZXNvdXJjZSBCdXR0b25CYWNrZ3JvdW5kQ29sb3J9IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBCb3JkZXJUaGlja25lc3M9IjEiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIFdpZHRoPSJ7RHluYW1pY1Jlc291cmNlIENoZWNrQm94QnVsbGV0RGVjb3JhdG9yU2l6ZSAqMC44NX0iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEhlaWdodD0ie0R5bmFtaWNSZXNvdXJjZSBDaGVja0JveEJ1bGxldERlY29yYXRvclNpemUgKjAuODV9IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBNYXJnaW49IjEiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIFNuYXBzVG9EZXZpY2VQaXhlbHM9IlRydWUiLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxWaWV3Ym94IE5hbWU9IkNoZWNrTWFya0NvbnRhaW5lciIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgV2lkdGg9IntEeW5hbWljUmVzb3VyY2UgQ2hlY2tCb3hCdWxsZXREZWNvcmF0b3JTaXplfSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgSGVpZ2h0PSJ7RHluYW1pY1Jlc291cmNlIENoZWNrQm94QnVsbGV0RGVjb3JhdG9yU2l6ZX0iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEhvcml6b250YWxBbGlnbm1lbnQ9IkNlbnRlciIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgVmVydGljYWxBbGlnbm1lbnQ9IkNlbnRlciIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgVmlzaWJpbGl0eT0iQ29sbGFwc2VkIj4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8UGF0aCBOYW1lPSJDaGVja01hcmsiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgU3Ryb2tlPSJ7RHluYW1pY1Jlc291cmNlIFRvZ2dsZUJ1dHRvbk9uQ29sb3J9IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIFN0cm9rZVRoaWNrbmVzcz0iMS41IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIERhdGE9Ik0gMCA1IEwgNSAxMCBMIDEyIDAiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgU3RyZXRjaD0iVW5pZm9ybSIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9WaWV3Ym94PgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L0dyaWQ+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9CdWxsZXREZWNvcmF0b3IuQnVsbGV0PgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxDb250ZW50UHJlc2VudGVyIE1hcmdpbj0iNCwwLDAsMCIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBIb3Jpem9udGFsQWxpZ25tZW50PSJMZWZ0IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIFZlcnRpY2FsQWxpZ25tZW50PSJDZW50ZXIiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgUmVjb2duaXplc0FjY2Vzc0tleT0iVHJ1ZSIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9CdWxsZXREZWNvcmF0b3I+CiAgICAgICAgICAgICAgICAgICAgICAgIDwvR3JpZD4KICAgICAgICAgICAgICAgICAgICAgICAgPENvbnRyb2xUZW1wbGF0ZS5UcmlnZ2Vycz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxUcmlnZ2VyIFByb3BlcnR5PSJJc0NoZWNrZWQiIFZhbHVlPSJUcnVlIj4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8U2V0dGVyIFRhcmdldE5hbWU9IkNoZWNrTWFya0NvbnRhaW5lciIgUHJvcGVydHk9IlZpc2liaWxpdHkiIFZhbHVlPSJWaXNpYmxlIi8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L1RyaWdnZXI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8VHJpZ2dlciBQcm9wZXJ0eT0iSXNNb3VzZU92ZXIiIFZhbHVlPSJUcnVlIj4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8IS0tU2V0dGVyIFRhcmdldE5hbWU9IkJvcmRlciIgUHJvcGVydHk9IkJhY2tncm91bmQiIFZhbHVlPSJ7RHluYW1pY1Jlc291cmNlIEJ1dHRvbkJhY2tncm91bmRQcmVzc2VkQ29sb3J9Ii8tLT4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJGb3JlZ3JvdW5kIiBWYWx1ZT0ie0R5bmFtaWNSZXNvdXJjZSBCdXR0b25CYWNrZ3JvdW5kUHJlc3NlZENvbG9yfSIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9UcmlnZ2VyPgogICAgICAgICAgICAgICAgICAgICAgICA8L0NvbnRyb2xUZW1wbGF0ZS5UcmlnZ2Vycz4KICAgICAgICAgICAgICAgICAgICA8L0NvbnRyb2xUZW1wbGF0ZT4KICAgICAgICAgICAgICAgICA8L1NldHRlci5WYWx1ZT4KICAgICAgICAgICAgPC9TZXR0ZXI+CiAgICAgICAgPC9TdHlsZT4KICAgICAgICA8U3R5bGUgVGFyZ2V0VHlwZT0iUmFkaW9CdXR0b24iPgogICAgICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJGb3JlZ3JvdW5kIiBWYWx1ZT0ie0R5bmFtaWNSZXNvdXJjZSBNYWluRm9yZWdyb3VuZENvbG9yfSIvPgogICAgICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJCYWNrZ3JvdW5kIiBWYWx1ZT0ie0R5bmFtaWNSZXNvdXJjZSBNYWluQmFja2dyb3VuZENvbG9yfSIvPgogICAgICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJGb250U2l6ZSIgVmFsdWU9IntEeW5hbWljUmVzb3VyY2UgRm9udFNpemV9IiAvPgogICAgICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJGb250RmFtaWx5IiBWYWx1ZT0ie0R5bmFtaWNSZXNvdXJjZSBGb250RmFtaWx5fSIvPgogICAgICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJUZW1wbGF0ZSI+CiAgICAgICAgICAgICAgICA8U2V0dGVyLlZhbHVlPgogICAgICAgICAgICAgICAgICAgIDxDb250cm9sVGVtcGxhdGUgVGFyZ2V0VHlwZT0iUmFkaW9CdXR0b24iPgogICAgICAgICAgICAgICAgICAgICAgICA8U3RhY2tQYW5lbCBPcmllbnRhdGlvbj0iSG9yaXpvbnRhbCIgTWFyZ2luPSJ7RHluYW1pY1Jlc291cmNlIENoZWNrQm94TWFyZ2lufSI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8Vmlld2JveCBXaWR0aD0ie0R5bmFtaWNSZXNvdXJjZSBDaGVja0JveEJ1bGxldERlY29yYXRvclNpemV9IiBIZWlnaHQ9IntEeW5hbWljUmVzb3VyY2UgQ2hlY2tCb3hCdWxsZXREZWNvcmF0b3JTaXplfSI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPEdyaWQgV2lkdGg9IjE0IiBIZWlnaHQ9IjE0Ij4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPEVsbGlwc2UgTmFtZT0iT3V0ZXJDaXJjbGUiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgU3Ryb2tlPSJ7RHluYW1pY1Jlc291cmNlIFRvZ2dsZUJ1dHRvbk9mZkNvbG9yfSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBGaWxsPSJ7RHluYW1pY1Jlc291cmNlIEJ1dHRvbkJhY2tncm91bmRDb2xvcn0iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgU3Ryb2tlVGhpY2tuZXNzPSIxIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIFdpZHRoPSIxNCIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBIZWlnaHQ9IjE0IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIFNuYXBzVG9EZXZpY2VQaXhlbHM9IlRydWUiLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPEVsbGlwc2UgTmFtZT0iSW5uZXJDaXJjbGUiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgRmlsbD0ie0R5bmFtaWNSZXNvdXJjZSBUb2dnbGVCdXR0b25PbkNvbG9yfSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBXaWR0aD0iOCIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBIZWlnaHQ9IjgiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgVmlzaWJpbGl0eT0iQ29sbGFwc2VkIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEhvcml6b250YWxBbGlnbm1lbnQ9IkNlbnRlciIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBWZXJ0aWNhbEFsaWdubWVudD0iQ2VudGVyIi8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9HcmlkPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9WaWV3Ym94PgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPENvbnRlbnRQcmVzZW50ZXIgTWFyZ2luPSI0LDAsMCwwIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIFZlcnRpY2FsQWxpZ25tZW50PSJDZW50ZXIiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgUmVjb2duaXplc0FjY2Vzc0tleT0iVHJ1ZSIvPgogICAgICAgICAgICAgICAgICAgICAgICA8L1N0YWNrUGFuZWw+CiAgICAgICAgICAgICAgICAgICAgICAgIDxDb250cm9sVGVtcGxhdGUuVHJpZ2dlcnM+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8VHJpZ2dlciBQcm9wZXJ0eT0iSXNDaGVja2VkIiBWYWx1ZT0iVHJ1ZSI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPFNldHRlciBUYXJnZXROYW1lPSJJbm5lckNpcmNsZSIgUHJvcGVydHk9IlZpc2liaWxpdHkiIFZhbHVlPSJWaXNpYmxlIi8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L1RyaWdnZXI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8VHJpZ2dlciBQcm9wZXJ0eT0iSXNNb3VzZU92ZXIiIFZhbHVlPSJUcnVlIj4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8U2V0dGVyIFRhcmdldE5hbWU9Ik91dGVyQ2lyY2xlIiBQcm9wZXJ0eT0iU3Ryb2tlIiBWYWx1ZT0ie0R5bmFtaWNSZXNvdXJjZSBUb2dnbGVCdXR0b25PbkNvbG9yfSIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9UcmlnZ2VyPgogICAgICAgICAgICAgICAgICAgICAgICA8L0NvbnRyb2xUZW1wbGF0ZS5UcmlnZ2Vycz4KICAgICAgICAgICAgICAgICAgICA8L0NvbnRyb2xUZW1wbGF0ZT4KICAgICAgICAgICAgICAgIDwvU2V0dGVyLlZhbHVlPgogICAgICAgICAgICA8L1NldHRlcj4KICAgICAgICA8L1N0eWxlPgogICAgICAgIDxTdHlsZSB4OktleT0iVG9nZ2xlU3dpdGNoU3R5bGUiIFRhcmdldFR5cGU9IkNoZWNrQm94Ij4KICAgICAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iVGVtcGxhdGUiPgogICAgICAgICAgICAgICAgPFNldHRlci5WYWx1ZT4KICAgICAgICAgICAgICAgICAgICA8Q29udHJvbFRlbXBsYXRlIFRhcmdldFR5cGU9IkNoZWNrQm94Ij4KICAgICAgICAgICAgICAgICAgICAgICAgPFN0YWNrUGFuZWw+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8R3JpZD4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8Qm9yZGVyIFdpZHRoPSI0NSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEhlaWdodD0iMjAiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBCYWNrZ3JvdW5kPSIjNTU1NTU1IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgQ29ybmVyUmFkaXVzPSIxMCIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIE1hcmdpbj0iNSwwIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIC8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPEJvcmRlciBOYW1lPSJXUEZUb2dnbGVTd2l0Y2hCdXR0b24iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBXaWR0aD0iMjUiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBIZWlnaHQ9IjI1IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgQmFja2dyb3VuZD0iQmxhY2siCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBDb3JuZXJSYWRpdXM9IjEyLjUiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBIb3Jpem9udGFsQWxpZ25tZW50PSJMZWZ0IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIC8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPENvbnRlbnRQcmVzZW50ZXIgTmFtZT0iV1BGVG9nZ2xlU3dpdGNoQ29udGVudCIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBNYXJnaW49IjEwLDAsMCwwIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIENvbnRlbnQ9IntUZW1wbGF0ZUJpbmRpbmcgQ29udGVudH0iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgVmVydGljYWxBbGlnbm1lbnQ9IkNlbnRlciIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9HcmlkPgogICAgICAgICAgICAgICAgICAgICAgICA8L1N0YWNrUGFuZWw+CiAgICAgICAgICAgICAgICAgICAgICAgIDxDb250cm9sVGVtcGxhdGUuVHJpZ2dlcnM+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8VHJpZ2dlciBQcm9wZXJ0eT0iSXNDaGVja2VkIiBWYWx1ZT0iZmFsc2UiPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxUcmlnZ2VyLkV4aXRBY3Rpb25zPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8UmVtb3ZlU3Rvcnlib2FyZCBCZWdpblN0b3J5Ym9hcmROYW1lPSJXUEZUb2dnbGVTd2l0Y2hMZWZ0IiAvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8QmVnaW5TdG9yeWJvYXJkIE5hbWU9IldQRlRvZ2dsZVN3aXRjaFJpZ2h0Ij4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxTdG9yeWJvYXJkPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxUaGlja25lc3NBbmltYXRpb24gU3Rvcnlib2FyZC5UYXJnZXRQcm9wZXJ0eT0iTWFyZ2luIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgU3Rvcnlib2FyZC5UYXJnZXROYW1lPSJXUEZUb2dnbGVTd2l0Y2hCdXR0b24iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBEdXJhdGlvbj0iMDowOjA6MCIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEZyb209IjAsMCwwLDAiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBUbz0iMjgsMCwwLDAiPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvVGhpY2tuZXNzQW5pbWF0aW9uPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9TdG9yeWJvYXJkPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L0JlZ2luU3Rvcnlib2FyZD4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L1RyaWdnZXIuRXhpdEFjdGlvbnM+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPFNldHRlciBUYXJnZXROYW1lPSJXUEZUb2dnbGVTd2l0Y2hCdXR0b24iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBQcm9wZXJ0eT0iQmFja2dyb3VuZCIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIFZhbHVlPSIjZmZmOWY0ZjQiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvVHJpZ2dlcj4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxUcmlnZ2VyIFByb3BlcnR5PSJJc0NoZWNrZWQiIFZhbHVlPSJ0cnVlIj4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8VHJpZ2dlci5FeGl0QWN0aW9ucz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPFJlbW92ZVN0b3J5Ym9hcmQgQmVnaW5TdG9yeWJvYXJkTmFtZT0iV1BGVG9nZ2xlU3dpdGNoUmlnaHQiIC8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxCZWdpblN0b3J5Ym9hcmQgTmFtZT0iV1BGVG9nZ2xlU3dpdGNoTGVmdCI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8U3Rvcnlib2FyZD4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8VGhpY2tuZXNzQW5pbWF0aW9uIFN0b3J5Ym9hcmQuVGFyZ2V0UHJvcGVydHk9Ik1hcmdpbiIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIFN0b3J5Ym9hcmQuVGFyZ2V0TmFtZT0iV1BGVG9nZ2xlU3dpdGNoQnV0dG9uIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgRHVyYXRpb249IjA6MDowOjAiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBGcm9tPSIyOCwwLDAsMCIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIFRvPSIwLDAsMCwwIj4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L1RoaWNrbmVzc0FuaW1hdGlvbj4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvU3Rvcnlib2FyZD4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9CZWdpblN0b3J5Ym9hcmQ+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9UcmlnZ2VyLkV4aXRBY3Rpb25zPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxTZXR0ZXIgVGFyZ2V0TmFtZT0iV1BGVG9nZ2xlU3dpdGNoQnV0dG9uIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgUHJvcGVydHk9IkJhY2tncm91bmQiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBWYWx1ZT0iI2ZmMDYwNjAwIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIC8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L1RyaWdnZXI+CiAgICAgICAgICAgICAgICAgICAgICAgIDwvQ29udHJvbFRlbXBsYXRlLlRyaWdnZXJzPgogICAgICAgICAgICAgICAgICAgIDwvQ29udHJvbFRlbXBsYXRlPgogICAgICAgICAgICAgICAgPC9TZXR0ZXIuVmFsdWU+CiAgICAgICAgICAgIDwvU2V0dGVyPgogICAgICAgIDwvU3R5bGU+CgogICAgICAgIDxTdHlsZSB4OktleT0iQ29sb3JmdWxUb2dnbGVTd2l0Y2hTdHlsZSIgVGFyZ2V0VHlwZT0ie3g6VHlwZSBDaGVja0JveH0iPgogICAgICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJUZW1wbGF0ZSI+CiAgICAgICAgICAgICAgICA8U2V0dGVyLlZhbHVlPgogICAgICAgICAgICAgICAgICAgIDxDb250cm9sVGVtcGxhdGUgVGFyZ2V0VHlwZT0ie3g6VHlwZSBUb2dnbGVCdXR0b259Ij4KICAgICAgICAgICAgICAgICAgICAgICAgPEdyaWQgTmFtZT0idG9nZ2xlU3dpdGNoIj4KCiAgICAgICAgICAgICAgICAgICAgICAgIDxHcmlkLkNvbHVtbkRlZmluaXRpb25zPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPENvbHVtbkRlZmluaXRpb24gV2lkdGg9IkF1dG8iLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxDb2x1bW5EZWZpbml0aW9uIFdpZHRoPSJBdXRvIi8+CiAgICAgICAgICAgICAgICAgICAgICAgIDwvR3JpZC5Db2x1bW5EZWZpbml0aW9ucz4KCiAgICAgICAgICAgICAgICAgICAgICAgIDxCb3JkZXIgR3JpZC5Db2x1bW49IjEiIE5hbWU9IkJvcmRlciIgQ29ybmVyUmFkaXVzPSI4IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEJvcmRlclRoaWNrbmVzcz0iMSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBXaWR0aD0iMzQiIEhlaWdodD0iMTciPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPEVsbGlwc2UgTmFtZT0iRWxsaXBzZSIgRmlsbD0ie0R5bmFtaWNSZXNvdXJjZSBNYWluRm9yZWdyb3VuZENvbG9yfSIgU3RyZXRjaD0iVW5pZm9ybSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgTWFyZ2luPSIyLDIsMiwxIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBIb3Jpem9udGFsQWxpZ25tZW50PSJMZWZ0IiBXaWR0aD0iMTAuOCIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgUmVuZGVyVHJhbnNmb3JtT3JpZ2luPSIwLjUsIDAuNSI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPEVsbGlwc2UuUmVuZGVyVHJhbnNmb3JtPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8U2NhbGVUcmFuc2Zvcm0gU2NhbGVYPSIxIiBTY2FsZVk9IjEiIC8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9FbGxpcHNlLlJlbmRlclRyYW5zZm9ybT4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvRWxsaXBzZT4KICAgICAgICAgICAgICAgICAgICAgICAgPC9Cb3JkZXI+CiAgICAgICAgICAgICAgICAgICAgICAgIDwvR3JpZD4KCiAgICAgICAgICAgICAgICAgICAgICAgIDxDb250cm9sVGVtcGxhdGUuVHJpZ2dlcnM+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8VHJpZ2dlciBQcm9wZXJ0eT0iSXNNb3VzZU92ZXIiIFZhbHVlPSJUcnVlIj4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8U2V0dGVyIFRhcmdldE5hbWU9IkJvcmRlciIgUHJvcGVydHk9IkJvcmRlckJydXNoIiBWYWx1ZT0ie0R5bmFtaWNSZXNvdXJjZSBNYWluRm9yZWdyb3VuZENvbG9yfSIgLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8U2V0dGVyIFRhcmdldE5hbWU9IkJvcmRlciIgUHJvcGVydHk9IkJhY2tncm91bmQiIFZhbHVlPSJ7RHluYW1pY1Jlc291cmNlIExpbmtIb3ZlckZvcmVncm91bmRDb2xvcn0iLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJDdXJzb3IiIFZhbHVlPSJIYW5kIiAvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IlBhbmVsLlpJbmRleCIgVmFsdWU9IjEwMDAiLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8VHJpZ2dlci5FbnRlckFjdGlvbnM+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxCZWdpblN0b3J5Ym9hcmQ+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8U3Rvcnlib2FyZD4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8RG91YmxlQW5pbWF0aW9uIFN0b3J5Ym9hcmQuVGFyZ2V0TmFtZT0iRWxsaXBzZSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgU3Rvcnlib2FyZC5UYXJnZXRQcm9wZXJ0eT0iKFVJRWxlbWVudC5SZW5kZXJUcmFuc2Zvcm0pLihTY2FsZVRyYW5zZm9ybS5TY2FsZVgpIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBUbz0iMS4xIiBEdXJhdGlvbj0iMDowOjAuMSIgLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8RG91YmxlQW5pbWF0aW9uIFN0b3J5Ym9hcmQuVGFyZ2V0TmFtZT0iRWxsaXBzZSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgU3Rvcnlib2FyZC5UYXJnZXRQcm9wZXJ0eT0iKFVJRWxlbWVudC5SZW5kZXJUcmFuc2Zvcm0pLihTY2FsZVRyYW5zZm9ybS5TY2FsZVkpIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBUbz0iMS4xIiBEdXJhdGlvbj0iMDowOjAuMSIgLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvU3Rvcnlib2FyZD4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9CZWdpblN0b3J5Ym9hcmQ+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9UcmlnZ2VyLkVudGVyQWN0aW9ucz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8VHJpZ2dlci5FeGl0QWN0aW9ucz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPEJlZ2luU3Rvcnlib2FyZD4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxTdG9yeWJvYXJkPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxEb3VibGVBbmltYXRpb24gU3Rvcnlib2FyZC5UYXJnZXROYW1lPSJFbGxpcHNlIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBTdG9yeWJvYXJkLlRhcmdldFByb3BlcnR5PSIoVUlFbGVtZW50LlJlbmRlclRyYW5zZm9ybSkuKFNjYWxlVHJhbnNmb3JtLlNjYWxlWCkiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIFRvPSIxLjAiIER1cmF0aW9uPSIwOjA6MC4xIiAvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxEb3VibGVBbmltYXRpb24gU3Rvcnlib2FyZC5UYXJnZXROYW1lPSJFbGxpcHNlIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBTdG9yeWJvYXJkLlRhcmdldFByb3BlcnR5PSIoVUlFbGVtZW50LlJlbmRlclRyYW5zZm9ybSkuKFNjYWxlVHJhbnNmb3JtLlNjYWxlWSkiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIFRvPSIxLjAiIER1cmF0aW9uPSIwOjA6MC4xIiAvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9TdG9yeWJvYXJkPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L0JlZ2luU3Rvcnlib2FyZD4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L1RyaWdnZXIuRXhpdEFjdGlvbnM+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L1RyaWdnZXI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8VHJpZ2dlciBQcm9wZXJ0eT0iVG9nZ2xlQnV0dG9uLklzQ2hlY2tlZCIgVmFsdWU9IkZhbHNlIj4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8U2V0dGVyIFRhcmdldE5hbWU9IkJvcmRlciIgUHJvcGVydHk9IkJhY2tncm91bmQiIFZhbHVlPSJ7RHluYW1pY1Jlc291cmNlIE1haW5CYWNrZ3JvdW5kQ29sb3J9IiAvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxTZXR0ZXIgVGFyZ2V0TmFtZT0iQm9yZGVyIiBQcm9wZXJ0eT0iQm9yZGVyQnJ1c2giIFZhbHVlPSJ7RHluYW1pY1Jlc291cmNlIFRvZ2dsZUJ1dHRvbk9mZkNvbG9yfSIgLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8U2V0dGVyIFRhcmdldE5hbWU9IkVsbGlwc2UiIFByb3BlcnR5PSJGaWxsIiBWYWx1ZT0ie0R5bmFtaWNSZXNvdXJjZSBUb2dnbGVCdXR0b25PZmZDb2xvcn0iIC8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L1RyaWdnZXI+CgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPFRyaWdnZXIgUHJvcGVydHk9IlRvZ2dsZUJ1dHRvbi5Jc0NoZWNrZWQiIFZhbHVlPSJUcnVlIj4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8U2V0dGVyIFRhcmdldE5hbWU9IkJvcmRlciIgUHJvcGVydHk9IkJhY2tncm91bmQiIFZhbHVlPSJ7RHluYW1pY1Jlc291cmNlIFRvZ2dsZUJ1dHRvbk9uQ29sb3J9IiAvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxTZXR0ZXIgVGFyZ2V0TmFtZT0iQm9yZGVyIiBQcm9wZXJ0eT0iQm9yZGVyQnJ1c2giIFZhbHVlPSJ7RHluYW1pY1Jlc291cmNlIFRvZ2dsZUJ1dHRvbk9uQ29sb3J9IiAvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxTZXR0ZXIgVGFyZ2V0TmFtZT0iRWxsaXBzZSIgUHJvcGVydHk9IkZpbGwiIFZhbHVlPSJXaGl0ZSIgLz4KCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPFRyaWdnZXIuRW50ZXJBY3Rpb25zPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8QmVnaW5TdG9yeWJvYXJkPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPFN0b3J5Ym9hcmQ+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPFRoaWNrbmVzc0FuaW1hdGlvbiBTdG9yeWJvYXJkLlRhcmdldE5hbWU9IkVsbGlwc2UiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBTdG9yeWJvYXJkLlRhcmdldFByb3BlcnR5PSJNYXJnaW4iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBUbz0iMTgsMiwyLDIiIER1cmF0aW9uPSIwOjA6MC4xIiAvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9TdG9yeWJvYXJkPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L0JlZ2luU3Rvcnlib2FyZD4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L1RyaWdnZXIuRW50ZXJBY3Rpb25zPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxUcmlnZ2VyLkV4aXRBY3Rpb25zPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8QmVnaW5TdG9yeWJvYXJkPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPFN0b3J5Ym9hcmQ+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPFRoaWNrbmVzc0FuaW1hdGlvbiBTdG9yeWJvYXJkLlRhcmdldE5hbWU9IkVsbGlwc2UiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBTdG9yeWJvYXJkLlRhcmdldFByb3BlcnR5PSJNYXJnaW4iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBUbz0iMiwyLDIsMSIgRHVyYXRpb249IjA6MDowLjEiIC8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L1N0b3J5Ym9hcmQ+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvQmVnaW5TdG9yeWJvYXJkPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvVHJpZ2dlci5FeGl0QWN0aW9ucz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvVHJpZ2dlcj4KICAgICAgICAgICAgICAgICAgICAgICAgPC9Db250cm9sVGVtcGxhdGUuVHJpZ2dlcnM+CiAgICAgICAgICAgICAgICAgICAgPC9Db250cm9sVGVtcGxhdGU+CiAgICAgICAgICAgICAgICA8L1NldHRlci5WYWx1ZT4KICAgICAgICAgICAgPC9TZXR0ZXI+CiAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IlZlcnRpY2FsQ29udGVudEFsaWdubWVudCIgVmFsdWU9IkNlbnRlciIgLz4KICAgICAgICA8L1N0eWxlPgoKICAgICAgICA8U3R5bGUgeDpLZXk9ImxhYmVsZm9ydHdlYWtzIiBUYXJnZXRUeXBlPSJ7eDpUeXBlIExhYmVsfSI+CiAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IkZvcmVncm91bmQiIFZhbHVlPSJ7RHluYW1pY1Jlc291cmNlIE1haW5Gb3JlZ3JvdW5kQ29sb3J9IiAvPgogICAgICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJCYWNrZ3JvdW5kIiBWYWx1ZT0ie0R5bmFtaWNSZXNvdXJjZSBNYWluQmFja2dyb3VuZENvbG9yfSIgLz4KICAgICAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iRm9udEZhbWlseSIgVmFsdWU9IntEeW5hbWljUmVzb3VyY2UgRm9udEZhbWlseX0iLz4KICAgICAgICAgICAgPFN0eWxlLlRyaWdnZXJzPgogICAgICAgICAgICAgICAgPFRyaWdnZXIgUHJvcGVydHk9IklzTW91c2VPdmVyIiBWYWx1ZT0iVHJ1ZSI+CiAgICAgICAgICAgICAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iRm9yZWdyb3VuZCIgVmFsdWU9IldoaXRlIiAvPgogICAgICAgICAgICAgICAgPC9UcmlnZ2VyPgogICAgICAgICAgICA8L1N0eWxlLlRyaWdnZXJzPgogICAgICAgIDwvU3R5bGU+CgogICAgICAgIDxTdHlsZSB4OktleT0iQm9yZGVyU3R5bGUiIFRhcmdldFR5cGU9IkJvcmRlciI+CiAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IkJhY2tncm91bmQiIFZhbHVlPSJ7RHluYW1pY1Jlc291cmNlIE1haW5CYWNrZ3JvdW5kQ29sb3J9Ii8+CiAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IkJvcmRlckJydXNoIiBWYWx1ZT0ie0R5bmFtaWNSZXNvdXJjZSBCb3JkZXJDb2xvcn0iLz4KICAgICAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iQm9yZGVyVGhpY2tuZXNzIiBWYWx1ZT0iMSIvPgogICAgICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJDb3JuZXJSYWRpdXMiIFZhbHVlPSI1Ii8+CiAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IlBhZGRpbmciIFZhbHVlPSI1Ii8+CiAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9Ik1hcmdpbiIgVmFsdWU9IjUiLz4KICAgICAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iRWZmZWN0Ij4KICAgICAgICAgICAgICAgIDxTZXR0ZXIuVmFsdWU+CiAgICAgICAgICAgICAgICAgICAgPERyb3BTaGFkb3dFZmZlY3QgU2hhZG93RGVwdGg9IjUiIEJsdXJSYWRpdXM9IjUiIE9wYWNpdHk9IntEeW5hbWljUmVzb3VyY2UgQm9yZGVyT3BhY2l0eX0iIENvbG9yPSJ7RHluYW1pY1Jlc291cmNlIENCb3JkZXJDb2xvcn0iLz4KICAgICAgICAgICAgICAgIDwvU2V0dGVyLlZhbHVlPgogICAgICAgICAgICA8L1NldHRlcj4KICAgICAgICA8L1N0eWxlPgoKICAgICAgICA8U3R5bGUgVGFyZ2V0VHlwZT0iVGV4dEJveCI+CiAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IkJhY2tncm91bmQiIFZhbHVlPSJ7RHluYW1pY1Jlc291cmNlIE1haW5CYWNrZ3JvdW5kQ29sb3J9Ii8+CiAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IkJvcmRlckJydXNoIiBWYWx1ZT0ie0R5bmFtaWNSZXNvdXJjZSBNYWluRm9yZWdyb3VuZENvbG9yfSIvPgogICAgICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJCb3JkZXJUaGlja25lc3MiIFZhbHVlPSIxIi8+CiAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IkZvcmVncm91bmQiIFZhbHVlPSJ7RHluYW1pY1Jlc291cmNlIE1haW5Gb3JlZ3JvdW5kQ29sb3J9Ii8+CiAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IkZvbnRTaXplIiBWYWx1ZT0ie0R5bmFtaWNSZXNvdXJjZSBGb250U2l6ZX0iLz4KICAgICAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iRm9udEZhbWlseSIgVmFsdWU9IntEeW5hbWljUmVzb3VyY2UgRm9udEZhbWlseX0iLz4KICAgICAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iUGFkZGluZyIgVmFsdWU9IjUiLz4KICAgICAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iSG9yaXpvbnRhbEFsaWdubWVudCIgVmFsdWU9IlN0cmV0Y2giLz4KICAgICAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iVmVydGljYWxBbGlnbm1lbnQiIFZhbHVlPSJDZW50ZXIiLz4KICAgICAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iSG9yaXpvbnRhbENvbnRlbnRBbGlnbm1lbnQiIFZhbHVlPSJTdHJldGNoIi8+CiAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IkNhcmV0QnJ1c2giIFZhbHVlPSJ7RHluYW1pY1Jlc291cmNlIE1haW5Gb3JlZ3JvdW5kQ29sb3J9Ii8+CiAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IkNvbnRleHRNZW51Ij4KICAgICAgICAgICAgICAgIDxTZXR0ZXIuVmFsdWU+CiAgICAgICAgICAgICAgICAgICAgPENvbnRleHRNZW51PgogICAgICAgICAgICAgICAgICAgICAgICA8Q29udGV4dE1lbnUuU3R5bGU+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8U3R5bGUgVGFyZ2V0VHlwZT0iQ29udGV4dE1lbnUiPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IlRlbXBsYXRlIj4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPFNldHRlci5WYWx1ZT4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxDb250cm9sVGVtcGxhdGUgVGFyZ2V0VHlwZT0iQ29udGV4dE1lbnUiPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxCb3JkZXIgQmFja2dyb3VuZD0ie0R5bmFtaWNSZXNvdXJjZSBNYWluQmFja2dyb3VuZENvbG9yfSIgQm9yZGVyQnJ1c2g9IntEeW5hbWljUmVzb3VyY2UgQm9yZGVyQ29sb3J9IiBCb3JkZXJUaGlja25lc3M9IjEiIENvcm5lclJhZGl1cz0iNSIgUGFkZGluZz0iNSI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxTdGFja1BhbmVsPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPE1lbnVJdGVtIENvbW1hbmQ9IkN1dCIgSGVhZGVyPSJDdXQiLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxNZW51SXRlbSBDb21tYW5kPSJDb3B5IiBIZWFkZXI9IkNvcHkiLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxNZW51SXRlbSBDb21tYW5kPSJQYXN0ZSIgSGVhZGVyPSJQYXN0ZSIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L1N0YWNrUGFuZWw+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9Cb3JkZXI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L0NvbnRyb2xUZW1wbGF0ZT4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9TZXR0ZXIuVmFsdWU+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9TZXR0ZXI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L1N0eWxlPgogICAgICAgICAgICAgICAgICAgICAgICA8L0NvbnRleHRNZW51LlN0eWxlPgogICAgICAgICAgICAgICAgICAgIDwvQ29udGV4dE1lbnU+CiAgICAgICAgICAgICAgICA8L1NldHRlci5WYWx1ZT4KICAgICAgICAgICAgPC9TZXR0ZXI+CiAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IlRlbXBsYXRlIj4KICAgICAgICAgICAgICAgIDxTZXR0ZXIuVmFsdWU+CiAgICAgICAgICAgICAgICAgICAgPENvbnRyb2xUZW1wbGF0ZSBUYXJnZXRUeXBlPSJUZXh0Qm94Ij4KICAgICAgICAgICAgICAgICAgICAgICAgPEJvcmRlciBCYWNrZ3JvdW5kPSJ7VGVtcGxhdGVCaW5kaW5nIEJhY2tncm91bmR9IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEJvcmRlckJydXNoPSJ7VGVtcGxhdGVCaW5kaW5nIEJvcmRlckJydXNofSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBCb3JkZXJUaGlja25lc3M9IntUZW1wbGF0ZUJpbmRpbmcgQm9yZGVyVGhpY2tuZXNzfSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBDb3JuZXJSYWRpdXM9IjUiPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPEdyaWQ+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPFNjcm9sbFZpZXdlciBOYW1lPSJQQVJUX0NvbnRlbnRIb3N0IiAvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9HcmlkPgogICAgICAgICAgICAgICAgICAgICAgICA8L0JvcmRlcj4KICAgICAgICAgICAgICAgICAgICA8L0NvbnRyb2xUZW1wbGF0ZT4KICAgICAgICAgICAgICAgIDwvU2V0dGVyLlZhbHVlPgogICAgICAgICAgICA8L1NldHRlcj4KICAgICAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iRWZmZWN0Ij4KICAgICAgICAgICAgICAgIDxTZXR0ZXIuVmFsdWU+CiAgICAgICAgICAgICAgICAgICAgPERyb3BTaGFkb3dFZmZlY3QgU2hhZG93RGVwdGg9IjUiIEJsdXJSYWRpdXM9IjUiIE9wYWNpdHk9IntEeW5hbWljUmVzb3VyY2UgQm9yZGVyT3BhY2l0eX0iIENvbG9yPSJ7RHluYW1pY1Jlc291cmNlIENCb3JkZXJDb2xvcn0iLz4KICAgICAgICAgICAgICAgIDwvU2V0dGVyLlZhbHVlPgogICAgICAgICAgICA8L1NldHRlcj4KICAgICAgICA8L1N0eWxlPgogICAgICAgIDxTdHlsZSBUYXJnZXRUeXBlPSJQYXNzd29yZEJveCI+CiAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IkJhY2tncm91bmQiIFZhbHVlPSJ7RHluYW1pY1Jlc291cmNlIE1haW5CYWNrZ3JvdW5kQ29sb3J9Ii8+CiAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IkJvcmRlckJydXNoIiBWYWx1ZT0ie0R5bmFtaWNSZXNvdXJjZSBNYWluRm9yZWdyb3VuZENvbG9yfSIvPgogICAgICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJCb3JkZXJUaGlja25lc3MiIFZhbHVlPSIxIi8+CiAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IkZvcmVncm91bmQiIFZhbHVlPSJ7RHluYW1pY1Jlc291cmNlIE1haW5Gb3JlZ3JvdW5kQ29sb3J9Ii8+CiAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IkZvbnRTaXplIiBWYWx1ZT0ie0R5bmFtaWNSZXNvdXJjZSBGb250U2l6ZX0iLz4KICAgICAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iRm9udEZhbWlseSIgVmFsdWU9IntEeW5hbWljUmVzb3VyY2UgRm9udEZhbWlseX0iLz4KICAgICAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iUGFkZGluZyIgVmFsdWU9IjUiLz4KICAgICAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iSG9yaXpvbnRhbEFsaWdubWVudCIgVmFsdWU9IlN0cmV0Y2giLz4KICAgICAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iVmVydGljYWxBbGlnbm1lbnQiIFZhbHVlPSJDZW50ZXIiLz4KICAgICAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iSG9yaXpvbnRhbENvbnRlbnRBbGlnbm1lbnQiIFZhbHVlPSJTdHJldGNoIi8+CiAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IkNhcmV0QnJ1c2giIFZhbHVlPSJ7RHluYW1pY1Jlc291cmNlIE1haW5Gb3JlZ3JvdW5kQ29sb3J9Ii8+CiAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IlRlbXBsYXRlIj4KICAgICAgICAgICAgICAgIDxTZXR0ZXIuVmFsdWU+CiAgICAgICAgICAgICAgICAgICAgPENvbnRyb2xUZW1wbGF0ZSBUYXJnZXRUeXBlPSJQYXNzd29yZEJveCI+CiAgICAgICAgICAgICAgICAgICAgICAgIDxCb3JkZXIgQmFja2dyb3VuZD0ie1RlbXBsYXRlQmluZGluZyBCYWNrZ3JvdW5kfSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBCb3JkZXJCcnVzaD0ie1RlbXBsYXRlQmluZGluZyBCb3JkZXJCcnVzaH0iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgQm9yZGVyVGhpY2tuZXNzPSJ7VGVtcGxhdGVCaW5kaW5nIEJvcmRlclRoaWNrbmVzc30iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgQ29ybmVyUmFkaXVzPSI1Ij4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxHcmlkPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxTY3JvbGxWaWV3ZXIgTmFtZT0iUEFSVF9Db250ZW50SG9zdCIgLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvR3JpZD4KICAgICAgICAgICAgICAgICAgICAgICAgPC9Cb3JkZXI+CiAgICAgICAgICAgICAgICAgICAgPC9Db250cm9sVGVtcGxhdGU+CiAgICAgICAgICAgICAgICA8L1NldHRlci5WYWx1ZT4KICAgICAgICAgICAgPC9TZXR0ZXI+CiAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IkVmZmVjdCI+CiAgICAgICAgICAgICAgICA8U2V0dGVyLlZhbHVlPgogICAgICAgICAgICAgICAgICAgIDxEcm9wU2hhZG93RWZmZWN0IFNoYWRvd0RlcHRoPSI1IiBCbHVyUmFkaXVzPSI1IiBPcGFjaXR5PSJ7RHluYW1pY1Jlc291cmNlIEJvcmRlck9wYWNpdHl9IiBDb2xvcj0ie0R5bmFtaWNSZXNvdXJjZSBDQm9yZGVyQ29sb3J9Ii8+CiAgICAgICAgICAgICAgICA8L1NldHRlci5WYWx1ZT4KICAgICAgICAgICAgPC9TZXR0ZXI+CiAgICAgICAgPC9TdHlsZT4KICAgICAgICA8U3R5bGUgeDpLZXk9IlNjcm9sbFZpc2liaWxpdHlSZWN0YW5nbGUiIFRhcmdldFR5cGU9IlJlY3RhbmdsZSI+CiAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IlZpc2liaWxpdHkiIFZhbHVlPSJDb2xsYXBzZWQiLz4KICAgICAgICAgICAgPFN0eWxlLlRyaWdnZXJzPgogICAgICAgICAgICAgICAgPE11bHRpRGF0YVRyaWdnZXI+CiAgICAgICAgICAgICAgICAgICAgPE11bHRpRGF0YVRyaWdnZXIuQ29uZGl0aW9ucz4KICAgICAgICAgICAgICAgICAgICAgICAgPENvbmRpdGlvbiBCaW5kaW5nPSJ7QmluZGluZyBQYXRoPUNvbXB1dGVkSG9yaXpvbnRhbFNjcm9sbEJhclZpc2liaWxpdHksIEVsZW1lbnROYW1lPXNjcm9sbFZpZXdlcn0iIFZhbHVlPSJWaXNpYmxlIi8+CiAgICAgICAgICAgICAgICAgICAgICAgIDxDb25kaXRpb24gQmluZGluZz0ie0JpbmRpbmcgUGF0aD1Db21wdXRlZFZlcnRpY2FsU2Nyb2xsQmFyVmlzaWJpbGl0eSwgRWxlbWVudE5hbWU9c2Nyb2xsVmlld2VyfSIgVmFsdWU9IlZpc2libGUiLz4KICAgICAgICAgICAgICAgICAgICA8L011bHRpRGF0YVRyaWdnZXIuQ29uZGl0aW9ucz4KICAgICAgICAgICAgICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJWaXNpYmlsaXR5IiBWYWx1ZT0iVmlzaWJsZSIvPgogICAgICAgICAgICAgICAgPC9NdWx0aURhdGFUcmlnZ2VyPgogICAgICAgICAgICA8L1N0eWxlLlRyaWdnZXJzPgogICAgICAgIDwvU3R5bGU+CiAgICAgICAgPFN0eWxlIHg6S2V5PSJSb3VuZGVkUHJvZ3Jlc3NCYXJTdHlsZSIgVGFyZ2V0VHlwZT0iUHJvZ3Jlc3NCYXIiPgogICAgICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJUZW1wbGF0ZSI+CiAgICAgICAgICAgICAgICA8U2V0dGVyLlZhbHVlPgogICAgICAgICAgICAgICAgICAgIDxDb250cm9sVGVtcGxhdGUgVGFyZ2V0VHlwZT0iUHJvZ3Jlc3NCYXIiPgogICAgICAgICAgICAgICAgICAgICAgICA8Qm9yZGVyIENvcm5lclJhZGl1cz0iNCIgQmFja2dyb3VuZD0ie0R5bmFtaWNSZXNvdXJjZSBNYWluQmFja2dyb3VuZENvbG9yfSIgQm9yZGVyQnJ1c2g9IntEeW5hbWljUmVzb3VyY2UgTWFpbkZvcmVncm91bmRDb2xvcn0iIEJvcmRlclRoaWNrbmVzcz0iMSI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8R3JpZCBDbGlwVG9Cb3VuZHM9IlRydWUiPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxCb3JkZXIgTmFtZT0iUEFSVF9UcmFjayIgQ29ybmVyUmFkaXVzPSI0IiBCYWNrZ3JvdW5kPSJUcmFuc3BhcmVudCIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxCb3JkZXIgTmFtZT0iUEFSVF9JbmRpY2F0b3IiIENvcm5lclJhZGl1cz0iNCIgQmFja2dyb3VuZD0ie0R5bmFtaWNSZXNvdXJjZSBQcm9ncmVzc0JhckZvcmVncm91bmRDb2xvcn0iIEhvcml6b250YWxBbGlnbm1lbnQ9IkxlZnQiLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvR3JpZD4KICAgICAgICAgICAgICAgICAgICAgICAgPC9Cb3JkZXI+CiAgICAgICAgICAgICAgICAgICAgPC9Db250cm9sVGVtcGxhdGU+CiAgICAgICAgICAgICAgICA8L1NldHRlci5WYWx1ZT4KICAgICAgICAgICAgPC9TZXR0ZXI+CiAgICAgICAgPC9TdHlsZT4KICAgICAgICA8IS0tIEZpbHRlciBDaGlwIFN0eWxlIOKAlCB1c2VkIGJ5IHRoZSBJbnN0YWxsIHRhYiBjYXRlZ29yeSBmaWx0ZXIgYnV0dG9ucyAtLT4KICAgICAgICA8U3R5bGUgeDpLZXk9IkZpbHRlckNoaXBTdHlsZSIgVGFyZ2V0VHlwZT0iQnV0dG9uIiBCYXNlZE9uPSJ7U3RhdGljUmVzb3VyY2Uge3g6VHlwZSBCdXR0b259fSI+CiAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9Ik1hcmdpbiIgVmFsdWU9IjIiLz4KICAgICAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iUGFkZGluZyIgVmFsdWU9IjEyLDAsMTIsMCIvPgogICAgICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJXaWR0aCIgVmFsdWU9IkF1dG8iLz4KICAgICAgICAgICAgPFNldHRlciBQcm9wZXJ0eT0iQ3Vyc29yIiBWYWx1ZT0iSGFuZCIvPgogICAgICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJUZW1wbGF0ZSI+CiAgICAgICAgICAgICAgICA8U2V0dGVyLlZhbHVlPgogICAgICAgICAgICAgICAgICAgIDxDb250cm9sVGVtcGxhdGUgVGFyZ2V0VHlwZT0iQnV0dG9uIj4KICAgICAgICAgICAgICAgICAgICAgICAgPEJvcmRlciBOYW1lPSJDaGlwQm9yZGVyIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEJhY2tncm91bmQ9IntUZW1wbGF0ZUJpbmRpbmcgQmFja2dyb3VuZH0iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgQm9yZGVyQnJ1c2g9IntUZW1wbGF0ZUJpbmRpbmcgQm9yZGVyQnJ1c2h9IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEJvcmRlclRoaWNrbmVzcz0ie0R5bmFtaWNSZXNvdXJjZSBCdXR0b25Cb3JkZXJUaGlja25lc3N9IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIENvcm5lclJhZGl1cz0ie0R5bmFtaWNSZXNvdXJjZSBCdXR0b25Db3JuZXJSYWRpdXN9IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIFBhZGRpbmc9IntUZW1wbGF0ZUJpbmRpbmcgUGFkZGluZ30iPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPENvbnRlbnRQcmVzZW50ZXIgSG9yaXpvbnRhbEFsaWdubWVudD0iQ2VudGVyIiBWZXJ0aWNhbEFsaWdubWVudD0iQ2VudGVyIi8+CiAgICAgICAgICAgICAgICAgICAgICAgIDwvQm9yZGVyPgogICAgICAgICAgICAgICAgICAgICAgICA8Q29udHJvbFRlbXBsYXRlLlRyaWdnZXJzPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPFRyaWdnZXIgUHJvcGVydHk9IklzUHJlc3NlZCIgVmFsdWU9IlRydWUiPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxTZXR0ZXIgVGFyZ2V0TmFtZT0iQ2hpcEJvcmRlciIgUHJvcGVydHk9IkJhY2tncm91bmQiIFZhbHVlPSJ7RHluYW1pY1Jlc291cmNlIEJ1dHRvbkJhY2tncm91bmRQcmVzc2VkQ29sb3J9Ii8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L1RyaWdnZXI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8VHJpZ2dlciBQcm9wZXJ0eT0iSXNNb3VzZU92ZXIiIFZhbHVlPSJUcnVlIj4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8U2V0dGVyIFRhcmdldE5hbWU9IkNoaXBCb3JkZXIiIFByb3BlcnR5PSJCYWNrZ3JvdW5kIiBWYWx1ZT0ie0R5bmFtaWNSZXNvdXJjZSBCdXR0b25CYWNrZ3JvdW5kTW91c2VvdmVyQ29sb3J9Ii8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L1RyaWdnZXI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8VHJpZ2dlciBQcm9wZXJ0eT0iSXNFbmFibGVkIiBWYWx1ZT0iRmFsc2UiPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxTZXR0ZXIgVGFyZ2V0TmFtZT0iQ2hpcEJvcmRlciIgUHJvcGVydHk9IkJhY2tncm91bmQiIFZhbHVlPSJ7RHluYW1pY1Jlc291cmNlIEJ1dHRvbkJhY2tncm91bmRTZWxlY3RlZENvbG9yfSIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IkZvcmVncm91bmQiIFZhbHVlPSJEaW1HcmF5Ii8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L1RyaWdnZXI+CiAgICAgICAgICAgICAgICAgICAgICAgIDwvQ29udHJvbFRlbXBsYXRlLlRyaWdnZXJzPgogICAgICAgICAgICAgICAgICAgIDwvQ29udHJvbFRlbXBsYXRlPgogICAgICAgICAgICAgICAgPC9TZXR0ZXIuVmFsdWU+CiAgICAgICAgICAgIDwvU2V0dGVyPgogICAgICAgIDwvU3R5bGU+CiAgICA8L1dpbmRvdy5SZXNvdXJjZXM+CiAgICA8R3JpZCBCYWNrZ3JvdW5kPSJ7RHluYW1pY1Jlc291cmNlIE1haW5CYWNrZ3JvdW5kQ29sb3J9IiBTaG93R3JpZExpbmVzPSJGYWxzZSIgTmFtZT0iV1BGTWFpbkdyaWQiIFdpZHRoPSJBdXRvIiBIZWlnaHQ9IkF1dG8iIEhvcml6b250YWxBbGlnbm1lbnQ9IlN0cmV0Y2giPgogICAgICAgIDxHcmlkLlJvd0RlZmluaXRpb25zPgogICAgICAgICAgICA8Um93RGVmaW5pdGlvbiBIZWlnaHQ9IkF1dG8iLz4KICAgICAgICAgICAgPFJvd0RlZmluaXRpb24gSGVpZ2h0PSJBdXRvIi8+CiAgICAgICAgICAgIDxSb3dEZWZpbml0aW9uIEhlaWdodD0iKiIvPgogICAgICAgICAgICA8Um93RGVmaW5pdGlvbiBIZWlnaHQ9IkF1dG8iLz4KICAgICAgICA8L0dyaWQuUm93RGVmaW5pdGlvbnM+CiAgICAgICAgPEdyaWQuQ29sdW1uRGVmaW5pdGlvbnM+CiAgICAgICAgICAgIDxDb2x1bW5EZWZpbml0aW9uIFdpZHRoPSIqIi8+CiAgICAgICAgPC9HcmlkLkNvbHVtbkRlZmluaXRpb25zPgogICAgICAgIDwhLS0gT2ZmbGluZSBiYW5uZXIgLS0+CiAgICAgICAgPEJvcmRlciBOYW1lPSJXUEZPZmZsaW5lQmFubmVyIiBHcmlkLlJvdz0iMCIgQmFja2dyb3VuZD0iIzhCMDAwMCIgVmlzaWJpbGl0eT0iQ29sbGFwc2VkIiBQYWRkaW5nPSI2LDQiPgogICAgICAgICAgICA8VGV4dEJsb2NrIFRleHQ9IiYjeDI2QTA7IE9mZmxpbmUgTW9kZSAtIE5vIEludGVybmV0IENvbm5lY3Rpb24iIEZvcmVncm91bmQ9IldoaXRlIiBGb250V2VpZ2h0PSJCb2xkIgogICAgICAgICAgICAgICAgSG9yaXpvbnRhbEFsaWdubWVudD0iQ2VudGVyIiBGb250U2l6ZT0iMTMiIEJhY2tncm91bmQ9IlRyYW5zcGFyZW50Ii8+CiAgICAgICAgPC9Cb3JkZXI+CiAgICAgICAgPEdyaWQgR3JpZC5Sb3c9IjEiIEJhY2tncm91bmQ9IntEeW5hbWljUmVzb3VyY2UgTWFpbkJhY2tncm91bmRDb2xvcn0iPgogICAgICAgICAgICA8R3JpZC5Db2x1bW5EZWZpbml0aW9ucz4KICAgICAgICAgICAgICAgIDxDb2x1bW5EZWZpbml0aW9uIFdpZHRoPSJBdXRvIi8+IDwhLS0gTmF2aWdhdGlvbiBidXR0b25zIC0tPgogICAgICAgICAgICAgICAgPENvbHVtbkRlZmluaXRpb24gV2lkdGg9IioiLz4gPCEtLSBTZWFyY2ggYmFyIGFuZCBidXR0b25zIC0tPgogICAgICAgICAgICA8L0dyaWQuQ29sdW1uRGVmaW5pdGlvbnM+CgogICAgICAgICAgICA8IS0tIE5hdmlnYXRpb24gQnV0dG9ucyBQYW5lbCAtLT4KICAgICAgICAgICAgPFN0YWNrUGFuZWwgTmFtZT0iTmF2RG9ja1BhbmVsIiBPcmllbnRhdGlvbj0iSG9yaXpvbnRhbCIgR3JpZC5Db2x1bW49IjAiIFZlcnRpY2FsQWxpZ25tZW50PSJDZW50ZXIiIE1hcmdpbj0iNSw1LDEwLDUiPgogICAgICAgICAgICAgICAgPFN0YWNrUGFuZWwgTmFtZT0iTmF2TG9nb1BhbmVsIiBPcmllbnRhdGlvbj0iSG9yaXpvbnRhbCIgSG9yaXpvbnRhbEFsaWdubWVudD0iTGVmdCIgQmFja2dyb3VuZD0ie0R5bmFtaWNSZXNvdXJjZSBNYWluQmFja2dyb3VuZENvbG9yfSIgU25hcHNUb0RldmljZVBpeGVscz0iVHJ1ZSIgTWFyZ2luPSIxMCwwLDIwLDAiPgogICAgICAgICAgICAgICAgPC9TdGFja1BhbmVsPgogICAgICAgICAgICAgICAgPFRvZ2dsZUJ1dHRvbiBTdHlsZT0ie1N0YXRpY1Jlc291cmNlIFRhYlRvZ2dsZUJ1dHRvbn0iIE1hcmdpbj0iMCwwLDUsMCIgSGVpZ2h0PSJ7RHluYW1pY1Jlc291cmNlIFRhYkJ1dHRvbkhlaWdodH0iIFdpZHRoPSJ7RHluYW1pY1Jlc291cmNlIFRhYkJ1dHRvbldpZHRofSIKICAgICAgICAgICAgICAgICAgICBCYWNrZ3JvdW5kPSJ7RHluYW1pY1Jlc291cmNlIEJ1dHRvbkluc3RhbGxCYWNrZ3JvdW5kQ29sb3J9IiBGb3JlZ3JvdW5kPSJ3aGl0ZSIgRm9udFdlaWdodD0iQm9sZCIgTmFtZT0iV1BGVGFiMUJUIj4KICAgICAgICAgICAgICAgICAgICA8VG9nZ2xlQnV0dG9uLkNvbnRlbnQ+CiAgICAgICAgICAgICAgICAgICAgICAgIDxUZXh0QmxvY2sgRm9udFNpemU9IntEeW5hbWljUmVzb3VyY2UgVGFiQnV0dG9uRm9udFNpemV9IiBCYWNrZ3JvdW5kPSJUcmFuc3BhcmVudCIgRm9yZWdyb3VuZD0ie0R5bmFtaWNSZXNvdXJjZSBCdXR0b25JbnN0YWxsRm9yZWdyb3VuZENvbG9yfSIgPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPFVuZGVybGluZT5BPC9VbmRlcmxpbmU+5bqU55So5a6J6KOFCiAgICAgICAgICAgICAgICAgICAgICAgIDwvVGV4dEJsb2NrPgogICAgICAgICAgICAgICAgICAgIDwvVG9nZ2xlQnV0dG9uLkNvbnRlbnQ+CiAgICAgICAgICAgICAgICA8L1RvZ2dsZUJ1dHRvbj4KICAgICAgICAgICAgICAgIDxUb2dnbGVCdXR0b24gU3R5bGU9IntTdGF0aWNSZXNvdXJjZSBUYWJUb2dnbGVCdXR0b259IiBNYXJnaW49IjAsMCw1LDAiIEhlaWdodD0ie0R5bmFtaWNSZXNvdXJjZSBUYWJCdXR0b25IZWlnaHR9IiBXaWR0aD0ie0R5bmFtaWNSZXNvdXJjZSBUYWJCdXR0b25XaWR0aH0iCiAgICAgICAgICAgICAgICAgICAgQmFja2dyb3VuZD0ie0R5bmFtaWNSZXNvdXJjZSBCdXR0b25Ud2Vha3NCYWNrZ3JvdW5kQ29sb3J9IiBGb3JlZ3JvdW5kPSJ7RHluYW1pY1Jlc291cmNlIEJ1dHRvblR3ZWFrc0ZvcmVncm91bmRDb2xvcn0iIEZvbnRXZWlnaHQ9IkJvbGQiIE5hbWU9IldQRlRhYjJCVCI+CiAgICAgICAgICAgICAgICAgICAgPFRvZ2dsZUJ1dHRvbi5Db250ZW50PgogICAgICAgICAgICAgICAgICAgICAgICA8VGV4dEJsb2NrIEZvbnRTaXplPSJ7RHluYW1pY1Jlc291cmNlIFRhYkJ1dHRvbkZvbnRTaXplfSIgQmFja2dyb3VuZD0iVHJhbnNwYXJlbnQiIEZvcmVncm91bmQ9IntEeW5hbWljUmVzb3VyY2UgQnV0dG9uVHdlYWtzRm9yZWdyb3VuZENvbG9yfSI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8VW5kZXJsaW5lPlk8L1VuZGVybGluZT7ns7vnu5/kvJjljJYKICAgICAgICAgICAgICAgICAgICAgICAgPC9UZXh0QmxvY2s+CiAgICAgICAgICAgICAgICAgICAgPC9Ub2dnbGVCdXR0b24uQ29udGVudD4KICAgICAgICAgICAgICAgIDwvVG9nZ2xlQnV0dG9uPgogICAgICAgICAgICAgICAgPFRvZ2dsZUJ1dHRvbiBTdHlsZT0ie1N0YXRpY1Jlc291cmNlIFRhYlRvZ2dsZUJ1dHRvbn0iIE1hcmdpbj0iMCwwLDUsMCIgSGVpZ2h0PSJ7RHluYW1pY1Jlc291cmNlIFRhYkJ1dHRvbkhlaWdodH0iIFdpZHRoPSJ7RHluYW1pY1Jlc291cmNlIFRhYkJ1dHRvbldpZHRofSIKICAgICAgICAgICAgICAgICAgICBCYWNrZ3JvdW5kPSJ7RHluYW1pY1Jlc291cmNlIEJ1dHRvbkNvbmZpZ0JhY2tncm91bmRDb2xvcn0iIEZvcmVncm91bmQ9IntEeW5hbWljUmVzb3VyY2UgQnV0dG9uQ29uZmlnRm9yZWdyb3VuZENvbG9yfSIgRm9udFdlaWdodD0iQm9sZCIgTmFtZT0iV1BGVGFiM0JUIj4KICAgICAgICAgICAgICAgICAgICA8VG9nZ2xlQnV0dG9uLkNvbnRlbnQ+CiAgICAgICAgICAgICAgICAgICAgICAgIDxUZXh0QmxvY2sgRm9udFNpemU9IntEeW5hbWljUmVzb3VyY2UgVGFiQnV0dG9uRm9udFNpemV9IiBCYWNrZ3JvdW5kPSJUcmFuc3BhcmVudCIgRm9yZWdyb3VuZD0ie0R5bmFtaWNSZXNvdXJjZSBCdXR0b25Db25maWdGb3JlZ3JvdW5kQ29sb3J9Ij4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxVbmRlcmxpbmU+UDwvVW5kZXJsaW5lPuWKn+iDvemFjee9rgogICAgICAgICAgICAgICAgICAgICAgICA8L1RleHRCbG9jaz4KICAgICAgICAgICAgICAgICAgICA8L1RvZ2dsZUJ1dHRvbi5Db250ZW50PgogICAgICAgICAgICAgICAgPC9Ub2dnbGVCdXR0b24+CiAgICAgICAgICAgICAgICA8VG9nZ2xlQnV0dG9uIFN0eWxlPSJ7U3RhdGljUmVzb3VyY2UgVGFiVG9nZ2xlQnV0dG9ufSIgTWFyZ2luPSIwLDAsNSwwIiBIZWlnaHQ9IntEeW5hbWljUmVzb3VyY2UgVGFiQnV0dG9uSGVpZ2h0fSIgV2lkdGg9IntEeW5hbWljUmVzb3VyY2UgVGFiQnV0dG9uV2lkdGh9IgogICAgICAgICAgICAgICAgICAgIEJhY2tncm91bmQ9IntEeW5hbWljUmVzb3VyY2UgQnV0dG9uVXBkYXRlc0JhY2tncm91bmRDb2xvcn0iIEZvcmVncm91bmQ9IntEeW5hbWljUmVzb3VyY2UgQnV0dG9uVXBkYXRlc0ZvcmVncm91bmRDb2xvcn0iIEZvbnRXZWlnaHQ9IkJvbGQiIE5hbWU9IldQRlRhYjRCVCI+CiAgICAgICAgICAgICAgICAgICAgPFRvZ2dsZUJ1dHRvbi5Db250ZW50PgogICAgICAgICAgICAgICAgICAgICAgICA8VGV4dEJsb2NrIEZvbnRTaXplPSJ7RHluYW1pY1Jlc291cmNlIFRhYkJ1dHRvbkZvbnRTaXplfSIgQmFja2dyb3VuZD0iVHJhbnNwYXJlbnQiIEZvcmVncm91bmQ9IntEeW5hbWljUmVzb3VyY2UgQnV0dG9uVXBkYXRlc0ZvcmVncm91bmRDb2xvcn0iPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPFVuZGVybGluZT5HPC9VbmRlcmxpbmU+V2luZG93cyDmm7TmlrAKICAgICAgICAgICAgICAgICAgICAgICAgPC9UZXh0QmxvY2s+CiAgICAgICAgICAgICAgICAgICAgPC9Ub2dnbGVCdXR0b24uQ29udGVudD4KICAgICAgICAgICAgICAgIDwvVG9nZ2xlQnV0dG9uPgogICAgICAgICAgICAgICAgPFRvZ2dsZUJ1dHRvbiBTdHlsZT0ie1N0YXRpY1Jlc291cmNlIFRhYlRvZ2dsZUJ1dHRvbn0iIE1hcmdpbj0iMCwwLDUsMCIgSGVpZ2h0PSJ7RHluYW1pY1Jlc291cmNlIFRhYkJ1dHRvbkhlaWdodH0iIFdpZHRoPSJBdXRvIiBNaW5XaWR0aD0ie0R5bmFtaWNSZXNvdXJjZSBUYWJCdXR0b25XaWR0aH0iCiAgICAgICAgICAgICAgICAgICAgQmFja2dyb3VuZD0ie0R5bmFtaWNSZXNvdXJjZSBCdXR0b25XaW4xMUlTT0JhY2tncm91bmRDb2xvcn0iIEZvcmVncm91bmQ9IntEeW5hbWljUmVzb3VyY2UgQnV0dG9uV2luMTFJU09Gb3JlZ3JvdW5kQ29sb3J9IiBGb250V2VpZ2h0PSJCb2xkIiBOYW1lPSJXUEZUYWI1QlQiPgogICAgICAgICAgICAgICAgICAgIDxUb2dnbGVCdXR0b24uQ29udGVudD4KICAgICAgICAgICAgICAgICAgICAgICAgPFRleHRCbG9jayBGb250U2l6ZT0ie0R5bmFtaWNSZXNvdXJjZSBUYWJCdXR0b25Gb250U2l6ZX0iIEJhY2tncm91bmQ9IlRyYW5zcGFyZW50IiBGb3JlZ3JvdW5kPSJ7RHluYW1pY1Jlc291cmNlIEJ1dHRvbldpbjExSVNPRm9yZWdyb3VuZENvbG9yfSI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8VW5kZXJsaW5lPlc8L1VuZGVybGluZT5XaW4xMSDliJvlu7rlt6XlhbcKICAgICAgICAgICAgICAgICAgICAgICAgPC9UZXh0QmxvY2s+CiAgICAgICAgICAgICAgICAgICAgPC9Ub2dnbGVCdXR0b24uQ29udGVudD4KICAgICAgICAgICAgICAgIDwvVG9nZ2xlQnV0dG9uPgogICAgICAgICAgICA8L1N0YWNrUGFuZWw+CgogICAgICAgICAgICA8IS0tIFNlYXJjaCBCYXIgYW5kIEFjdGlvbiBCdXR0b25zIC0tPgogICAgICAgICAgICA8R3JpZCBOYW1lPSJHcmlkQmVzaWRlTmF2RG9ja1BhbmVsIiBHcmlkLkNvbHVtbj0iMSIgQmFja2dyb3VuZD0ie0R5bmFtaWNSZXNvdXJjZSBNYWluQmFja2dyb3VuZENvbG9yfSIgU2hvd0dyaWRMaW5lcz0iRmFsc2UiIEhlaWdodD0iQXV0byI+CiAgICAgICAgICAgICAgICA8R3JpZC5Db2x1bW5EZWZpbml0aW9ucz4KICAgICAgICAgICAgICAgICAgICA8Q29sdW1uRGVmaW5pdGlvbiBXaWR0aD0iMioiLz4gPCEtLSBTZWFyY2ggYmFyIGFyZWEgLSBwcmlvcml0eSBzcGFjZSAtLT4KICAgICAgICAgICAgICAgICAgICA8Q29sdW1uRGVmaW5pdGlvbiBXaWR0aD0iQXV0byIvPjwhLS0gQnV0dG9ucyBhcmVhIC0tPgogICAgICAgICAgICAgICAgPC9HcmlkLkNvbHVtbkRlZmluaXRpb25zPgoKICAgICAgICAgICAgICAgIDxCb3JkZXIgR3JpZC5Db2x1bW49IjAiIE1hcmdpbj0iNSwwLDEwLDAiIE1pbldpZHRoPSIxMjAiIEhlaWdodD0ie0R5bmFtaWNSZXNvdXJjZSBTZWFyY2hCYXJIZWlnaHR9IiBWZXJ0aWNhbEFsaWdubWVudD0iQ2VudGVyIiBIb3Jpem9udGFsQWxpZ25tZW50PSJTdHJldGNoIj4KICAgICAgICAgICAgICAgICAgICA8R3JpZD4KICAgICAgICAgICAgICAgICAgICAgICAgPFRleHRCb3gKICAgICAgICAgICAgICAgICAgICAgICAgICAgIEhlaWdodD0ie0R5bmFtaWNSZXNvdXJjZSBTZWFyY2hCYXJIZWlnaHR9IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgRm9udFNpemU9IntEeW5hbWljUmVzb3VyY2UgU2VhcmNoQmFyVGV4dEJveEZvbnRTaXplfSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgIFZlcnRpY2FsQWxpZ25tZW50PSJDZW50ZXIiIEhvcml6b250YWxBbGlnbm1lbnQ9IlN0cmV0Y2giCiAgICAgICAgICAgICAgICAgICAgICAgICAgICBCb3JkZXJUaGlja25lc3M9IjEiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICBOYW1lPSJTZWFyY2hCYXIiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICBGb3JlZ3JvdW5kPSJ7RHluYW1pY1Jlc291cmNlIE1haW5Gb3JlZ3JvdW5kQ29sb3J9IiBCYWNrZ3JvdW5kPSJ7RHluYW1pY1Jlc291cmNlIE1haW5CYWNrZ3JvdW5kQ29sb3J9IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgUGFkZGluZz0iMywzLDMwLDAiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICBUb29sVGlwPSLmjIkgQ3RybC1GIOi+k+WFpeW6lOeUqOWQjeensOi/h+a7pOWIl+ihqO+8jOaMiSBFc2Mg6YeN572u562b6YCJIj4KICAgICAgICAgICAgICAgICAgICAgICAgPC9UZXh0Qm94PgogICAgICAgICAgICAgICAgICAgICAgICA8VGV4dEJsb2NrCiAgICAgICAgICAgICAgICAgICAgICAgICAgICBOYW1lPSJTZWFyY2hCYXJJY29uIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgVmVydGljYWxBbGlnbm1lbnQ9IkNlbnRlciIgSG9yaXpvbnRhbEFsaWdubWVudD0iUmlnaHQiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICBGb250RmFtaWx5PSJTZWdvZSBNREwyIEFzc2V0cyIKICAgICAgICAgICAgICAgICAgICAgICAgICAgIEZvcmVncm91bmQ9IntEeW5hbWljUmVzb3VyY2UgQnV0dG9uQmFja2dyb3VuZFNlbGVjdGVkQ29sb3J9IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgRm9udFNpemU9IntEeW5hbWljUmVzb3VyY2UgSWNvbkZvbnRTaXplfSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgIE1hcmdpbj0iMCwwLDgsMCIgV2lkdGg9IkF1dG8iIEhlaWdodD0iQXV0byI+JiN4RTcyMTsKICAgICAgICAgICAgICAgICAgICAgICAgPC9UZXh0QmxvY2s+CiAgICAgICAgICAgICAgICAgICAgPC9HcmlkPgogICAgICAgICAgICAgICAgPC9Cb3JkZXI+CiAgICAgICAgICAgICAgICA8QnV0dG9uIEdyaWQuQ29sdW1uPSIwIgogICAgICAgICAgICAgICAgICAgIFZlcnRpY2FsQWxpZ25tZW50PSJDZW50ZXIiIEhvcml6b250YWxBbGlnbm1lbnQ9IlJpZ2h0IgogICAgICAgICAgICAgICAgICAgIE5hbWU9IlNlYXJjaEJhckNsZWFyQnV0dG9uIgogICAgICAgICAgICAgICAgICAgIFN0eWxlPSJ7U3RhdGljUmVzb3VyY2UgU2VhcmNoQmFyQ2xlYXJCdXR0b25TdHlsZX0iCiAgICAgICAgICAgICAgICAgICAgTWFyZ2luPSIwLDAsMjAsMCIgVmlzaWJpbGl0eT0iQ29sbGFwc2VkIj4KICAgICAgICAgICAgICAgIDwvQnV0dG9uPgoKICAgICAgICAgICAgICAgIDwhLS0gQnV0dG9ucyBDb250YWluZXIgLS0+CiAgICAgICAgICAgICAgICA8U3RhY2tQYW5lbCBHcmlkLkNvbHVtbj0iMSIgT3JpZW50YXRpb249Ikhvcml6b250YWwiIEhvcml6b250YWxBbGlnbm1lbnQ9IlJpZ2h0IiBWZXJ0aWNhbEFsaWdubWVudD0iQ2VudGVyIiBNYXJnaW49IjUsNSw1LDUiPgogICAgICAgICAgICAgICAgICAgIDxCdXR0b24gTmFtZT0iVGhlbWVCdXR0b24iCiAgICAgICAgICAgICAgICAgICAgICAgIFN0eWxlPSJ7U3RhdGljUmVzb3VyY2UgSG92ZXJCdXR0b25TdHlsZX0iCiAgICAgICAgICAgICAgICAgICAgICAgIEJvcmRlckJydXNoPSJUcmFuc3BhcmVudCIKICAgICAgICAgICAgICAgICAgICBCYWNrZ3JvdW5kPSJ7RHluYW1pY1Jlc291cmNlIE1haW5CYWNrZ3JvdW5kQ29sb3J9IgogICAgICAgICAgICAgICAgICAgIEZvcmVncm91bmQ9IntEeW5hbWljUmVzb3VyY2UgTWFpbkZvcmVncm91bmRDb2xvcn0iCiAgICAgICAgICAgICAgICAgICAgRm9udFNpemU9IntEeW5hbWljUmVzb3VyY2UgU2V0dGluZ3NJY29uRm9udFNpemV9IgogICAgICAgICAgICAgICAgICAgIFdpZHRoPSJ7RHluYW1pY1Jlc291cmNlIEljb25CdXR0b25TaXplfSIgSGVpZ2h0PSJ7RHluYW1pY1Jlc291cmNlIEljb25CdXR0b25TaXplfSIKICAgICAgICAgICAgICAgICAgICBIb3Jpem9udGFsQWxpZ25tZW50PSJSaWdodCIgVmVydGljYWxBbGlnbm1lbnQ9IkNlbnRlciIKICAgICAgICAgICAgICAgICAgICBNYXJnaW49IjAsMCwyLDAiCiAgICAgICAgICAgICAgICAgICAgRm9udEZhbWlseT0iU2Vnb2UgTURMMiBBc3NldHMiCiAgICAgICAgICAgICAgICAgICAgQ29udGVudD0i5pegIgogICAgICAgICAgICAgICAgICAgIFRvb2xUaXA9IuWIh+aNoiBXaW5VdGlsIOeVjOmdouS4u+mimCIKICAgICAgICAgICAgICAgIC8+CiAgICAgICAgICAgICAgICAgICAgPFBvcHVwIE5hbWU9IlRoZW1lUG9wdXAiCiAgICAgICAgICAgICAgICAgICAgSXNPcGVuPSJGYWxzZSIKICAgICAgICAgICAgICAgICAgICBQbGFjZW1lbnRUYXJnZXQ9IntCaW5kaW5nIEVsZW1lbnROYW1lPVRoZW1lQnV0dG9ufSIgUGxhY2VtZW50PSJCb3R0b20iCiAgICAgICAgICAgICAgICAgICAgSG9yaXpvbnRhbEFsaWdubWVudD0iUmlnaHQiIFZlcnRpY2FsQWxpZ25tZW50PSJUb3AiPgogICAgICAgICAgICAgICAgICAgIDxCb3JkZXIgQmFja2dyb3VuZD0ie0R5bmFtaWNSZXNvdXJjZSBNYWluQmFja2dyb3VuZENvbG9yfSIgQm9yZGVyQnJ1c2g9IntEeW5hbWljUmVzb3VyY2UgTWFpbkZvcmVncm91bmRDb2xvcn0iIEJvcmRlclRoaWNrbmVzcz0iMSIgQ29ybmVyUmFkaXVzPSIwIiBNYXJnaW49IjAiPgogICAgICAgICAgICAgICAgICAgICAgICA8U3RhY2tQYW5lbCBCYWNrZ3JvdW5kPSJ7RHluYW1pY1Jlc291cmNlIE1haW5CYWNrZ3JvdW5kQ29sb3J9IiBIb3Jpem9udGFsQWxpZ25tZW50PSJTdHJldGNoIiBWZXJ0aWNhbEFsaWdubWVudD0iU3RyZXRjaCI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8TWVudUl0ZW0gRm9udFNpemU9IntEeW5hbWljUmVzb3VyY2UgQnV0dG9uRm9udFNpemV9IiBIZWFkZXI9IkF1dG8iIE5hbWU9IkF1dG9UaGVtZU1lbnVJdGVtIiBGb3JlZ3JvdW5kPSJ7RHluYW1pY1Jlc291cmNlIE1haW5Gb3JlZ3JvdW5kQ29sb3J9Ij4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8TWVudUl0ZW0uVG9vbFRpcD4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPFRvb2xUaXAgQ29udGVudD0i6Lef6ZqPIFdpbmRvd3Mg5Li76aKYIi8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9NZW51SXRlbS5Ub29sVGlwPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9NZW51SXRlbT4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxNZW51SXRlbSBGb250U2l6ZT0ie0R5bmFtaWNSZXNvdXJjZSBCdXR0b25Gb250U2l6ZX0iIEhlYWRlcj0iRGFyayIgTmFtZT0iRGFya1RoZW1lTWVudUl0ZW0iIEZvcmVncm91bmQ9IntEeW5hbWljUmVzb3VyY2UgTWFpbkZvcmVncm91bmRDb2xvcn0iPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxNZW51SXRlbS5Ub29sVGlwPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8VG9vbFRpcCBDb250ZW50PSLkvb/nlKjmt7HoibLkuLvpopgiLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L01lbnVJdGVtLlRvb2xUaXA+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L01lbnVJdGVtPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPE1lbnVJdGVtIEZvbnRTaXplPSJ7RHluYW1pY1Jlc291cmNlIEJ1dHRvbkZvbnRTaXplfSIgSGVhZGVyPSJMaWdodCIgTmFtZT0iTGlnaHRUaGVtZU1lbnVJdGVtIiBGb3JlZ3JvdW5kPSJ7RHluYW1pY1Jlc291cmNlIE1haW5Gb3JlZ3JvdW5kQ29sb3J9Ij4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8TWVudUl0ZW0uVG9vbFRpcD4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPFRvb2xUaXAgQ29udGVudD0i5L2/55So5rWF6Imy5Li76aKYIi8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9NZW51SXRlbS5Ub29sVGlwPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9NZW51SXRlbT4KICAgICAgICAgICAgICAgICAgICAgICAgPC9TdGFja1BhbmVsPgogICAgICAgICAgICAgICAgICAgIDwvQm9yZGVyPgogICAgICAgICAgICAgICAgPC9Qb3B1cD4KCiAgICAgICAgICAgICAgICAgICAgPEJ1dHRvbiBOYW1lPSJGb250U2NhbGluZ0J1dHRvbiIKICAgICAgICAgICAgICAgICAgICAgICAgU3R5bGU9IntTdGF0aWNSZXNvdXJjZSBIb3ZlckJ1dHRvblN0eWxlfSIKICAgICAgICAgICAgICAgICAgICAgICAgQm9yZGVyQnJ1c2g9IlRyYW5zcGFyZW50IgogICAgICAgICAgICAgICAgICAgIEJhY2tncm91bmQ9IntEeW5hbWljUmVzb3VyY2UgTWFpbkJhY2tncm91bmRDb2xvcn0iCiAgICAgICAgICAgICAgICAgICAgRm9yZWdyb3VuZD0ie0R5bmFtaWNSZXNvdXJjZSBNYWluRm9yZWdyb3VuZENvbG9yfSIKICAgICAgICAgICAgICAgICAgICBGb250U2l6ZT0ie0R5bmFtaWNSZXNvdXJjZSBTZXR0aW5nc0ljb25Gb250U2l6ZX0iCiAgICAgICAgICAgICAgICAgICAgV2lkdGg9IntEeW5hbWljUmVzb3VyY2UgSWNvbkJ1dHRvblNpemV9IiBIZWlnaHQ9IntEeW5hbWljUmVzb3VyY2UgSWNvbkJ1dHRvblNpemV9IgogICAgICAgICAgICAgICAgICAgIEhvcml6b250YWxBbGlnbm1lbnQ9IlJpZ2h0IiBWZXJ0aWNhbEFsaWdubWVudD0iQ2VudGVyIgogICAgICAgICAgICAgICAgICAgIE1hcmdpbj0iMCwwLDIsMCIKICAgICAgICAgICAgICAgICAgICBGb250RmFtaWx5PSJTZWdvZSBNREwyIEFzc2V0cyIKICAgICAgICAgICAgICAgICAgICBDb250ZW50PSImI3hFOEQzOyIKICAgICAgICAgICAgICAgICAgICBUb29sVGlwPSLosIPmlbTlrZfkvZPnvKnmlL7ku6XpgILlupTovoXliqnlip/og73pnIDmsYIiCiAgICAgICAgICAgICAgICAvPgogICAgICAgICAgICAgICAgICAgIDxQb3B1cCBOYW1lPSJGb250U2NhbGluZ1BvcHVwIgogICAgICAgICAgICAgICAgICAgIElzT3Blbj0iRmFsc2UiCiAgICAgICAgICAgICAgICAgICAgUGxhY2VtZW50VGFyZ2V0PSJ7QmluZGluZyBFbGVtZW50TmFtZT1Gb250U2NhbGluZ0J1dHRvbn0iIFBsYWNlbWVudD0iQm90dG9tIgogICAgICAgICAgICAgICAgICAgIEhvcml6b250YWxBbGlnbm1lbnQ9IlJpZ2h0IiBWZXJ0aWNhbEFsaWdubWVudD0iVG9wIj4KICAgICAgICAgICAgICAgICAgICA8Qm9yZGVyIEJhY2tncm91bmQ9IntEeW5hbWljUmVzb3VyY2UgTWFpbkJhY2tncm91bmRDb2xvcn0iIEJvcmRlckJydXNoPSJ7RHluYW1pY1Jlc291cmNlIE1haW5Gb3JlZ3JvdW5kQ29sb3J9IiBCb3JkZXJUaGlja25lc3M9IjEiIENvcm5lclJhZGl1cz0iMCIgTWFyZ2luPSIwIj4KICAgICAgICAgICAgICAgICAgICAgICAgPFN0YWNrUGFuZWwgQmFja2dyb3VuZD0ie0R5bmFtaWNSZXNvdXJjZSBNYWluQmFja2dyb3VuZENvbG9yfSIgSG9yaXpvbnRhbEFsaWdubWVudD0iU3RyZXRjaCIgVmVydGljYWxBbGlnbm1lbnQ9IlN0cmV0Y2giIE1pbldpZHRoPSIyMDAiPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPFRleHRCbG9jayBUZXh0PSJGb250IFNjYWxpbmciCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEZvbnRTaXplPSJ7RHluYW1pY1Jlc291cmNlIEJ1dHRvbkZvbnRTaXplfSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgRm9yZWdyb3VuZD0ie0R5bmFtaWNSZXNvdXJjZSBNYWluRm9yZWdyb3VuZENvbG9yfSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgSG9yaXpvbnRhbEFsaWdubWVudD0iQ2VudGVyIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBNYXJnaW49IjEwLDUsMTAsNSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgRm9udFdlaWdodD0iQm9sZCIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPFNlcGFyYXRvciBNYXJnaW49IjUsMCw1LDUiLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxTdGFja1BhbmVsIE9yaWVudGF0aW9uPSJIb3Jpem9udGFsIiBNYXJnaW49IjEwLDUsMTAsMTAiPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxUZXh0QmxvY2sgVGV4dD0iU21hbGwiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBGb250U2l6ZT0ie0R5bmFtaWNSZXNvdXJjZSBCdXR0b25Gb250U2l6ZX0iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBGb3JlZ3JvdW5kPSJ7RHluYW1pY1Jlc291cmNlIE1haW5Gb3JlZ3JvdW5kQ29sb3J9IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgVmVydGljYWxBbGlnbm1lbnQ9IkNlbnRlciIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIE1hcmdpbj0iMCwwLDEwLDAiLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8U2xpZGVyIE5hbWU9IkZvbnRTY2FsaW5nU2xpZGVyIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgTWluaW11bT0iMC43NSIgTWF4aW11bT0iMi4wIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgVmFsdWU9IjEuMCIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIFRpY2tGcmVxdWVuY3k9IjAuMjUiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBUaWNrUGxhY2VtZW50PSJCb3R0b21SaWdodCIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIElzU25hcFRvVGlja0VuYWJsZWQ9IlRydWUiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBXaWR0aD0iMTIwIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgVmVydGljYWxBbGlnbm1lbnQ9IkNlbnRlciIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxUZXh0QmxvY2sgVGV4dD0iTGFyZ2UiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBGb250U2l6ZT0ie0R5bmFtaWNSZXNvdXJjZSBCdXR0b25Gb250U2l6ZX0iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBGb3JlZ3JvdW5kPSJ7RHluYW1pY1Jlc291cmNlIE1haW5Gb3JlZ3JvdW5kQ29sb3J9IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgVmVydGljYWxBbGlnbm1lbnQ9IkNlbnRlciIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIE1hcmdpbj0iMTAsMCwwLDAiLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvU3RhY2tQYW5lbD4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxUZXh0QmxvY2sgTmFtZT0iRm9udFNjYWxpbmdWYWx1ZSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgVGV4dD0iMTAwJSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgRm9udFNpemU9IntEeW5hbWljUmVzb3VyY2UgQnV0dG9uRm9udFNpemV9IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBGb3JlZ3JvdW5kPSJ7RHluYW1pY1Jlc291cmNlIE1haW5Gb3JlZ3JvdW5kQ29sb3J9IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBIb3Jpem9udGFsQWxpZ25tZW50PSJDZW50ZXIiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIE1hcmdpbj0iMTAsMCwxMCw1Ii8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8U3RhY2tQYW5lbCBPcmllbnRhdGlvbj0iSG9yaXpvbnRhbCIgSG9yaXpvbnRhbEFsaWdubWVudD0iQ2VudGVyIiBNYXJnaW49IjEwLDAsMTAsMTAiPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxCdXR0b24gTmFtZT0iRm9udFNjYWxpbmdSZXNldEJ1dHRvbiIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIENvbnRlbnQ9IumHjee9riIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIFN0eWxlPSJ7U3RhdGljUmVzb3VyY2UgSG92ZXJCdXR0b25TdHlsZX0iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBXaWR0aD0iNjAiIEhlaWdodD0iMjUiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBNYXJnaW49IjUsMCw1LDAiLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8QnV0dG9uIE5hbWU9IkZvbnRTY2FsaW5nQXBwbHlCdXR0b24iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBDb250ZW50PSLlupTnlKgiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBTdHlsZT0ie1N0YXRpY1Jlc291cmNlIEhvdmVyQnV0dG9uU3R5bGV9IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgV2lkdGg9IjYwIiBIZWlnaHQ9IjI1IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgTWFyZ2luPSI1LDAsNSwwIi8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L1N0YWNrUGFuZWw+CiAgICAgICAgICAgICAgICAgICAgICAgIDwvU3RhY2tQYW5lbD4KICAgICAgICAgICAgICAgICAgICA8L0JvcmRlcj4KICAgICAgICAgICAgICAgIDwvUG9wdXA+CgogICAgICAgICAgICAgICAgICAgIDxCdXR0b24gTmFtZT0iU2V0dGluZ3NCdXR0b24iCiAgICAgICAgICAgICAgICAgICAgICAgIFN0eWxlPSJ7U3RhdGljUmVzb3VyY2UgSG92ZXJCdXR0b25TdHlsZX0iCiAgICAgICAgICAgICAgICAgICAgICAgIEJvcmRlckJydXNoPSJUcmFuc3BhcmVudCIKICAgICAgICAgICAgICAgICAgICBCYWNrZ3JvdW5kPSJ7RHluYW1pY1Jlc291cmNlIE1haW5CYWNrZ3JvdW5kQ29sb3J9IgogICAgICAgICAgICAgICAgICAgIEZvcmVncm91bmQ9IntEeW5hbWljUmVzb3VyY2UgTWFpbkZvcmVncm91bmRDb2xvcn0iCiAgICAgICAgICAgICAgICAgICAgRm9udFNpemU9IntEeW5hbWljUmVzb3VyY2UgU2V0dGluZ3NJY29uRm9udFNpemV9IgogICAgICAgICAgICAgICAgICAgIFdpZHRoPSJ7RHluYW1pY1Jlc291cmNlIEljb25CdXR0b25TaXplfSIgSGVpZ2h0PSJ7RHluYW1pY1Jlc291cmNlIEljb25CdXR0b25TaXplfSIKICAgICAgICAgICAgICAgICAgICBIb3Jpem9udGFsQWxpZ25tZW50PSJSaWdodCIgVmVydGljYWxBbGlnbm1lbnQ9IkNlbnRlciIKICAgICAgICAgICAgICAgICAgICBNYXJnaW49IjAsMCwyLDAiCiAgICAgICAgICAgICAgICAgICAgRm9udEZhbWlseT0iU2Vnb2UgTURMMiBBc3NldHMiCiAgICAgICAgICAgICAgICAgICAgQ29udGVudD0iJiN4RTcxMzsiLz4KICAgICAgICAgICAgICAgICAgICA8UG9wdXAgTmFtZT0iU2V0dGluZ3NQb3B1cCIKICAgICAgICAgICAgICAgICAgICBJc09wZW49IkZhbHNlIgogICAgICAgICAgICAgICAgICAgIFBsYWNlbWVudFRhcmdldD0ie0JpbmRpbmcgRWxlbWVudE5hbWU9U2V0dGluZ3NCdXR0b259IiBQbGFjZW1lbnQ9IkJvdHRvbSIKICAgICAgICAgICAgICAgICAgICBIb3Jpem9udGFsQWxpZ25tZW50PSJSaWdodCIgVmVydGljYWxBbGlnbm1lbnQ9IlRvcCI+CiAgICAgICAgICAgICAgICAgICAgPEJvcmRlciBCYWNrZ3JvdW5kPSJ7RHluYW1pY1Jlc291cmNlIE1haW5CYWNrZ3JvdW5kQ29sb3J9IiBCb3JkZXJCcnVzaD0ie0R5bmFtaWNSZXNvdXJjZSBNYWluRm9yZWdyb3VuZENvbG9yfSIgQm9yZGVyVGhpY2tuZXNzPSIxIiBDb3JuZXJSYWRpdXM9IjAiIE1hcmdpbj0iMCI+CiAgICAgICAgICAgICAgICAgICAgICAgIDxTdGFja1BhbmVsIEJhY2tncm91bmQ9IntEeW5hbWljUmVzb3VyY2UgTWFpbkJhY2tncm91bmRDb2xvcn0iIEhvcml6b250YWxBbGlnbm1lbnQ9IlN0cmV0Y2giIFZlcnRpY2FsQWxpZ25tZW50PSJTdHJldGNoIj4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxNZW51SXRlbSBGb250U2l6ZT0ie0R5bmFtaWNSZXNvdXJjZSBCdXR0b25Gb250U2l6ZX0iIEhlYWRlcj0iSW1wb3J0IiBOYW1lPSJJbXBvcnRNZW51SXRlbSIgRm9yZWdyb3VuZD0ie0R5bmFtaWNSZXNvdXJjZSBNYWluRm9yZWdyb3VuZENvbG9yfSI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPE1lbnVJdGVtLlRvb2xUaXA+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxUb29sVGlwIENvbnRlbnQ9IuS7juWvvOWHuueahOaWh+S7tuWvvOWFpemFjee9riIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvTWVudUl0ZW0uVG9vbFRpcD4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvTWVudUl0ZW0+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8TWVudUl0ZW0gRm9udFNpemU9IntEeW5hbWljUmVzb3VyY2UgQnV0dG9uRm9udFNpemV9IiBIZWFkZXI9IkV4cG9ydCIgTmFtZT0iRXhwb3J0TWVudUl0ZW0iIEZvcmVncm91bmQ9IntEeW5hbWljUmVzb3VyY2UgTWFpbkZvcmVncm91bmRDb2xvcn0iPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxNZW51SXRlbS5Ub29sVGlwPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8VG9vbFRpcCBDb250ZW50PSLlr7zlh7rlt7LpgInpobnlubblsIblkb3ku6TlpI3liLbliLDliarotLTmnb8iLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L01lbnVJdGVtLlRvb2xUaXA+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L01lbnVJdGVtPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPFNlcGFyYXRvci8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8TWVudUl0ZW0gRm9udFNpemU9IntEeW5hbWljUmVzb3VyY2UgQnV0dG9uRm9udFNpemV9IiBIZWFkZXI9IkFib3V0IiBOYW1lPSJBYm91dE1lbnVJdGVtIiBGb3JlZ3JvdW5kPSJ7RHluYW1pY1Jlc291cmNlIE1haW5Gb3JlZ3JvdW5kQ29sb3J9Ii8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8TWVudUl0ZW0gRm9udFNpemU9IntEeW5hbWljUmVzb3VyY2UgQnV0dG9uRm9udFNpemV9IiBIZWFkZXI9IkRvY3VtZW50YXRpb24iIE5hbWU9IkRvY3VtZW50YXRpb25NZW51SXRlbSIgRm9yZWdyb3VuZD0ie0R5bmFtaWNSZXNvdXJjZSBNYWluRm9yZWdyb3VuZENvbG9yfSIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPE1lbnVJdGVtIEZvbnRTaXplPSJ7RHluYW1pY1Jlc291cmNlIEJ1dHRvbkZvbnRTaXplfSIgSGVhZGVyPSJTcG9uc29ycyIgTmFtZT0iU3BvbnNvck1lbnVJdGVtIiBGb3JlZ3JvdW5kPSJ7RHluYW1pY1Jlc291cmNlIE1haW5Gb3JlZ3JvdW5kQ29sb3J9Ii8+CiAgICAgICAgICAgICAgICAgICAgICAgIDwvU3RhY2tQYW5lbD4KICAgICAgICAgICAgICAgICAgICA8L0JvcmRlcj4KICAgICAgICAgICAgICAgIDwvUG9wdXA+CgogICAgICAgICAgICAgICAgICAgIDxCdXR0b24KICAgICAgICAgICAgICAgICAgICAgICAgQ29udGVudD0iJiN4RTkyMTsiCiAgICAgICAgICAgICAgICAgICAgICAgIFN0eWxlPSJ7U3RhdGljUmVzb3VyY2UgSG92ZXJCdXR0b25TdHlsZX0iCiAgICAgICAgICAgICAgICAgICAgICAgIEJvcmRlclRoaWNrbmVzcz0iMCIKICAgICAgICAgICAgICAgICAgICAgICAgQm9yZGVyQnJ1c2g9IlRyYW5zcGFyZW50IgogICAgICAgICAgICAgICAgICAgICAgICBCYWNrZ3JvdW5kPSJ7RHluYW1pY1Jlc291cmNlIE1haW5CYWNrZ3JvdW5kQ29sb3J9IgogICAgICAgICAgICAgICAgICAgICAgICBXaWR0aD0ie0R5bmFtaWNSZXNvdXJjZSBJY29uQnV0dG9uU2l6ZX0iIEhlaWdodD0ie0R5bmFtaWNSZXNvdXJjZSBJY29uQnV0dG9uU2l6ZX0iCiAgICAgICAgICAgICAgICAgICAgICAgIEhvcml6b250YWxBbGlnbm1lbnQ9IlJpZ2h0IiBWZXJ0aWNhbEFsaWdubWVudD0iQ2VudGVyIgogICAgICAgICAgICAgICAgICAgICAgICBNYXJnaW49IjAiCiAgICAgICAgICAgICAgICAgICAgICAgIEZvbnRGYW1pbHk9IlNlZ29lIE1ETDIgQXNzZXRzIgogICAgICAgICAgICAgICAgICAgICAgICBGb3JlZ3JvdW5kPSJ7RHluYW1pY1Jlc291cmNlIE1haW5Gb3JlZ3JvdW5kQ29sb3J9IgogICAgICAgICAgICAgICAgICAgICAgICBGb250U2l6ZT0ie0R5bmFtaWNSZXNvdXJjZSBDbG9zZUljb25Gb250U2l6ZX0iCiAgICAgICAgICAgICAgICAgICAgICAgIFRvb2xUaXA9IuacgOWwj+WMliIKICAgICAgICAgICAgICAgICAgICAgICAgQXV0b21hdGlvblByb3BlcnRpZXMuTmFtZT0iTWluaW1pemUiCiAgICAgICAgICAgICAgICAgICAgICAgIE5hbWU9IldQRk1pbmltaXplQnV0dG9uIiAvPgogICAgICAgICAgICAgICAgICAgIDxCdXR0b24KICAgICAgICAgICAgICAgICAgICAgICAgQm9yZGVyVGhpY2tuZXNzPSIwIgogICAgICAgICAgICAgICAgICAgICAgICBCb3JkZXJCcnVzaD0iVHJhbnNwYXJlbnQiCiAgICAgICAgICAgICAgICAgICAgICAgIEJhY2tncm91bmQ9IntEeW5hbWljUmVzb3VyY2UgTWFpbkJhY2tncm91bmRDb2xvcn0iCiAgICAgICAgICAgICAgICAgICAgICAgIFdpZHRoPSJ7RHluYW1pY1Jlc291cmNlIEljb25CdXR0b25TaXplfSIgSGVpZ2h0PSJ7RHluYW1pY1Jlc291cmNlIEljb25CdXR0b25TaXplfSIKICAgICAgICAgICAgICAgICAgICAgICAgSG9yaXpvbnRhbEFsaWdubWVudD0iUmlnaHQiIFZlcnRpY2FsQWxpZ25tZW50PSJDZW50ZXIiCiAgICAgICAgICAgICAgICAgICAgICAgIE1hcmdpbj0iMCwwLDAsMCIKICAgICAgICAgICAgICAgICAgICAgICAgRm9udEZhbWlseT0iU2Vnb2UgTURMMiBBc3NldHMiCiAgICAgICAgICAgICAgICAgICAgICAgIEZvcmVncm91bmQ9IntEeW5hbWljUmVzb3VyY2UgTWFpbkZvcmVncm91bmRDb2xvcn0iCiAgICAgICAgICAgICAgICAgICAgICAgIEZvbnRTaXplPSJ7RHluYW1pY1Jlc291cmNlIENsb3NlSWNvbkZvbnRTaXplfSIKICAgICAgICAgICAgICAgICAgICAgICAgTmFtZT0iV1BGTWF4aW1pemVCdXR0b24iPgogICAgICAgICAgICAgICAgICAgICAgICA8QnV0dG9uLlN0eWxlPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPFN0eWxlIFRhcmdldFR5cGU9IkJ1dHRvbiIgQmFzZWRPbj0ie1N0YXRpY1Jlc291cmNlIEhvdmVyQnV0dG9uU3R5bGV9Ij4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJDb250ZW50IiBWYWx1ZT0iJiN4RTkyMjsiLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJUb29sVGlwIiBWYWx1ZT0iTWF4aW1pemUiLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJBdXRvbWF0aW9uUHJvcGVydGllcy5OYW1lIiBWYWx1ZT0iTWF4aW1pemUiLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8U3R5bGUuVHJpZ2dlcnM+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxEYXRhVHJpZ2dlciBCaW5kaW5nPSJ7QmluZGluZyBXaW5kb3dTdGF0ZSwgUmVsYXRpdmVTb3VyY2U9e1JlbGF0aXZlU291cmNlIEFuY2VzdG9yVHlwZT17eDpUeXBlIFdpbmRvd319fSIgVmFsdWU9Ik1heGltaXplZCI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJDb250ZW50IiBWYWx1ZT0iJiN4RTkyMzsiLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxTZXR0ZXIgUHJvcGVydHk9IlRvb2xUaXAiIFZhbHVlPSJSZXN0b3JlIi8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8U2V0dGVyIFByb3BlcnR5PSJBdXRvbWF0aW9uUHJvcGVydGllcy5OYW1lIiBWYWx1ZT0iUmVzdG9yZSIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L0RhdGFUcmlnZ2VyPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvU3R5bGUuVHJpZ2dlcnM+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L1N0eWxlPgogICAgICAgICAgICAgICAgICAgICAgICA8L0J1dHRvbi5TdHlsZT4KICAgICAgICAgICAgICAgICAgICA8L0J1dHRvbj4KCiAgICAgICAgICAgICAgICAgICAgPEJ1dHRvbgogICAgICAgICAgICAgICAgICAgICAgICBDb250ZW50PSImI3hFOEJCOyIKICAgICAgICAgICAgICAgICAgICAgICAgU3R5bGU9IntTdGF0aWNSZXNvdXJjZSBIb3ZlckJ1dHRvblN0eWxlfSIKICAgICAgICAgICAgICAgICAgICAgICAgQm9yZGVyVGhpY2tuZXNzPSIwIgogICAgICAgICAgICAgICAgICAgICAgICBCb3JkZXJCcnVzaD0iVHJhbnNwYXJlbnQiCiAgICAgICAgICAgICAgICAgICAgICAgIEJhY2tncm91bmQ9IntEeW5hbWljUmVzb3VyY2UgTWFpbkJhY2tncm91bmRDb2xvcn0iCiAgICAgICAgICAgICAgICAgICAgICAgIFdpZHRoPSJ7RHluYW1pY1Jlc291cmNlIEljb25CdXR0b25TaXplfSIgSGVpZ2h0PSJ7RHluYW1pY1Jlc291cmNlIEljb25CdXR0b25TaXplfSIKICAgICAgICAgICAgICAgICAgICAgICAgSG9yaXpvbnRhbEFsaWdubWVudD0iUmlnaHQiIFZlcnRpY2FsQWxpZ25tZW50PSJDZW50ZXIiCiAgICAgICAgICAgICAgICAgICAgICAgIE1hcmdpbj0iMCIKICAgICAgICAgICAgICAgICAgICAgICAgRm9udEZhbWlseT0iU2Vnb2UgTURMMiBBc3NldHMiCiAgICAgICAgICAgICAgICAgICAgICAgIEZvcmVncm91bmQ9IntEeW5hbWljUmVzb3VyY2UgTWFpbkZvcmVncm91bmRDb2xvcn0iCiAgICAgICAgICAgICAgICAgICAgICAgIEZvbnRTaXplPSJ7RHluYW1pY1Jlc291cmNlIENsb3NlSWNvbkZvbnRTaXplfSIKICAgICAgICAgICAgICAgICAgICAgICAgVG9vbFRpcD0i5YWz6ZetIgogICAgICAgICAgICAgICAgICAgICAgICBBdXRvbWF0aW9uUHJvcGVydGllcy5OYW1lPSJDbG9zZSIKICAgICAgICAgICAgICAgICAgICAgICAgTmFtZT0iV1BGQ2xvc2VCdXR0b24iIC8+CiAgICAgICAgICAgICAgICA8L1N0YWNrUGFuZWw+CiAgICAgICAgICAgIDwvR3JpZD4KICAgICAgICA8L0dyaWQ+CgogICAgICAgIDxUYWJDb250cm9sIE5hbWU9IldQRlRhYk5hdiIgQmFja2dyb3VuZD0iVHJhbnNwYXJlbnQiIFdpZHRoPSJBdXRvIiBIZWlnaHQ9IkF1dG8iIEJvcmRlckJydXNoPSJUcmFuc3BhcmVudCIgQm9yZGVyVGhpY2tuZXNzPSIwIiBHcmlkLlJvdz0iMiIgR3JpZC5Db2x1bW49IjAiIFBhZGRpbmc9Ii0xIj4KICAgICAgICAgICAgPFRhYkl0ZW0gSGVhZGVyPSLlupTnlKjlronoo4UiIFZpc2liaWxpdHk9IkNvbGxhcHNlZCIgTmFtZT0iV1BGVGFiMSI+CiAgICAgICAgICAgICAgICA8R3JpZCBCYWNrZ3JvdW5kPSJUcmFuc3BhcmVudCIgPgogICAgICAgICAgICAgICAgICAgIDxHcmlkLlJvd0RlZmluaXRpb25zPgogICAgICAgICAgICAgICAgICAgICAgICA8Um93RGVmaW5pdGlvbiBIZWlnaHQ9IkF1dG8iLz4KICAgICAgICAgICAgICAgICAgICAgICAgPFJvd0RlZmluaXRpb24gSGVpZ2h0PSIqIi8+CiAgICAgICAgICAgICAgICAgICAgPC9HcmlkLlJvd0RlZmluaXRpb25zPgoKICAgICAgICAgICAgICAgICAgICA8IS0tIFF1aWNrIENhdGVnb3J5IFNlYXJjaCBDaGlwcyAtLT4KICAgICAgICAgICAgICAgICAgICA8V3JhcFBhbmVsIEdyaWQuUm93PSIwIiBPcmllbnRhdGlvbj0iSG9yaXpvbnRhbCIgTWFyZ2luPSI1LDUsNSw1IiBOYW1lPSJXUEZTZWFyY2hDaGlwcyI+CiAgICAgICAgICAgICAgICAgICAgICAgIDxUZXh0QmxvY2sgVGV4dD0iRmlsdGVycyIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBGb250U2l6ZT0ie0R5bmFtaWNSZXNvdXJjZSBIZWFkZXJGb250U2l6ZX0iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgRm9udEZhbWlseT0ie0R5bmFtaWNSZXNvdXJjZSBIZWFkZXJGb250RmFtaWx5fSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBGb3JlZ3JvdW5kPSJ7RHluYW1pY1Jlc291cmNlIExhYmVsYm94Rm9yZWdyb3VuZENvbG9yfSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBCYWNrZ3JvdW5kPSJUcmFuc3BhcmVudCIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBWZXJ0aWNhbEFsaWdubWVudD0iQ2VudGVyIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIE1hcmdpbj0iMTUsMCw4LDAiLz4KICAgICAgICAgICAgICAgICAgICAgICAgPEJ1dHRvbiBOYW1lPSJXUEZTZWFyY2hDaGlwQWxsIiAgICAgICAgICAgICBDb250ZW50PSLlhajpg6giICAgICAgICAgICAgICAgU3R5bGU9IntTdGF0aWNSZXNvdXJjZSBGaWx0ZXJDaGlwU3R5bGV9Ii8+CiAgICAgICAgICAgICAgICAgICAgICAgIDxCdXR0b24gTmFtZT0iV1BGU2VhcmNoQ2hpcEJyb3dzZXJzIiAgICAgICAgQ29udGVudD0i5rWP6KeI5ZmoIiAgICAgICAgICBTdHlsZT0ie1N0YXRpY1Jlc291cmNlIEZpbHRlckNoaXBTdHlsZX0iLz4KICAgICAgICAgICAgICAgICAgICAgICAgPEJ1dHRvbiBOYW1lPSJXUEZTZWFyY2hDaGlwQ29tbXVuaWNhdGlvbnMiICBDb250ZW50PSLpgJrorq8iICAgIFN0eWxlPSJ7U3RhdGljUmVzb3VyY2UgRmlsdGVyQ2hpcFN0eWxlfSIvPgogICAgICAgICAgICAgICAgICAgICAgICA8QnV0dG9uIE5hbWU9IldQRlNlYXJjaENoaXBEZXZlbG9wbWVudCIgICAgIENvbnRlbnQ9IuW8gOWPkeW3peWFtyIgICAgICAgU3R5bGU9IntTdGF0aWNSZXNvdXJjZSBGaWx0ZXJDaGlwU3R5bGV9Ii8+CiAgICAgICAgICAgICAgICAgICAgICAgIDxCdXR0b24gTmFtZT0iV1BGU2VhcmNoQ2hpcEdhbWVzIiAgICAgICAgICAgQ29udGVudD0i5ri45oiPIiAgICAgICAgICAgICBTdHlsZT0ie1N0YXRpY1Jlc291cmNlIEZpbHRlckNoaXBTdHlsZX0iLz4KICAgICAgICAgICAgICAgICAgICAgICAgPEJ1dHRvbiBOYW1lPSJXUEZTZWFyY2hDaGlwTWljcm9zb2Z0VG9vbHMiICBDb250ZW50PSLlvq7ova/lt6XlhbciICAgU3R5bGU9IntTdGF0aWNSZXNvdXJjZSBGaWx0ZXJDaGlwU3R5bGV9Ii8+CiAgICAgICAgICAgICAgICAgICAgICAgIDxCdXR0b24gTmFtZT0iV1BGU2VhcmNoQ2hpcE11bHRpbWVkaWFUb29scyIgQ29udGVudD0i5aSa5aqS5L2T5bel5YW3IiAgU3R5bGU9IntTdGF0aWNSZXNvdXJjZSBGaWx0ZXJDaGlwU3R5bGV9Ii8+CiAgICAgICAgICAgICAgICAgICAgICAgIDxCdXR0b24gTmFtZT0iV1BGU2VhcmNoQ2hpcFByb1Rvb2xzIiAgICAgICAgQ29udGVudD0i5LiT5Lia5bel5YW3IiAgICAgICAgIFN0eWxlPSJ7U3RhdGljUmVzb3VyY2UgRmlsdGVyQ2hpcFN0eWxlfSIvPgogICAgICAgICAgICAgICAgICAgICAgICA8QnV0dG9uIE5hbWU9IldQRlNlYXJjaENoaXBTZWxmaG9zdGVkVG9vbHMiIENvbnRlbnQ9IuiHquaJmOeuoeW3peWFtyIgIFN0eWxlPSJ7U3RhdGljUmVzb3VyY2UgRmlsdGVyQ2hpcFN0eWxlfSIvPgogICAgICAgICAgICAgICAgICAgICAgICA8QnV0dG9uIE5hbWU9IldQRlNlYXJjaENoaXBVdGlsaXRpZXMiICAgICAgIENvbnRlbnQ9IuWunueUqOW3peWFtyIgICAgICAgICBTdHlsZT0ie1N0YXRpY1Jlc291cmNlIEZpbHRlckNoaXBTdHlsZX0iLz4KICAgICAgICAgICAgICAgICAgICA8L1dyYXBQYW5lbD4KCiAgICAgICAgICAgICAgICAgICAgPEdyaWQgR3JpZC5Sb3c9IjEiIE1hcmdpbj0ie0R5bmFtaWNSZXNvdXJjZSBUYWJDb250ZW50TWFyZ2lufSI+CiAgICAgICAgICAgICAgICAgICAgICAgIDxHcmlkLkNvbHVtbkRlZmluaXRpb25zPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPENvbHVtbkRlZmluaXRpb24gV2lkdGg9IkF1dG8iIC8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8Q29sdW1uRGVmaW5pdGlvbiBXaWR0aD0iKiIgLz4KICAgICAgICAgICAgICAgICAgICAgICAgPC9HcmlkLkNvbHVtbkRlZmluaXRpb25zPgoKICAgICAgICAgICAgICAgICAgICAgICAgPEdyaWQgTmFtZT0iYXBwc2NhdGVnb3J5IiBHcmlkLkNvbHVtbj0iMCIgSG9yaXpvbnRhbEFsaWdubWVudD0iU3RyZXRjaCIgVmVydGljYWxBbGlnbm1lbnQ9IlN0cmV0Y2giPgogICAgICAgICAgICAgICAgICAgICAgICA8L0dyaWQ+CgogICAgICAgICAgICAgICAgICAgICAgICA8R3JpZCBOYW1lPSJhcHBzcGFuZWwiIEdyaWQuQ29sdW1uPSIxIiBIb3Jpem9udGFsQWxpZ25tZW50PSJTdHJldGNoIiBWZXJ0aWNhbEFsaWdubWVudD0iU3RyZXRjaCI+CiAgICAgICAgICAgICAgICAgICAgICAgIDwvR3JpZD4KICAgICAgICAgICAgICAgICAgICA8L0dyaWQ+CiAgICAgICAgICAgICAgICA8L0dyaWQ+CiAgICAgICAgICAgIDwvVGFiSXRlbT4KICAgICAgICAgICAgPFRhYkl0ZW0gSGVhZGVyPSLns7vnu5/kvJjljJYiIFZpc2liaWxpdHk9IkNvbGxhcHNlZCIgTmFtZT0iV1BGVGFiMiI+CiAgICAgICAgICAgICAgICA8R3JpZD4KICAgICAgICAgICAgICAgICAgICA8IS0tIE1haW4gY29udGVudCBhcmVhIHdpdGggYSBTY3JvbGxWaWV3ZXIgLS0+CiAgICAgICAgICAgICAgICAgICAgPEdyaWQuUm93RGVmaW5pdGlvbnM+CiAgICAgICAgICAgICAgICAgICAgICAgIDxSb3dEZWZpbml0aW9uIEhlaWdodD0iKiIgLz4KICAgICAgICAgICAgICAgICAgICAgICAgPFJvd0RlZmluaXRpb24gSGVpZ2h0PSJBdXRvIiAvPgogICAgICAgICAgICAgICAgICAgIDwvR3JpZC5Sb3dEZWZpbml0aW9ucz4KCiAgICAgICAgICAgICAgICAgICAgPFNjcm9sbFZpZXdlciBWZXJ0aWNhbFNjcm9sbEJhclZpc2liaWxpdHk9IkF1dG8iIEhvcml6b250YWxTY3JvbGxCYXJWaXNpYmlsaXR5PSJEaXNhYmxlZCIgR3JpZC5Sb3c9IjAiIE1hcmdpbj0ie0R5bmFtaWNSZXNvdXJjZSBUYWJDb250ZW50TWFyZ2lufSI+CiAgICAgICAgICAgICAgICAgICAgICAgIDxHcmlkIEJhY2tncm91bmQ9IlRyYW5zcGFyZW50Ij4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxHcmlkLlJvd0RlZmluaXRpb25zPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxSb3dEZWZpbml0aW9uIEhlaWdodD0iQXV0byIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxSb3dEZWZpbml0aW9uIEhlaWdodD0iKiIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxSb3dEZWZpbml0aW9uIEhlaWdodD0iQXV0byIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9HcmlkLlJvd0RlZmluaXRpb25zPgoKICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxTdGFja1BhbmVsIEJhY2tncm91bmQ9IntEeW5hbWljUmVzb3VyY2UgTWFpbkJhY2tncm91bmRDb2xvcn0iIE9yaWVudGF0aW9uPSJWZXJ0aWNhbCIgR3JpZC5Sb3c9IjAiIEdyaWQuQ29sdW1uPSIwIiBHcmlkLkNvbHVtblNwYW49IjIiIE1hcmdpbj0iNSI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPExhYmVsIENvbnRlbnQ9IuaOqOiNkOmAieaLqe+8miIgRm9udFNpemU9IntEeW5hbWljUmVzb3VyY2UgRm9udFNpemV9IiBWZXJ0aWNhbEFsaWdubWVudD0iQ2VudGVyIiBNYXJnaW49IjIiLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8V3JhcFBhbmVsIE9yaWVudGF0aW9uPSJIb3Jpem9udGFsIiBIb3Jpem9udGFsQWxpZ25tZW50PSJMZWZ0IiBNYXJnaW49IjAsMiwwLDAiPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8QnV0dG9uIE5hbWU9IldQRnN0YW5kYXJkIiBDb250ZW50PSIg5qCH5YeGICIgTWFyZ2luPSIyIiBXaWR0aD0ie0R5bmFtaWNSZXNvdXJjZSBCdXR0b25XaWR0aH0iIEhlaWdodD0ie0R5bmFtaWNSZXNvdXJjZSBCdXR0b25IZWlnaHR9Ii8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxCdXR0b24gTmFtZT0iV1BGbWluaW1hbCIgQ29udGVudD0iIOeyvueugCAiIE1hcmdpbj0iMiIgV2lkdGg9IntEeW5hbWljUmVzb3VyY2UgQnV0dG9uV2lkdGh9IiBIZWlnaHQ9IntEeW5hbWljUmVzb3VyY2UgQnV0dG9uSGVpZ2h0fSIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8QnV0dG9uIE5hbWU9IldQRkFkdmFuY2VkIiBDb250ZW50PSIg6auY57qnICIgTWFyZ2luPSIyIiBXaWR0aD0ie0R5bmFtaWNSZXNvdXJjZSBCdXR0b25XaWR0aH0iIEhlaWdodD0ie0R5bmFtaWNSZXNvdXJjZSBCdXR0b25IZWlnaHR9Ii8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxCdXR0b24gTmFtZT0iV1BGQ2xlYXJUd2Vha3NTZWxlY3Rpb24iIENvbnRlbnQ9IiDmuIXpmaQgIiBNYXJnaW49IjIiIFdpZHRoPSJ7RHluYW1pY1Jlc291cmNlIEJ1dHRvbldpZHRofSIgSGVpZ2h0PSJ7RHluYW1pY1Jlc291cmNlIEJ1dHRvbkhlaWdodH0iLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPEJ1dHRvbiBOYW1lPSJXUEZHZXRJbnN0YWxsZWRUd2Vha3MiIENvbnRlbnQ9IuW3suWuieijheS8mOWMluWIl+ihqCIgTWFyZ2luPSIyIiBXaWR0aD0ie0R5bmFtaWNSZXNvdXJjZSBCdXR0b25XaWR0aH0iIEhlaWdodD0ie0R5bmFtaWNSZXNvdXJjZSBCdXR0b25IZWlnaHR9Ii8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxCdXR0b24gTmFtZT0iV1BGQXBweFJlbW92YWwiIENvbnRlbnQ9IkFwcFgg56e76ZmkIiBNYXJnaW49IjIiIFdpZHRoPSJ7RHluYW1pY1Jlc291cmNlIEJ1dHRvbldpZHRofSIgSGVpZ2h0PSJ7RHluYW1pY1Jlc291cmNlIEJ1dHRvbkhlaWdodH0iLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L1dyYXBQYW5lbD4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvU3RhY2tQYW5lbD4KCiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8R3JpZCBOYW1lPSJ0d2Vha3NwYW5lbCIgR3JpZC5Sb3c9IjEiPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwhLS0gWW91ciB0d2Vha3NwYW5lbCBjb250ZW50IGdvZXMgaGVyZSAtLT4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvR3JpZD4KCiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8Qm9yZGVyIEdyaWQuQ29sdW1uU3Bhbj0iMiIgR3JpZC5Sb3c9IjIiIEdyaWQuQ29sdW1uPSIwIiBTdHlsZT0ie1N0YXRpY1Jlc291cmNlIEJvcmRlclN0eWxlfSI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPFN0YWNrUGFuZWwgQmFja2dyb3VuZD0ie0R5bmFtaWNSZXNvdXJjZSBNYWluQmFja2dyb3VuZENvbG9yfSIgT3JpZW50YXRpb249Ikhvcml6b250YWwiIEhvcml6b250YWxBbGlnbm1lbnQ9IkxlZnQiPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8VGV4dEJsb2NrIFBhZGRpbmc9IjEwIj4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIE5vdGU6IEhvdmVyIG92ZXIgaXRlbXMgdG8gZ2V0IGEgYmV0dGVyIGRlc2NyaXB0aW9uLiBQbGVhc2UgYmUgY2FyZWZ1bCBhcyBtYW55IG9mIHRoZXNlIHR3ZWFrcyB3aWxsIGhlYXZpbHkgbW9kaWZ5IHlvdXIgc3lzdGVtLgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPExpbmVCcmVhay8+UmVjb21tZW5kZWQgc2VsZWN0aW9ucyBhcmUgZm9yIG5vcm1hbCB1c2VycyBhbmQgaWYgeW91IGFyZSB1bnN1cmUgZG8gTk9UIGNoZWNrIGFueXRoaW5nIGVsc2UhCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvVGV4dEJsb2NrPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvU3RhY2tQYW5lbD4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvQm9yZGVyPgogICAgICAgICAgICAgICAgICAgICAgICA8L0dyaWQ+CiAgICAgICAgICAgICAgICAgICAgPC9TY3JvbGxWaWV3ZXI+CiAgICAgICAgICAgICAgICAgICAgPEJvcmRlciBHcmlkLlJvdz0iMSIgQmFja2dyb3VuZD0ie0R5bmFtaWNSZXNvdXJjZSBNYWluQmFja2dyb3VuZENvbG9yfSIgQm9yZGVyQnJ1c2g9IntEeW5hbWljUmVzb3VyY2UgQm9yZGVyQ29sb3J9IiBCb3JkZXJUaGlja25lc3M9IjEiIENvcm5lclJhZGl1cz0iNSIgSG9yaXpvbnRhbEFsaWdubWVudD0iU3RyZXRjaCIgUGFkZGluZz0iMTAiPgogICAgICAgICAgICAgICAgICAgICAgICA8V3JhcFBhbmVsIE9yaWVudGF0aW9uPSJIb3Jpem9udGFsIiBIb3Jpem9udGFsQWxpZ25tZW50PSJMZWZ0IiBWZXJ0aWNhbEFsaWdubWVudD0iQ2VudGVyIiBHcmlkLkNvbHVtbj0iMCI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8QnV0dG9uIE5hbWU9IldQRlR3ZWFrc2J1dHRvbiIgQ29udGVudD0i6L+Q6KGM5LyY5YyWIiBNYXJnaW49IjUiIFdpZHRoPSJ7RHluYW1pY1Jlc291cmNlIEJ1dHRvbldpZHRofSIgSGVpZ2h0PSJ7RHluYW1pY1Jlc291cmNlIEJ1dHRvbkhlaWdodH0iLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxCdXR0b24gTmFtZT0iV1BGVW5kb2FsbCIgQ29udGVudD0i5pKk6ZSA5LyY5YyWIiBNYXJnaW49IjUiIFdpZHRoPSJ7RHluYW1pY1Jlc291cmNlIEJ1dHRvbldpZHRofSIgSGVpZ2h0PSJ7RHluYW1pY1Jlc291cmNlIEJ1dHRvbkhlaWdodH0iLz4KICAgICAgICAgICAgICAgICAgICAgICAgPC9XcmFwUGFuZWw+CiAgICAgICAgICAgICAgICAgICAgPC9Cb3JkZXI+CiAgICAgICAgICAgICAgICA8L0dyaWQ+CiAgICAgICAgICAgIDwvVGFiSXRlbT4KICAgICAgICAgICAgPFRhYkl0ZW0gSGVhZGVyPSLlip/og73phY3nva4iIFZpc2liaWxpdHk9IkNvbGxhcHNlZCIgTmFtZT0iV1BGVGFiMyI+CiAgICAgICAgICAgICAgICA8U2Nyb2xsVmlld2VyIFZlcnRpY2FsU2Nyb2xsQmFyVmlzaWJpbGl0eT0iQXV0byIgSG9yaXpvbnRhbFNjcm9sbEJhclZpc2liaWxpdHk9IkF1dG8iIE1hcmdpbj0ie0R5bmFtaWNSZXNvdXJjZSBUYWJDb250ZW50TWFyZ2lufSI+CiAgICAgICAgICAgICAgICAgICAgPEdyaWQgTmFtZT0iZmVhdHVyZXNwYW5lbCIgR3JpZC5Sb3c9IjEiIEJhY2tncm91bmQ9IlRyYW5zcGFyZW50Ij4KICAgICAgICAgICAgICAgICAgICA8L0dyaWQ+CiAgICAgICAgICAgICAgICA8L1Njcm9sbFZpZXdlcj4KICAgICAgICAgICAgPC9UYWJJdGVtPgogICAgICAgICAgICA8VGFiSXRlbSBIZWFkZXI9IldpbmRvd3Mg5pu05pawIiBWaXNpYmlsaXR5PSJDb2xsYXBzZWQiIE5hbWU9IldQRlRhYjQiPgogICAgICAgICAgICAgICAgPFNjcm9sbFZpZXdlciBWZXJ0aWNhbFNjcm9sbEJhclZpc2liaWxpdHk9IkF1dG8iIEhvcml6b250YWxTY3JvbGxCYXJWaXNpYmlsaXR5PSJEaXNhYmxlZCIgTWFyZ2luPSJ7RHluYW1pY1Jlc291cmNlIFRhYkNvbnRlbnRNYXJnaW59Ij4KICAgICAgICAgICAgICAgICAgICA8R3JpZCBCYWNrZ3JvdW5kPSJUcmFuc3BhcmVudCIgTWF4V2lkdGg9IjEyNTAiIEhvcml6b250YWxBbGlnbm1lbnQ9IkNlbnRlciI+CiAgICAgICAgICAgICAgICAgICAgICAgIDxHcmlkLlJvd0RlZmluaXRpb25zPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPFJvd0RlZmluaXRpb24gSGVpZ2h0PSJBdXRvIi8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8Um93RGVmaW5pdGlvbiBIZWlnaHQ9IkF1dG8iLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxSb3dEZWZpbml0aW9uIEhlaWdodD0iQXV0byIvPgogICAgICAgICAgICAgICAgICAgICAgICA8L0dyaWQuUm93RGVmaW5pdGlvbnM+CgogICAgICAgICAgICAgICAgICAgICAgICA8U3RhY2tQYW5lbCBHcmlkLlJvdz0iMCIgTWFyZ2luPSIxMCwxMCwxMCwxNCI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8VGV4dEJsb2NrIFRleHQ9IldpbmRvd3MgVXBkYXRlIFByb2ZpbGVzIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBGb250U2l6ZT0iMjQiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEZvbnRXZWlnaHQ9IkJvbGQiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEZvcmVncm91bmQ9IntEeW5hbWljUmVzb3VyY2UgTWFpbkZvcmVncm91bmRDb2xvcn0iLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxUZXh0QmxvY2sgVGV4dD0iQ2hvb3NlIGhvdyBXaW5kb3dzIHJlY2VpdmVzIHVwZGF0ZXMuIEVhY2ggcHJvZmlsZSByZXBsYWNlcyB0aGUgV2luZG93cyBVcGRhdGUgc2V0dGluZ3MgbWFuYWdlZCBieSBXaW5VdGlsLiIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgTWFyZ2luPSIwLDYsMCwwIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBGb250U2l6ZT0iMTMiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIFRleHRXcmFwcGluZz0iV3JhcCIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgRm9yZWdyb3VuZD0ie0R5bmFtaWNSZXNvdXJjZSBNYWluRm9yZWdyb3VuZENvbG9yfSIvPgogICAgICAgICAgICAgICAgICAgICAgICA8L1N0YWNrUGFuZWw+CgogICAgICAgICAgICAgICAgICAgICAgICA8VW5pZm9ybUdyaWQgR3JpZC5Sb3c9IjEiIENvbHVtbnM9IjMiPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPEJvcmRlciBTdHlsZT0ie1N0YXRpY1Jlc291cmNlIEJvcmRlclN0eWxlfSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgQm9yZGVyQnJ1c2g9IntEeW5hbWljUmVzb3VyY2UgUHJvZ3Jlc3NCYXJGb3JlZ3JvdW5kQ29sb3J9IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBCb3JkZXJUaGlja25lc3M9IjIiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIFBhZGRpbmc9IjE2IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBNaW5IZWlnaHQ9IjMwMCI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPEdyaWQ+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxHcmlkLlJvd0RlZmluaXRpb25zPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPFJvd0RlZmluaXRpb24gSGVpZ2h0PSJBdXRvIi8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8Um93RGVmaW5pdGlvbiBIZWlnaHQ9IioiLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxSb3dEZWZpbml0aW9uIEhlaWdodD0iQXV0byIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L0dyaWQuUm93RGVmaW5pdGlvbnM+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxTdGFja1BhbmVsIEdyaWQuUm93PSIwIiBNYXJnaW49IjAsMCwwLDE0Ij4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxUZXh0QmxvY2sgVGV4dD0iUmVjb21tZW5kZWQiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEZvbnRTaXplPSIyMCIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgRm9udFdlaWdodD0iQm9sZCIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgRm9yZWdyb3VuZD0ie0R5bmFtaWNSZXNvdXJjZSBNYWluRm9yZWdyb3VuZENvbG9yfSIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPFRleHRCbG9jayBUZXh0PSJCYWxhbmNlZCBzZWN1cml0eSBhbmQgc3RhYmlsaXR5IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBNYXJnaW49IjAsNCwwLDAiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEZvbnRTaXplPSIxMyIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgRm9yZWdyb3VuZD0ie0R5bmFtaWNSZXNvdXJjZSBNYWluRm9yZWdyb3VuZENvbG9yfSIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L1N0YWNrUGFuZWw+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxTdGFja1BhbmVsIEdyaWQuUm93PSIxIj4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxUZXh0QmxvY2sgVGV4dD0iLSBEZWZlcnMgZmVhdHVyZSB1cGRhdGVzIGZvciAzNjUgZGF5cyIgVGV4dFdyYXBwaW5nPSJXcmFwIiBNYXJnaW49IjAsMCwwLDciIEZvcmVncm91bmQ9IntEeW5hbWljUmVzb3VyY2UgTWFpbkZvcmVncm91bmRDb2xvcn0iLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxUZXh0QmxvY2sgVGV4dD0iLSBEZWZlcnMgcXVhbGl0eSB1cGRhdGVzIGZvciA0IGRheXMiIFRleHRXcmFwcGluZz0iV3JhcCIgTWFyZ2luPSIwLDAsMCw3IiBGb3JlZ3JvdW5kPSJ7RHluYW1pY1Jlc291cmNlIE1haW5Gb3JlZ3JvdW5kQ29sb3J9Ii8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8VGV4dEJsb2NrIFRleHQ9Ii0gRXhjbHVkZXMgZHJpdmVycyBmcm9tIHF1YWxpdHkgdXBkYXRlcyIgVGV4dFdyYXBwaW5nPSJXcmFwIiBNYXJnaW49IjAsMCwwLDciIEZvcmVncm91bmQ9IntEeW5hbWljUmVzb3VyY2UgTWFpbkZvcmVncm91bmRDb2xvcn0iLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxUZXh0QmxvY2sgVGV4dD0iLSBQcmV2ZW50cyBhdXRvbWF0aWMgcmVzdGFydHMgd2hpbGUgYSB1c2VyIGlzIHNpZ25lZCBpbiIgVGV4dFdyYXBwaW5nPSJXcmFwIiBNYXJnaW49IjAsMCwwLDEyIiBGb3JlZ3JvdW5kPSJ7RHluYW1pY1Jlc291cmNlIE1haW5Gb3JlZ3JvdW5kQ29sb3J9Ii8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8VGV4dEJsb2NrIFRleHQ9IkF2YWlsYWJsZSBvbiBXaW5kb3dzIFBybywgRW50ZXJwcmlzZSwgYW5kIEVkdWNhdGlvbiBlZGl0aW9ucy4iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEZvbnRTaXplPSIxMSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgRm9udFN0eWxlPSJJdGFsaWMiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIFRleHRXcmFwcGluZz0iV3JhcCIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgRm9yZWdyb3VuZD0ie0R5bmFtaWNSZXNvdXJjZSBNYWluRm9yZWdyb3VuZENvbG9yfSIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L1N0YWNrUGFuZWw+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxCdXR0b24gTmFtZT0iV1BGVXBkYXRlc3NlY3VyaXR5IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEdyaWQuUm93PSIyIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIENvbnRlbnQ9IuW6lOeUqOaOqOiNkCIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBGb250U2l6ZT0ie0R5bmFtaWNSZXNvdXJjZSBDb25maWdUYWJCdXR0b25Gb250U2l6ZX0iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgTWFyZ2luPSIwLDE2LDAsMCIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBQYWRkaW5nPSIxMCIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvR3JpZD4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvQm9yZGVyPgoKICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxCb3JkZXIgU3R5bGU9IntTdGF0aWNSZXNvdXJjZSBCb3JkZXJTdHlsZX0iIFBhZGRpbmc9IjE2IiBNaW5IZWlnaHQ9IjMwMCI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPEdyaWQ+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxHcmlkLlJvd0RlZmluaXRpb25zPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPFJvd0RlZmluaXRpb24gSGVpZ2h0PSJBdXRvIi8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8Um93RGVmaW5pdGlvbiBIZWlnaHQ9IioiLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxSb3dEZWZpbml0aW9uIEhlaWdodD0iQXV0byIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L0dyaWQuUm93RGVmaW5pdGlvbnM+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxTdGFja1BhbmVsIEdyaWQuUm93PSIwIiBNYXJnaW49IjAsMCwwLDE0Ij4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxUZXh0QmxvY2sgVGV4dD0iV2luZG93cyBEZWZhdWx0IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBGb250U2l6ZT0iMjAiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEZvbnRXZWlnaHQ9IkJvbGQiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEZvcmVncm91bmQ9IntEeW5hbWljUmVzb3VyY2UgTWFpbkZvcmVncm91bmRDb2xvcn0iLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxUZXh0QmxvY2sgVGV4dD0iUmV0dXJuIGNvbnRyb2wgdG8gV2luZG93cyIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgTWFyZ2luPSIwLDQsMCwwIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBGb250U2l6ZT0iMTMiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEZvcmVncm91bmQ9IntEeW5hbWljUmVzb3VyY2UgTWFpbkZvcmVncm91bmRDb2xvcn0iLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9TdGFja1BhbmVsPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8U3RhY2tQYW5lbCBHcmlkLlJvdz0iMSI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8VGV4dEJsb2NrIFRleHQ9Ii0gUmVtb3ZlcyBXaW5kb3dzIFVwZGF0ZSBwb2xpY2llcyBhcHBsaWVkIGJ5IFdpblV0aWwiIFRleHRXcmFwcGluZz0iV3JhcCIgTWFyZ2luPSIwLDAsMCw3IiBGb3JlZ3JvdW5kPSJ7RHluYW1pY1Jlc291cmNlIE1haW5Gb3JlZ3JvdW5kQ29sb3J9Ii8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8VGV4dEJsb2NrIFRleHQ9Ii0gUmVzdG9yZXMgdXBkYXRlIHNlcnZpY2Ugc3RhcnR1cCBzZXR0aW5ncyIgVGV4dFdyYXBwaW5nPSJXcmFwIiBNYXJnaW49IjAsMCwwLDciIEZvcmVncm91bmQ9IntEeW5hbWljUmVzb3VyY2UgTWFpbkZvcmVncm91bmRDb2xvcn0iLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxUZXh0QmxvY2sgVGV4dD0iLSBSZS1lbmFibGVzIHVwZGF0ZSBzY2hlZHVsZWQgdGFza3MiIFRleHRXcmFwcGluZz0iV3JhcCIgTWFyZ2luPSIwLDAsMCwxMiIgRm9yZWdyb3VuZD0ie0R5bmFtaWNSZXNvdXJjZSBNYWluRm9yZWdyb3VuZENvbG9yfSIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPFRleHRCbG9jayBUZXh0PSJVc2UgdGhpcyB0byB1bmRvIHRoZSBSZWNvbW1lbmRlZCBvciBEaXNhYmxlIHByb2ZpbGUuIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBGb250U2l6ZT0iMTEiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEZvbnRTdHlsZT0iSXRhbGljIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBUZXh0V3JhcHBpbmc9IldyYXAiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEZvcmVncm91bmQ9IntEeW5hbWljUmVzb3VyY2UgTWFpbkZvcmVncm91bmRDb2xvcn0iLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9TdGFja1BhbmVsPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8QnV0dG9uIE5hbWU9IldQRlVwZGF0ZXNkZWZhdWx0IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEdyaWQuUm93PSIyIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIENvbnRlbnQ9IuaBouWkjem7mOiupCIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBGb250U2l6ZT0ie0R5bmFtaWNSZXNvdXJjZSBDb25maWdUYWJCdXR0b25Gb250U2l6ZX0iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgTWFyZ2luPSIwLDE2LDAsMCIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBQYWRkaW5nPSIxMCIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvR3JpZD4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvQm9yZGVyPgoKICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxCb3JkZXIgU3R5bGU9IntTdGF0aWNSZXNvdXJjZSBCb3JkZXJTdHlsZX0iIFBhZGRpbmc9IjE2IiBNaW5IZWlnaHQ9IjMwMCI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPEdyaWQ+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxHcmlkLlJvd0RlZmluaXRpb25zPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPFJvd0RlZmluaXRpb24gSGVpZ2h0PSJBdXRvIi8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8Um93RGVmaW5pdGlvbiBIZWlnaHQ9IioiLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxSb3dEZWZpbml0aW9uIEhlaWdodD0iQXV0byIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L0dyaWQuUm93RGVmaW5pdGlvbnM+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxTdGFja1BhbmVsIEdyaWQuUm93PSIwIiBNYXJnaW49IjAsMCwwLDE0Ij4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxUZXh0QmxvY2sgVGV4dD0iRGlzYWJsZSBVcGRhdGVzIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBGb250U2l6ZT0iMjAiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEZvbnRXZWlnaHQ9IkJvbGQiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEZvcmVncm91bmQ9IlJlZCIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPFRleHRCbG9jayBUZXh0PSJBZHZhbmNlZCB1c2Ugb25seSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgTWFyZ2luPSIwLDQsMCwwIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBGb250U2l6ZT0iMTMiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEZvbnRXZWlnaHQ9IlNlbWlCb2xkIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBGb3JlZ3JvdW5kPSJSZWQiLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9TdGFja1BhbmVsPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8U3RhY2tQYW5lbCBHcmlkLlJvdz0iMSI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8VGV4dEJsb2NrIFRleHQ9Ii0gRGlzYWJsZXMgYXV0b21hdGljIHVwZGF0ZSBwb2xpY3kiIFRleHRXcmFwcGluZz0iV3JhcCIgTWFyZ2luPSIwLDAsMCw3IiBGb3JlZ3JvdW5kPSJ7RHluYW1pY1Jlc291cmNlIE1haW5Gb3JlZ3JvdW5kQ29sb3J9Ii8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8VGV4dEJsb2NrIFRleHQ9Ii0gU3RvcHMgdXBkYXRlIHNlcnZpY2VzIGFuZCBzY2hlZHVsZWQgdGFza3MiIFRleHRXcmFwcGluZz0iV3JhcCIgTWFyZ2luPSIwLDAsMCw3IiBGb3JlZ3JvdW5kPSJ7RHluYW1pY1Jlc291cmNlIE1haW5Gb3JlZ3JvdW5kQ29sb3J9Ii8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8VGV4dEJsb2NrIFRleHQ9Ii0gQ2xlYXJzIGRvd25sb2FkZWQgdXBkYXRlIGZpbGVzIiBUZXh0V3JhcHBpbmc9IldyYXAiIE1hcmdpbj0iMCwwLDAsMTIiIEZvcmVncm91bmQ9IntEeW5hbWljUmVzb3VyY2UgTWFpbkZvcmVncm91bmRDb2xvcn0iLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxUZXh0QmxvY2sgVGV4dD0iU2VjdXJpdHkgdXBkYXRlcyB3aWxsIG5vdCBiZSBpbnN0YWxsZWQgd2hpbGUgdGhpcyBwcm9maWxlIGlzIGFjdGl2ZS4iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEZvbnRTaXplPSIxMSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgRm9udFN0eWxlPSJJdGFsaWMiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIFRleHRXcmFwcGluZz0iV3JhcCIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgRm9yZWdyb3VuZD0iUmVkIi8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvU3RhY2tQYW5lbD4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPEJ1dHRvbiBOYW1lPSJXUEZVcGRhdGVzZGlzYWJsZSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBHcmlkLlJvdz0iMiIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBDb250ZW50PSLnpoHnlKjmm7TmlrAiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgRm9udFNpemU9IntEeW5hbWljUmVzb3VyY2UgQ29uZmlnVGFiQnV0dG9uRm9udFNpemV9IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEZvcmVncm91bmQ9IlJlZCIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBNYXJnaW49IjAsMTYsMCwwIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIFBhZGRpbmc9IjEwIi8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9HcmlkPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9Cb3JkZXI+CiAgICAgICAgICAgICAgICAgICAgICAgIDwvVW5pZm9ybUdyaWQ+CgogICAgICAgICAgICAgICAgICAgICAgICA8Qm9yZGVyIEdyaWQuUm93PSIyIiBTdHlsZT0ie1N0YXRpY1Jlc291cmNlIEJvcmRlclN0eWxlfSIgTWFyZ2luPSI4LDE0LDgsOCIgUGFkZGluZz0iMTIiPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPFRleHRCbG9jayBUZXh0PSJDaGFuZ2VzIGFwcGx5IHN5c3RlbS13aWRlLiBSZXN0YXJ0IFdpbmRvd3MgYWZ0ZXIgc3dpdGNoaW5nIHByb2ZpbGVzLiBVc2UgUmVzdG9yZSBEZWZhdWx0cyB0byB1bmRvIFdpblV0aWwgdXBkYXRlIHBvbGljaWVzLiIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgVGV4dFdyYXBwaW5nPSJXcmFwIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBIb3Jpem9udGFsQWxpZ25tZW50PSJDZW50ZXIiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEZvcmVncm91bmQ9IntEeW5hbWljUmVzb3VyY2UgTWFpbkZvcmVncm91bmRDb2xvcn0iLz4KICAgICAgICAgICAgICAgICAgICAgICAgPC9Cb3JkZXI+CiAgICAgICAgICAgICAgICAgICAgPC9HcmlkPgogICAgICAgICAgICAgICAgPC9TY3JvbGxWaWV3ZXI+CiAgICAgICAgICAgIDwvVGFiSXRlbT4KICAgICAgICAgICAgPFRhYkl0ZW0gSGVhZGVyPSJXaW4xMSDliJvlu7rlt6XlhbciIFZpc2liaWxpdHk9IkNvbGxhcHNlZCIgTmFtZT0iV1BGVGFiNSI+CiAgICAgICAgICAgICAgICA8R3JpZCBOYW1lPSJXaW4xMUlTT1BhbmVsIiBNYXJnaW49IntEeW5hbWljUmVzb3VyY2UgVGFiQ29udGVudE1hcmdpbn0iIEJhY2tncm91bmQ9IlRyYW5zcGFyZW50Ij4KICAgICAgICAgICAgICAgICAgICA8R3JpZC5Sb3dEZWZpbml0aW9ucz4KICAgICAgICAgICAgICAgICAgICAgICAgPFJvd0RlZmluaXRpb24gSGVpZ2h0PSJBdXRvIi8+ICA8IS0tIFN0ZXBzIDEtNCAtLT4KICAgICAgICAgICAgICAgICAgICAgICAgPFJvd0RlZmluaXRpb24gSGVpZ2h0PSIqIi8+ICAgICA8IS0tIExvZyAvIFN0YXR1cyAtLT4KICAgICAgICAgICAgICAgICAgICA8L0dyaWQuUm93RGVmaW5pdGlvbnM+CgogICAgICAgICAgICAgICAgICAgIDwhLS0gU3RlcHMgMS00IC0tPgogICAgICAgICAgICAgICAgICAgIDxTdGFja1BhbmVsIEdyaWQuUm93PSIwIj4KCiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8IS0tIOKUgOKUgOKUgCBTVEVQIDEgOiBTZWxlY3QgV2luZG93cyAxMSBJU08g4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSAIC0tPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPEdyaWQgTmFtZT0iV1BGV2luMTFJU09TZWxlY3RTZWN0aW9uIiBNYXJnaW49IjUiIEhvcml6b250YWxBbGlnbm1lbnQ9IkxlZnQiIE1pbldpZHRoPSJ7RHluYW1pY1Jlc291cmNlIEJ1dHRvbldpZHRofSI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPEdyaWQuQ29sdW1uRGVmaW5pdGlvbnM+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxDb2x1bW5EZWZpbml0aW9uIFdpZHRoPSIqIi8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxDb2x1bW5EZWZpbml0aW9uIFdpZHRoPSIqIi8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9HcmlkLkNvbHVtbkRlZmluaXRpb25zPgoKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8IS0tIExlZnQ6IEZpbGUgU2VsZWN0b3IgLS0+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPFN0YWNrUGFuZWwgR3JpZC5Db2x1bW49IjAiIE1hcmdpbj0iNSw1LDE1LDUiPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8VGV4dEJsb2NrIEZvbnRTaXplPSJ7RHluYW1pY1Jlc291cmNlIEZvbnRTaXplfSIgRm9udFdlaWdodD0iQm9sZCIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBGb3JlZ3JvdW5kPSJ7RHluYW1pY1Jlc291cmNlIE1haW5Gb3JlZ3JvdW5kQ29sb3J9IiBNYXJnaW49IjAsMCwwLDgiPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgU3RlcCAxIC0gU2VsZWN0IFdpbmRvd3MgMTEgSVNPCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvVGV4dEJsb2NrPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8VGV4dEJsb2NrIEZvbnRTaXplPSJ7RHluYW1pY1Jlc291cmNlIEZvbnRTaXplfSIgRm9yZWdyb3VuZD0ie0R5bmFtaWNSZXNvdXJjZSBNYWluRm9yZWdyb3VuZENvbG9yfSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBUZXh0V3JhcHBpbmc9IldyYXAiIE1hcmdpbj0iMCwwLDAsNiI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBCcm93c2UgdG8geW91ciBsb2NhbGx5IHNhdmVkIFdpbmRvd3MgMTEgSVNPIGZpbGUuIE9ubHkgb2ZmaWNpYWwgSVNPcwogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgZG93bmxvYWRlZCBmcm9tIE1pY3Jvc29mdCBhcmUgc3VwcG9ydGVkLgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L1RleHRCbG9jaz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPFRleHRCbG9jayBGb250U2l6ZT0ie0R5bmFtaWNSZXNvdXJjZSBGb250U2l6ZX0iIEZvcmVncm91bmQ9IntEeW5hbWljUmVzb3VyY2UgTWFpbkZvcmVncm91bmRDb2xvcn0iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgVGV4dFdyYXBwaW5nPSJXcmFwIiBNYXJnaW49IjAsMCwwLDEyIiBGb250U3R5bGU9Ikl0YWxpYyI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8UnVuIEZvbnRXZWlnaHQ9IkJvbGQiPk5PVEU6PC9SdW4+IFRoaXMgaXMgb25seSBtZWFudCBmb3IgRnJlc2ggYW5kIE5ldyBXaW5kb3dzIGluc3RhbGxzLgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L1RleHRCbG9jaz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPEdyaWQ+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8R3JpZC5Db2x1bW5EZWZpbml0aW9ucz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8Q29sdW1uRGVmaW5pdGlvbiBXaWR0aD0iKiIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxDb2x1bW5EZWZpbml0aW9uIFdpZHRoPSJBdXRvIi8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L0dyaWQuQ29sdW1uRGVmaW5pdGlvbnM+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8VGV4dEJveCBHcmlkLkNvbHVtbj0iMCIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIE5hbWU9IldQRldpbjExSVNPUGF0aCIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIElzUmVhZE9ubHk9IlRydWUiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBWZXJ0aWNhbEFsaWdubWVudD0iQ2VudGVyIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgUGFkZGluZz0iNiw0IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgTWFyZ2luPSIwLDAsNiwwIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgVGV4dD0iTm8gSVNPIHNlbGVjdGVkLi4uIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgRm9yZWdyb3VuZD0ie0R5bmFtaWNSZXNvdXJjZSBNYWluRm9yZWdyb3VuZENvbG9yfSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEJhY2tncm91bmQ9IntEeW5hbWljUmVzb3VyY2UgTWFpbkJhY2tncm91bmRDb2xvcn0iLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxCdXR0b24gR3JpZC5Db2x1bW49IjEiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIE5hbWU9IldQRldpbjExSVNPQnJvd3NlQnV0dG9uIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBDb250ZW50PSLmtY/op4giCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIFdpZHRoPSJBdXRvIiBQYWRkaW5nPSIxMiwwIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBIZWlnaHQ9IntEeW5hbWljUmVzb3VyY2UgQnV0dG9uSGVpZ2h0fSIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L0dyaWQ+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxUZXh0QmxvY2sgTmFtZT0iV1BGV2luMTFJU09GaWxlSW5mbyIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBGb250U2l6ZT0ie0R5bmFtaWNSZXNvdXJjZSBGb250U2l6ZX0iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgRm9yZWdyb3VuZD0ie0R5bmFtaWNSZXNvdXJjZSBNYWluRm9yZWdyb3VuZENvbG9yfSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBNYXJnaW49IjAsOCwwLDAiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgVGV4dFdyYXBwaW5nPSJXcmFwIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIFZpc2liaWxpdHk9IkNvbGxhcHNlZCIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvU3RhY2tQYW5lbD4KCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPCEtLSBSaWdodDogRG93bmxvYWQgZ3VpZGFuY2UgLS0+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPEJvcmRlciBHcmlkLkNvbHVtbj0iMSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEJhY2tncm91bmQ9IntEeW5hbWljUmVzb3VyY2UgTWFpbkJhY2tncm91bmRDb2xvcn0iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBCb3JkZXJCcnVzaD0ie0R5bmFtaWNSZXNvdXJjZSBCb3JkZXJDb2xvcn0iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBCb3JkZXJUaGlja25lc3M9IjEiIENvcm5lclJhZGl1cz0iNSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIE1hcmdpbj0iNSIgUGFkZGluZz0iMTUiPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8U3RhY2tQYW5lbD4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxUZXh0QmxvY2sgRm9udFNpemU9IntEeW5hbWljUmVzb3VyY2UgRm9udFNpemV9IiBGb250V2VpZ2h0PSJCb2xkIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBGb3JlZ3JvdW5kPSJPcmFuZ2VSZWQiIE1hcmdpbj0iMCwwLDAsMTAiPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICEhV0FSTklORyEhIFlvdSBtdXN0IHVzZSBhbiBvZmZpY2lhbCBNaWNyb3NvZnQgSVNPCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L1RleHRCbG9jaz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxUZXh0QmxvY2sgRm9udFNpemU9IntEeW5hbWljUmVzb3VyY2UgRm9udFNpemV9IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBGb3JlZ3JvdW5kPSJ7RHluYW1pY1Jlc291cmNlIE1haW5Gb3JlZ3JvdW5kQ29sb3J9IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBUZXh0V3JhcHBpbmc9IldyYXAiIE1hcmdpbj0iMCwwLDAsOCI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgRG93bmxvYWQgdGhlIFdpbmRvd3MgMTEgSVNPIGRpcmVjdGx5IGZyb20gTWljcm9zb2Z0LmNvbS4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBUaGlyZC1wYXJ0eSwgcHJlLW1vZGlmaWVkLCBvciB1bm9mZmljaWFsIGltYWdlcyBhcmUgbm90IHN1cHBvcnRlZAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIGFuZCBtYXkgcHJvZHVjZSBicm9rZW4gcmVzdWx0cy4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvVGV4dEJsb2NrPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPFRleHRCbG9jayBGb250U2l6ZT0ie0R5bmFtaWNSZXNvdXJjZSBGb250U2l6ZX0iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEZvcmVncm91bmQ9IntEeW5hbWljUmVzb3VyY2UgTWFpbkZvcmVncm91bmRDb2xvcn0iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIFRleHRXcmFwcGluZz0iV3JhcCIgTWFyZ2luPSIwLDAsMCw2Ij4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBPbiB0aGUgTWljcm9zb2Z0IGRvd25sb2FkIHBhZ2UsIGNob29zZToKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvVGV4dEJsb2NrPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPFRleHRCbG9jayBGb250U2l6ZT0ie0R5bmFtaWNSZXNvdXJjZSBGb250U2l6ZX0iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEZvcmVncm91bmQ9IntEeW5hbWljUmVzb3VyY2UgTWFpbkZvcmVncm91bmRDb2xvcn0iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIFRleHRXcmFwcGluZz0iV3JhcCIgTWFyZ2luPSIxMiwwLDAsMTIiPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIC0gRWRpdGlvbiAgOiBXaW5kb3dzIDExCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPExpbmVCcmVhay8+LSBMYW5ndWFnZSA6IHlvdXIgcHJlZmVycmVkIGxhbmd1YWdlCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPExpbmVCcmVhay8+LSBBcmNoaXRlY3R1cmUgOiA2NC1iaXQgKHg2NCkKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvVGV4dEJsb2NrPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPEJ1dHRvbiBOYW1lPSJXUEZXaW4xMUlTT0Rvd25sb2FkTGluayIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgQ29udGVudD0i5omT5byA5b6u6L2v5LiL6L296aG16Z2iIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBIb3Jpem9udGFsQWxpZ25tZW50PSJMZWZ0IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBXaWR0aD0iQXV0byIgUGFkZGluZz0iMTIsMCIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgSGVpZ2h0PSJ7RHluYW1pY1Jlc291cmNlIEJ1dHRvbkhlaWdodH0iLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9TdGFja1BhbmVsPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvQm9yZGVyPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9HcmlkPgoKICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwhLS0g4pSA4pSA4pSAIFNURVAgMiA6IE1vdW50ICYgVmVyaWZ5IElTTyDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIAgLS0+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8R3JpZCBOYW1lPSJXUEZXaW4xMUlTT01vdW50U2VjdGlvbiIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIE1hcmdpbj0iNSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIFZpc2liaWxpdHk9IkNvbGxhcHNlZCIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEhvcml6b250YWxBbGlnbm1lbnQ9IkxlZnQiIE1pbldpZHRoPSJ7RHluYW1pY1Jlc291cmNlIEJ1dHRvbldpZHRofSI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPEdyaWQuQ29sdW1uRGVmaW5pdGlvbnM+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxDb2x1bW5EZWZpbml0aW9uIFdpZHRoPSJBdXRvIi8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxDb2x1bW5EZWZpbml0aW9uIFdpZHRoPSIqIi8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9HcmlkLkNvbHVtbkRlZmluaXRpb25zPgoKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8U3RhY2tQYW5lbCBHcmlkLkNvbHVtbj0iMCIgTWFyZ2luPSIwLDAsMjAsMCIgVmVydGljYWxBbGlnbm1lbnQ9IlRvcCI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxUZXh0QmxvY2sgRm9udFNpemU9IntEeW5hbWljUmVzb3VyY2UgRm9udFNpemV9IiBGb250V2VpZ2h0PSJCb2xkIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEZvcmVncm91bmQ9IntEeW5hbWljUmVzb3VyY2UgTWFpbkZvcmVncm91bmRDb2xvcn0iIE1hcmdpbj0iMCwwLDAsOCI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBTdGVwIDIgLSBNb3VudCAmYW1wOyBWZXJpZnkgSVNPCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvVGV4dEJsb2NrPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8VGV4dEJsb2NrIEZvbnRTaXplPSJ7RHluYW1pY1Jlc291cmNlIEZvbnRTaXplfSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBGb3JlZ3JvdW5kPSJ7RHluYW1pY1Jlc291cmNlIE1haW5Gb3JlZ3JvdW5kQ29sb3J9IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIFRleHRXcmFwcGluZz0iV3JhcCIgTWFyZ2luPSIwLDAsMCwxMiIgTWF4V2lkdGg9IjMyMCI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBNb3VudCB0aGUgSVNPIGFuZCBjb25maXJtIGl0IGNvbnRhaW5zIGEgdmFsaWQgV2luZG93cyAxMQogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgaW5zdGFsbC53aW0gYmVmb3JlIGFueSBtb2RpZmljYXRpb25zIGFyZSBtYWRlLgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L1RleHRCbG9jaz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPEJ1dHRvbiBOYW1lPSJXUEZXaW4xMUlTT01vdW50QnV0dG9uIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIENvbnRlbnQ9IuaMgui9veW5tumqjOivgSBJU08iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgSG9yaXpvbnRhbEFsaWdubWVudD0iTGVmdCIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBXaWR0aD0iQXV0byIgUGFkZGluZz0iMTIsMCIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBIZWlnaHQ9IntEeW5hbWljUmVzb3VyY2UgQnV0dG9uSGVpZ2h0fSIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8Q2hlY2tCb3ggTmFtZT0iV1BGV2luMTFJU09JbmplY3REcml2ZXJzIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgQ29udGVudD0i5rOo5YWl5b2T5YmN57O757uf6amx5YqoIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgRm9udFNpemU9IntEeW5hbWljUmVzb3VyY2UgRm9udFNpemV9IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgRm9yZWdyb3VuZD0ie0R5bmFtaWNSZXNvdXJjZSBNYWluRm9yZWdyb3VuZENvbG9yfSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIElzQ2hlY2tlZD0iRmFsc2UiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBNYXJnaW49IjAsOCwwLDAiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBUb29sVGlwPSLku47mnKzmnLrlr7zlh7rmiYDmnInpqbHliqjlubbms6jlhaUgaW5zdGFsbC53aW0g5ZKMIGJvb3Qud2lt77yM5o6o6I2Q55So5LqO5pyJ5LiN5pSv5oyBIE5WTWUg5oiW572R57uc5o6n5Yi25Zmo55qE57O757uf44CCIi8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9TdGFja1BhbmVsPgoKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8IS0tIFZlcmlmaWNhdGlvbiByZXN1bHRzIHBhbmVsIC0tPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxCb3JkZXIgR3JpZC5Db2x1bW49IjEiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBOYW1lPSJXUEZXaW4xMUlTT1ZlcmlmeVJlc3VsdFBhbmVsIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgQmFja2dyb3VuZD0ie0R5bmFtaWNSZXNvdXJjZSBNYWluQmFja2dyb3VuZENvbG9yfSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEJvcmRlckJydXNoPSJ7RHluYW1pY1Jlc291cmNlIEJvcmRlckNvbG9yfSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEJvcmRlclRoaWNrbmVzcz0iMSIgQ29ybmVyUmFkaXVzPSI1IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgUGFkZGluZz0iMTIiIE1hcmdpbj0iMCwwLDAsMCIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIFZpc2liaWxpdHk9IkNvbGxhcHNlZCI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxTdGFja1BhbmVsPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPFRleHRCbG9jayBOYW1lPSJXUEZXaW4xMUlTT01vdW50RHJpdmVMZXR0ZXIiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEZvbnRTaXplPSJ7RHluYW1pY1Jlc291cmNlIEZvbnRTaXplfSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgRm9yZWdyb3VuZD0ie0R5bmFtaWNSZXNvdXJjZSBNYWluRm9yZWdyb3VuZENvbG9yfSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgTWFyZ2luPSIwLDAsMCw0Ii8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8VGV4dEJsb2NrIE5hbWU9IldQRldpbjExSVNPQXJjaExhYmVsIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBGb250U2l6ZT0ie0R5bmFtaWNSZXNvdXJjZSBGb250U2l6ZX0iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEZvcmVncm91bmQ9IntEeW5hbWljUmVzb3VyY2UgTWFpbkZvcmVncm91bmRDb2xvcn0iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIE1hcmdpbj0iMCwwLDAsNCIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPFRleHRCbG9jayBGb250U2l6ZT0ie0R5bmFtaWNSZXNvdXJjZSBGb250U2l6ZX0iIEZvbnRXZWlnaHQ9IkJvbGQiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEZvcmVncm91bmQ9IntEeW5hbWljUmVzb3VyY2UgTWFpbkZvcmVncm91bmRDb2xvcn0iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIE1hcmdpbj0iMCw2LDAsNCI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgU2VsZWN0IEVkaXRpb246CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L1RleHRCbG9jaz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxDb21ib0JveCBOYW1lPSJXUEZXaW4xMUlTT0VkaXRpb25Db21ib0JveCIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBGb250U2l6ZT0ie0R5bmFtaWNSZXNvdXJjZSBGb250U2l6ZX0iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgRm9yZWdyb3VuZD0ie0R5bmFtaWNSZXNvdXJjZSBNYWluRm9yZWdyb3VuZENvbG9yfSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBCYWNrZ3JvdW5kPSJ7RHluYW1pY1Jlc291cmNlIE1haW5CYWNrZ3JvdW5kQ29sb3J9IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEhvcml6b250YWxBbGlnbm1lbnQ9IkxlZnQiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgTWFyZ2luPSIwLDAsMCwwIi8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvU3RhY2tQYW5lbD4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L0JvcmRlcj4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvR3JpZD4KCiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8IS0tIOKUgOKUgOKUgCBTVEVQIDMgOiBNb2RpZnkgaW5zdGFsbC53aW0g4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSAIC0tPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPFN0YWNrUGFuZWwgTmFtZT0iV1BGV2luMTFJU09Nb2RpZnlTZWN0aW9uIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgTWFyZ2luPSI1IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgVmlzaWJpbGl0eT0iQ29sbGFwc2VkIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgSG9yaXpvbnRhbEFsaWdubWVudD0iTGVmdCIgTWluV2lkdGg9IntEeW5hbWljUmVzb3VyY2UgQnV0dG9uV2lkdGh9Ij4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8VGV4dEJsb2NrIEZvbnRTaXplPSJ7RHluYW1pY1Jlc291cmNlIEZvbnRTaXplfSIgRm9udFdlaWdodD0iQm9sZCIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEZvcmVncm91bmQ9IntEeW5hbWljUmVzb3VyY2UgTWFpbkZvcmVncm91bmRDb2xvcn0iIE1hcmdpbj0iMCwwLDAsOCI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIFN0ZXAgMyAtIE1vZGlmeSBpbnN0YWxsLndpbQogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvVGV4dEJsb2NrPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxUZXh0QmxvY2sgRm9udFNpemU9IntEeW5hbWljUmVzb3VyY2UgRm9udFNpemV9IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgRm9yZWdyb3VuZD0ie0R5bmFtaWNSZXNvdXJjZSBNYWluRm9yZWdyb3VuZENvbG9yfSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIFRleHRXcmFwcGluZz0iV3JhcCIgTWFyZ2luPSIwLDAsMCwxMiI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIFRoZSBJU08gY29udGVudHMgd2lsbCBiZSBleHRyYWN0ZWQgdG8gYSB0ZW1wb3Jhcnkgd29ya2luZyBkaXJlY3RvcnksCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIGluc3RhbGwud2ltIHdpbGwgYmUgbW9kaWZpZWQgKGNvbXBvbmVudHMgcmVtb3ZlZCwgdHdlYWtzIGFwcGxpZWQpLAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBhbmQgdGhlIHJlc3VsdCB3aWxsIGJlIHJlcGFja2FnZWQuIFRoaXMgcHJvY2VzcyBtYXkgdGFrZSBzZXZlcmFsIG1pbnV0ZXMKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgZGVwZW5kaW5nIG9uIHlvdXIgaGFyZHdhcmUuCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9UZXh0QmxvY2s+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPEJ1dHRvbiBOYW1lPSJXUEZXaW4xMUlTT01vZGlmeUJ1dHRvbiIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIENvbnRlbnQ9Iui/kOihjCBXaW5kb3dzIElTTyDkv67mlLnlkozliJvlu7rlt6XlhbciCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBIb3Jpem9udGFsQWxpZ25tZW50PSJMZWZ0IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgV2lkdGg9IkF1dG8iIFBhZGRpbmc9IjEyLDAiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBIZWlnaHQ9IntEeW5hbWljUmVzb3VyY2UgQnV0dG9uSGVpZ2h0fSIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9TdGFja1BhbmVsPgoKICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwhLS0g4pSA4pSA4pSAIFNURVAgNCA6IE91dHB1dCBPcHRpb25zIOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgCAtLT4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxTdGFja1BhbmVsIE5hbWU9IldQRldpbjExSVNPT3V0cHV0U2VjdGlvbiIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIE1hcmdpbj0iNSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIFZpc2liaWxpdHk9IkNvbGxhcHNlZCIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEhvcml6b250YWxBbGlnbm1lbnQ9IkxlZnQiIE1pbldpZHRoPSJ7RHluYW1pY1Jlc291cmNlIEJ1dHRvbldpZHRofSI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPCEtLSBIZWFkZXIgcm93OiB0aXRsZSArIENsZWFuICYgUmVzZXQgYnV0dG9uIC0tPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxHcmlkIE1hcmdpbj0iMCwwLDAsMTIiPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8R3JpZC5Db2x1bW5EZWZpbml0aW9ucz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxDb2x1bW5EZWZpbml0aW9uIFdpZHRoPSIqIi8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8Q29sdW1uRGVmaW5pdGlvbiBXaWR0aD0iQXV0byIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L0dyaWQuQ29sdW1uRGVmaW5pdGlvbnM+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxUZXh0QmxvY2sgR3JpZC5Db2x1bW49IjAiIEZvbnRTaXplPSJ7RHluYW1pY1Jlc291cmNlIEZvbnRTaXplfSIgRm9udFdlaWdodD0iQm9sZCIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBGb3JlZ3JvdW5kPSJ7RHluYW1pY1Jlc291cmNlIE1haW5Gb3JlZ3JvdW5kQ29sb3J9IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIFZlcnRpY2FsQWxpZ25tZW50PSJDZW50ZXIiPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgU3RlcCA0IC0gT3V0cHV0OiBXaGF0IHdvdWxkIHlvdSBsaWtlIHRvIGRvIHdpdGggdGhlIG1vZGlmaWVkIGltYWdlPwogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L1RleHRCbG9jaz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPEJ1dHRvbiBHcmlkLkNvbHVtbj0iMSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBOYW1lPSJXUEZXaW4xMUlTT0NsZWFuUmVzZXRCdXR0b24iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgQ29udGVudD0i5riF55CG5bm26YeN572uIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEZvcmVncm91bmQ9Ik9yYW5nZVJlZCIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBXaWR0aD0iQXV0byIgUGFkZGluZz0iMTIsMCIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBIZWlnaHQ9IntEeW5hbWljUmVzb3VyY2UgQnV0dG9uSGVpZ2h0fSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBUb29sVGlwPSLliKDpmaTkuLTml7blt6XkvZznm67lvZXlubbph43nva7lm57mraXpqqQgMSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBNYXJnaW49IjEyLDAsMCwwIi8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9HcmlkPgoKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8IS0tIOKUgOKUgCBDaG9pY2UgcHJvbXB0IGJ1dHRvbnMg4pSA4pSAIC0tPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxHcmlkIE1hcmdpbj0iMCwwLDAsMTIiPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8R3JpZC5Db2x1bW5EZWZpbml0aW9ucz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxDb2x1bW5EZWZpbml0aW9uIFdpZHRoPSIqIi8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8Q29sdW1uRGVmaW5pdGlvbiBXaWR0aD0iMTYiLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxDb2x1bW5EZWZpbml0aW9uIFdpZHRoPSIqIi8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvR3JpZC5Db2x1bW5EZWZpbml0aW9ucz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPEJ1dHRvbiBHcmlkLkNvbHVtbj0iMCIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBOYW1lPSJXUEZXaW4xMUlTT0Nob29zZUlTT0J1dHRvbiIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBDb250ZW50PSLkv53lrZjkuLogSVNPIOaWh+S7tiIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBIb3Jpem9udGFsQWxpZ25tZW50PSJTdHJldGNoIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIFdpZHRoPSJBdXRvIiBQYWRkaW5nPSIxMiwwIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEhlaWdodD0ie0R5bmFtaWNSZXNvdXJjZSBCdXR0b25IZWlnaHR9Ii8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxCdXR0b24gR3JpZC5Db2x1bW49IjIiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgTmFtZT0iV1BGV2luMTFJU09DaG9vc2VVU0JCdXR0b24iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgQ29udGVudD0i55u05o6l5YaZ5YWlIFVTQiDpqbHliqjlmajvvIjkvJrmk6bpmaTmlbTkuKrno4Hnm5jvvIkiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgRm9yZWdyb3VuZD0iT3JhbmdlUmVkIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEhvcml6b250YWxBbGlnbm1lbnQ9IlN0cmV0Y2giCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgV2lkdGg9IkF1dG8iIFBhZGRpbmc9IjEyLDAiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgSGVpZ2h0PSJ7RHluYW1pY1Jlc291cmNlIEJ1dHRvbkhlaWdodH0iLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L0dyaWQ+CgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwhLS0g4pSA4pSAIFVTQiB3cml0ZSBzdWItcGFuZWwgKHJldmVhbGVkIG9uIFVTQiBjaG9pY2UpIOKUgOKUgCAtLT4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8Qm9yZGVyIE5hbWU9IldQRldpbjExSVNPT3B0aW9uVVNCIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgU3R5bGU9IntTdGF0aWNSZXNvdXJjZSBCb3JkZXJTdHlsZX0iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBWaXNpYmlsaXR5PSJDb2xsYXBzZWQiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBNYXJnaW49IjAsOCwwLDAiPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8U3RhY2tQYW5lbD4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxUZXh0QmxvY2sgRm9udFNpemU9IntEeW5hbWljUmVzb3VyY2UgRm9udFNpemV9IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBGb3JlZ3JvdW5kPSJ7RHluYW1pY1Jlc291cmNlIE1haW5Gb3JlZ3JvdW5kQ29sb3J9IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBUZXh0V3JhcHBpbmc9IldyYXAiIE1hcmdpbj0iMCwwLDAsOCI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPFJ1biBGb250V2VpZ2h0PSJCb2xkIiBGb3JlZ3JvdW5kPSJPcmFuZ2VSZWQiPiEhIEFsbCBkYXRhIG9uIHRoZSBzZWxlY3RlZCBVU0IgZHJpdmUgd2lsbCBiZSBwZXJtYW5lbnRseSBlcmFzZWQgISE8L1J1bj4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8TGluZUJyZWFrLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBTZWxlY3QgYSByZW1vdmFibGUgVVNCIGRyaXZlIGJlbG93LCB0aGVuIGNsaWNrIEVyYXNlICZhbXA7IFdyaXRlLgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9UZXh0QmxvY2s+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8IS0tIFVTQiBkcml2ZSBzZWxlY3RvciByb3cgLS0+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8R3JpZCBNYXJnaW49IjAsMCwwLDgiPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxHcmlkLkNvbHVtbkRlZmluaXRpb25zPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8Q29sdW1uRGVmaW5pdGlvbiBXaWR0aD0iKiIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8Q29sdW1uRGVmaW5pdGlvbiBXaWR0aD0iQXV0byIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvR3JpZC5Db2x1bW5EZWZpbml0aW9ucz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8Q29tYm9Cb3ggR3JpZC5Db2x1bW49IjAiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIE5hbWU9IldQRldpbjExSVNPVVNCRHJpdmVDb21ib0JveCIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgRm9yZWdyb3VuZD0ie0R5bmFtaWNSZXNvdXJjZSBNYWluRm9yZWdyb3VuZENvbG9yfSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgQmFja2dyb3VuZD0ie0R5bmFtaWNSZXNvdXJjZSBNYWluQmFja2dyb3VuZENvbG9yfSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgVmVydGljYWxBbGlnbm1lbnQ9IkNlbnRlciIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgTWFyZ2luPSIwLDAsNiwwIi8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPEJ1dHRvbiBHcmlkLkNvbHVtbj0iMSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIE5hbWU9IldQRldpbjExSVNPUmVmcmVzaFVTQkJ1dHRvbiIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIENvbnRlbnQ9IuWIt+aWsCIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIFdpZHRoPSJBdXRvIiBQYWRkaW5nPSI4LDAiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBIZWlnaHQ9IntEeW5hbWljUmVzb3VyY2UgQnV0dG9uSGVpZ2h0fSIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9HcmlkPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPEJ1dHRvbiBOYW1lPSJXUEZXaW4xMUlTT1dyaXRlVVNCQnV0dG9uIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBDb250ZW50PSLmk6bpmaTlubblhpnlhaUgVVNCIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBGb3JlZ3JvdW5kPSJPcmFuZ2VSZWQiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEhvcml6b250YWxBbGlnbm1lbnQ9IlN0cmV0Y2giCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIFdpZHRoPSJBdXRvIiBQYWRkaW5nPSIxMiwwIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBIZWlnaHQ9IntEeW5hbWljUmVzb3VyY2UgQnV0dG9uSGVpZ2h0fSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgTWFyZ2luPSIwLDAsMCwxMCIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L1N0YWNrUGFuZWw+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9Cb3JkZXI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L1N0YWNrUGFuZWw+CgogICAgICAgICAgICAgICAgICAgIDwvU3RhY2tQYW5lbD4KCiAgICAgICAgICAgICAgICAgICAgPCEtLSBTdGF0dXMgTG9nIChmaWxscyByZW1haW5pbmcgaGVpZ2h0KSAtLT4KICAgICAgICAgICAgICAgICAgICA8R3JpZCBHcmlkLlJvdz0iMSIgTWFyZ2luPSI1Ij4KICAgICAgICAgICAgICAgICAgICAgICAgPEdyaWQuUm93RGVmaW5pdGlvbnM+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8Um93RGVmaW5pdGlvbiBIZWlnaHQ9IkF1dG8iLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxSb3dEZWZpbml0aW9uIEhlaWdodD0iKiIvPgogICAgICAgICAgICAgICAgICAgICAgICA8L0dyaWQuUm93RGVmaW5pdGlvbnM+CiAgICAgICAgICAgICAgICAgICAgICAgIDxUZXh0QmxvY2sgR3JpZC5Sb3c9IjAiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgRm9udFNpemU9IntEeW5hbWljUmVzb3VyY2UgRm9udFNpemV9IiBGb250V2VpZ2h0PSJCb2xkIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEZvcmVncm91bmQ9IntEeW5hbWljUmVzb3VyY2UgTWFpbkZvcmVncm91bmRDb2xvcn0iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgTWFyZ2luPSIwLDAsMCw0Ij4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIFN0YXR1cyBMb2cKICAgICAgICAgICAgICAgICAgICAgICAgPC9UZXh0QmxvY2s+CiAgICAgICAgICAgICAgICAgICAgICAgIDxUZXh0Qm94IEdyaWQuUm93PSIxIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBOYW1lPSJXUEZXaW4xMUlTT1N0YXR1c0xvZyIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgSXNSZWFkT25seT0iVHJ1ZSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgVGV4dFdyYXBwaW5nPSJXcmFwIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBWZXJ0aWNhbFNjcm9sbEJhclZpc2liaWxpdHk9IlZpc2libGUiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIFZlcnRpY2FsQWxpZ25tZW50PSJTdHJldGNoIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBQYWRkaW5nPSI2IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBCYWNrZ3JvdW5kPSJ7RHluYW1pY1Jlc291cmNlIE1haW5CYWNrZ3JvdW5kQ29sb3J9IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBGb3JlZ3JvdW5kPSJ7RHluYW1pY1Jlc291cmNlIE1haW5Gb3JlZ3JvdW5kQ29sb3J9IgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBCb3JkZXJCcnVzaD0ie0R5bmFtaWNSZXNvdXJjZSBCb3JkZXJDb2xvcn0iCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEJvcmRlclRoaWNrbmVzcz0iMSIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgVGV4dD0iUmVhZHkuIFBsZWFzZSBzZWxlY3QgYSBXaW5kb3dzIDExIElTTyB0byBiZWdpbi4iLz4KICAgICAgICAgICAgICAgICAgICA8L0dyaWQ+CgogICAgICAgICAgICAgICAgPC9HcmlkPgogICAgICAgICAgICA8L1RhYkl0ZW0+CiAgICAgICAgICAgIDxUYWJJdGVtIEhlYWRlcj0iQXBwWCIgVmlzaWJpbGl0eT0iQ29sbGFwc2VkIiBOYW1lPSJXUEZUYWI2Ij4KICAgICAgICAgICAgICAgIDxHcmlkPgogICAgICAgICAgICAgICAgICAgIDxHcmlkLlJvd0RlZmluaXRpb25zPgogICAgICAgICAgICAgICAgICAgICAgICA8Um93RGVmaW5pdGlvbiBIZWlnaHQ9IioiIC8+CiAgICAgICAgICAgICAgICAgICAgICAgIDxSb3dEZWZpbml0aW9uIEhlaWdodD0iQXV0byIgLz4KICAgICAgICAgICAgICAgICAgICA8L0dyaWQuUm93RGVmaW5pdGlvbnM+CgogICAgICAgICAgICAgICAgICAgIDxTY3JvbGxWaWV3ZXIgVmVydGljYWxTY3JvbGxCYXJWaXNpYmlsaXR5PSJBdXRvIiBIb3Jpem9udGFsU2Nyb2xsQmFyVmlzaWJpbGl0eT0iRGlzYWJsZWQiIEdyaWQuUm93PSIwIiBNYXJnaW49IntEeW5hbWljUmVzb3VyY2UgVGFiQ29udGVudE1hcmdpbn0iPgogICAgICAgICAgICAgICAgICAgICAgICA8R3JpZCBCYWNrZ3JvdW5kPSJUcmFuc3BhcmVudCI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8R3JpZC5Sb3dEZWZpbml0aW9ucz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8Um93RGVmaW5pdGlvbiBIZWlnaHQ9IkF1dG8iLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8Um93RGVmaW5pdGlvbiBIZWlnaHQ9IioiLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8Um93RGVmaW5pdGlvbiBIZWlnaHQ9IkF1dG8iLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvR3JpZC5Sb3dEZWZpbml0aW9ucz4KCiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8U3RhY2tQYW5lbCBCYWNrZ3JvdW5kPSJ7RHluYW1pY1Jlc291cmNlIE1haW5CYWNrZ3JvdW5kQ29sb3J9IiBPcmllbnRhdGlvbj0iVmVydGljYWwiIEdyaWQuUm93PSIwIiBHcmlkLkNvbHVtbj0iMCIgTWFyZ2luPSI1Ij4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8TGFiZWwgQ29udGVudD0i6YCJ5oup77yaIiBGb250U2l6ZT0ie0R5bmFtaWNSZXNvdXJjZSBGb250U2l6ZX0iIFZlcnRpY2FsQWxpZ25tZW50PSJDZW50ZXIiIE1hcmdpbj0iMiIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxTdGFja1BhbmVsIE9yaWVudGF0aW9uPSJIb3Jpem9udGFsIiBIb3Jpem9udGFsQWxpZ25tZW50PSJMZWZ0IiBNYXJnaW49IjAsMiwwLDAiPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8QnV0dG9uIE5hbWU9IldQRkRlZmF1bHRBcHB4U2VsZWN0aW9uIiBDb250ZW50PSLpu5jorqQiIE1hcmdpbj0iMiIgV2lkdGg9IntEeW5hbWljUmVzb3VyY2UgQnV0dG9uV2lkdGh9IiBIZWlnaHQ9IntEeW5hbWljUmVzb3VyY2UgQnV0dG9uSGVpZ2h0fSIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8QnV0dG9uIE5hbWU9IldQRkdldEluc3RhbGxlZEFwcHgiIENvbnRlbnQ9IuW3suWuieijheWIl+ihqCIgTWFyZ2luPSIyIiBXaWR0aD0ie0R5bmFtaWNSZXNvdXJjZSBCdXR0b25XaWR0aH0iIEhlaWdodD0ie0R5bmFtaWNSZXNvdXJjZSBCdXR0b25IZWlnaHR9Ii8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxCdXR0b24gTmFtZT0iV1BGU2VsZWN0QWxsQXBweCIgQ29udGVudD0i5YWo6YCJIiBNYXJnaW49IjIiIFdpZHRoPSJ7RHluYW1pY1Jlc291cmNlIEJ1dHRvbldpZHRofSIgSGVpZ2h0PSJ7RHluYW1pY1Jlc291cmNlIEJ1dHRvbkhlaWdodH0iLz4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPEJ1dHRvbiBOYW1lPSJXUEZDbGVhckFwcHhTZWxlY3Rpb24iIENvbnRlbnQ9Iua4hemZpOmAieaLqSIgTWFyZ2luPSIyIiBXaWR0aD0ie0R5bmFtaWNSZXNvdXJjZSBCdXR0b25XaWR0aH0iIEhlaWdodD0ie0R5bmFtaWNSZXNvdXJjZSBCdXR0b25IZWlnaHR9Ii8+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9TdGFja1BhbmVsPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9TdGFja1BhbmVsPgoKICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxHcmlkIE5hbWU9ImFwcHhwYW5lbCIgR3JpZC5Sb3c9IjEiPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9HcmlkPgoKICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxCb3JkZXIgR3JpZC5Sb3c9IjIiIFN0eWxlPSJ7U3RhdGljUmVzb3VyY2UgQm9yZGVyU3R5bGV9IiBNYXJnaW49IjUsMTUsNSw1Ij4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA8U3RhY2tQYW5lbCBCYWNrZ3JvdW5kPSJ7RHluYW1pY1Jlc291cmNlIE1haW5CYWNrZ3JvdW5kQ29sb3J9IiBPcmllbnRhdGlvbj0iSG9yaXpvbnRhbCIgSG9yaXpvbnRhbEFsaWdubWVudD0iTGVmdCI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxUZXh0QmxvY2sgUGFkZGluZz0iMTAiIFRleHRXcmFwcGluZz0iV3JhcCIgRm9yZWdyb3VuZD0ie0R5bmFtaWNSZXNvdXJjZSBNYWluRm9yZWdyb3VuZENvbG9yfSI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBOb3RlOiBTZWxlY3QgdGhlIFdpbmRvd3MgQXBwWCBwYWNrYWdlcyB5b3Ugd2lzaCB0byBpbnN0YWxsIG9yIHJlbW92ZS4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxMaW5lQnJlYWsvPkluc3RhbGwgU2VsZWN0ZWQgcmVnaXN0ZXJzIGEgbG9jYWwgbWFuaWZlc3Qgd2hlbiBhdmFpbGFibGUsIHRoZW4gZmFsbHMgYmFjayB0byB0aGUgTWljcm9zb2Z0IFN0b3JlLgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPExpbmVCcmVhay8+UmVtb3ZlIFNlbGVjdGVkIHJlbW92ZXMgcGFja2FnZXMgZm9yIHRoZSBjdXJyZW50IHVzZXIgYW5kIGFsbCBuZXcgdXNlciBwcm9maWxlcy4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9UZXh0QmxvY2s+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9TdGFja1BhbmVsPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPC9Cb3JkZXI+CiAgICAgICAgICAgICAgICAgICAgICAgIDwvR3JpZD4KICAgICAgICAgICAgICAgICAgICA8L1Njcm9sbFZpZXdlcj4KCiAgICAgICAgICAgICAgICAgICAgPEJvcmRlciBHcmlkLlJvdz0iMSIgQmFja2dyb3VuZD0ie0R5bmFtaWNSZXNvdXJjZSBNYWluQmFja2dyb3VuZENvbG9yfSIgQm9yZGVyQnJ1c2g9IntEeW5hbWljUmVzb3VyY2UgQm9yZGVyQ29sb3J9IiBCb3JkZXJUaGlja25lc3M9IjEiIENvcm5lclJhZGl1cz0iNSIgSG9yaXpvbnRhbEFsaWdubWVudD0iU3RyZXRjaCIgUGFkZGluZz0iMTAiPgogICAgICAgICAgICAgICAgICAgICAgICA8V3JhcFBhbmVsIE9yaWVudGF0aW9uPSJIb3Jpem9udGFsIiBIb3Jpem9udGFsQWxpZ25tZW50PSJMZWZ0IiBWZXJ0aWNhbEFsaWdubWVudD0iQ2VudGVyIj4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxCdXR0b24gTmFtZT0iV1BGQmFja1RvVHdlYWtzIiBDb250ZW50PSLov5Tlm57kvJjljJYiIE1hcmdpbj0iNSIgV2lkdGg9IntEeW5hbWljUmVzb3VyY2UgQnV0dG9uV2lkdGh9IiBIZWlnaHQ9IntEeW5hbWljUmVzb3VyY2UgQnV0dG9uSGVpZ2h0fSIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPEJ1dHRvbiBOYW1lPSJXUEZJbnN0YWxsU2VsZWN0ZWRBcHB4IiBDb250ZW50PSLlronoo4XpgInkuK0iIE1hcmdpbj0iNSIgV2lkdGg9IntEeW5hbWljUmVzb3VyY2UgQnV0dG9uV2lkdGh9IiBIZWlnaHQ9IntEeW5hbWljUmVzb3VyY2UgQnV0dG9uSGVpZ2h0fSIvPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPEJ1dHRvbiBOYW1lPSJXUEZSZW1vdmVTZWxlY3RlZEFwcHgiIENvbnRlbnQ9Iuenu+mZpOmAieS4rSIgTWFyZ2luPSI1IiBXaWR0aD0ie0R5bmFtaWNSZXNvdXJjZSBCdXR0b25XaWR0aH0iIEhlaWdodD0ie0R5bmFtaWNSZXNvdXJjZSBCdXR0b25IZWlnaHR9Ii8+CiAgICAgICAgICAgICAgICAgICAgICAgIDwvV3JhcFBhbmVsPgogICAgICAgICAgICAgICAgICAgIDwvQm9yZGVyPgogICAgICAgICAgICAgICAgPC9HcmlkPgogICAgICAgICAgICA8L1RhYkl0ZW0+CiAgICAgICAgPC9UYWJDb250cm9sPgoKICAgICAgICA8IS0tIFdpbmRvdy1sZXZlbCBwcm9ncmVzcyBpbmRpY2F0b3IgLSB2aXNpYmxlIHJlZ2FyZGxlc3Mgb2YgYWN0aXZlIHRhYiAtLT4KICAgICAgICA8Qm9yZGVyIE5hbWU9IldQRlR3ZWFrc1Byb2dyZXNzQmFyIiBHcmlkLlJvdz0iMyIgQmFja2dyb3VuZD0ie0R5bmFtaWNSZXNvdXJjZSBNYWluQmFja2dyb3VuZENvbG9yfSIgVmlzaWJpbGl0eT0iQ29sbGFwc2VkIiBQYWRkaW5nPSIxMCw2Ij4KICAgICAgICAgICAgPFN0YWNrUGFuZWwgT3JpZW50YXRpb249IlZlcnRpY2FsIj4KICAgICAgICAgICAgICAgIDxUZXh0QmxvY2sgTmFtZT0iV1BGVHdlYWtzUHJvZ3Jlc3NMYWJlbCIgVGV4dD0iIiBGb3JlZ3JvdW5kPSJ7RHluYW1pY1Jlc291cmNlIE1haW5Gb3JlZ3JvdW5kQ29sb3J9IiBGb250U2l6ZT0iMTMiIEJhY2tncm91bmQ9IlRyYW5zcGFyZW50IiBNYXJnaW49IjAsMCwwLDQiLz4KICAgICAgICAgICAgICAgIDxQcm9ncmVzc0JhciBOYW1lPSJXUEZUd2Vha3NQcm9ncmVzc1ZhbHVlIiBIZWlnaHQ9IjYiIE1pbmltdW09IjAiIE1heGltdW09IjEwMCIgVmFsdWU9IjAiIFN0eWxlPSJ7U3RhdGljUmVzb3VyY2UgUm91bmRlZFByb2dyZXNzQmFyU3R5bGV9Ii8+CiAgICAgICAgICAgIDwvU3RhY2tQYW5lbD4KICAgICAgICA8L0JvcmRlcj4KICAgIDwvR3JpZD4KPC9XaW5kb3c+Cg=='))
 
 
 $WinUtilAutounattendXml = @'
@@ -12535,8 +7905,6 @@ $scripts = @(
 </unattend>
 
 '@
-
-
 
 Write-Host @"
     CCCCCCCCCCCCCTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT
