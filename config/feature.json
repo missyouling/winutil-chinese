@@ -328,7 +328,7 @@
     "link": "https://winutil.christitus.com/dev/features/legacy-windows-panels/restore"
   },
   "WPFWinUtilInstallPSProfile": {
-    "Content": "CTT PowerShell 配置文件 - 安装",
+    "Content": "PowerShell 是微软的自动化任务框架和脚本语言",
     "category": "PowerShell 配置文件 (仅 PowerShell 7+)",
     "panel": "2",
     "Type": "Button",
@@ -337,7 +337,7 @@
     "link": "https://winutil.christitus.com/dev/features/powershell-profile-powershell-7--only/installpsprofile"
   },
   "WPFWinUtilUninstallPSProfile": {
-    "Content": "CTT PowerShell 配置文件 - 移除",
+    "Content": "PowerShell 是微软的自动化任务框架和脚本语言",
     "category": "PowerShell 配置文件 (仅 PowerShell 7+)",
     "panel": "2",
     "Type": "Button",

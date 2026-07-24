@@ -60,11 +60,13 @@ def compile_winutil(source_dir: str, output_path: str):
                 wpfformat[f"WPFInstall{key}"] = value
             configs[name] = json.dumps(wpfformat, ensure_ascii=False, indent=2)
     
-    # Write configs as PowerShell hashtable
+    # Write configs as PowerShell hashtable with proper escaping
     lines.append("$sync.configs = @{\n")
     for name, data in configs.items():
         key = name.replace("applications", "WPFInstall")
-        lines.append(f'    "{name}" = \'{data}\'\n')
+        # Escape single quotes for PowerShell single-quoted strings
+        escaped = data.replace("'", "''")
+        lines.append(f'    "{name}" = \'{escaped}\'\n')
     lines.append("}\n")
     lines.append("\n")
     print(f"✅ config/ — {len(configs)} 个文件")

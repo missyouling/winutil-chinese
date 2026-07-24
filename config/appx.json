@@ -82,7 +82,7 @@
   "WPFAppxMicrosoft_WindowsCrossDevice": {
     "Category": "微软生态系统",
     "Content": "移动设备",
-    "Description": "Manages system-level background connectivity with paired mobile devices. Removing this may disable cross-device features such as phone screen mirroring, file transfer, and mobile hotspot handoff integrated into Windows Settings.",
+    "Description": "管理与配对移动设备的系统级后台连接",
     "Panel": "0",
     "PackageId": "MicrosoftWindows.CrossDevice",
     "StoreId": "9NTXGKQ8P7N0"
@@ -226,7 +226,7 @@
   "WPFAppxMicrosoft_XboxIdentityProvider": {
     "Category": "Xbox与游戏",
     "Content": "Xbox 身份提供程序",
-    "Description": "Manages Xbox network user authentication and background account validation for connected titles. Warning: removing this may break Microsoft account sign-in for non-Xbox games and apps that rely on this authentication pipeline.",
+    "Description": "管理 Xbox 网络用户认证和后台账户访问",
     "Panel": "1",
     "PackageId": "Microsoft.XboxIdentityProvider",
     "StoreId": "9WZDNCRD1HKW"
@@ -241,7 +241,7 @@
   "WPFAppxMicrosoft_Xbox_TCUI": {
     "Category": "Xbox与游戏",
     "Content": "Xbox TCUI",
-    "Description": "Provides core account connection UI modules for single sign-on flows within game titles. Warning: removing this may break Microsoft account authentication in games and apps that do not otherwise require the Xbox app.",
+    "Description": "为 Xbox 提供核心账户连接 UI 模块",
     "Panel": "1",
     "PackageId": "Microsoft.Xbox.TCUI"
   },

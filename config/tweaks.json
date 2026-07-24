@@ -548,7 +548,7 @@
   },
   "WPFTweaksRemoveEdge": {
     "Content": "Microsoft Edge - 移除",
-    "Description": "Uninstalls Microsoft Edge by creating dummy MicrosoftEdge.exe file in the legacy Edge folder. This tricks Windows into unlocking the official Edge uninstaller allowing for a system-level removal.",
+    "Description": "通过创建虚拟 MicrosoftEdge.exe 文件解锁官方卸载程序，实现系统级移除 Microsoft Edge",
     "category": "高级优化 - 谨慎操作",
     "panel": "1",
     "InvokeScript": [
@@ -732,7 +732,7 @@
   },
   "WPFTweaksReservedStorage": {
     "Content": "禁用预留存储",
-    "Description": "Disables Windows Reserved Storage (7-10 GB held for updates/temp files). Recommended only on small drives. Re-enable before major Windows feature updates to avoid installation failures.",
+    "Description": "禁用 Windows 预留存储（约 7-10 GB 用于更新和临时文件）。仅建议小容量硬盘使用",
     "category": "高级优化 - 谨慎操作",
     "panel": "1",
     "InvokeScript": [
@@ -907,7 +907,7 @@
   },
   "WPFTweaksBlockAdobeNet": {
     "Content": "Adobe URL 阻止列表 - 启用",
-    "Description": "Reduces user interruptions by selectively blocking connections to Adobe's activation and telemetry servers. Credit: Ruddernation-Designs",
+    "Description": "通过选择性阻止 Adobe 连接来减少不必要的用户干扰",
     "category": "高级优化 - 谨慎操作",
     "panel": "1",
     "InvokeScript": [

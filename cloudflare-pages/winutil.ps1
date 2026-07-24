@@ -8258,7 +8258,7 @@ $sync.configs = @{
     "category": "工具类",
     "choco": "keepassxc",
     "content": "KeePassXC 密码管理",
-    "description": "KeePassXC is a modern, secure, and open-source password manager that stores and manages your most sensitive information. You can run KeePassXC on Windows, macOS, and Linux systems. KeePassXC is for people with extremely high demands of secure personal data management. It saves many different types of information, such as usernames, passwords, URLs, attachments, and notes in an offline, encrypted file that can be stored in any location, including private and public cloud solutions. For easy identification and management, user-defined titles and icons can be specified for entries. In addition, entries are sorted into customizable groups. An integrated search function allows you to use advanced patterns to easily find any entry in your database. A customizable, fast, and easy-to-use password generator utility allows you to create passwords with any combination of characters or easy to remember passphrases.",
+    "description": "KeePassXC 是一款现代、安全、开源的密码管理器",
     "link": "https://keepassxc.org/",
     "winget": "KeePassXCTeam.KeePassXC",
     "foss": true
@@ -8366,7 +8366,7 @@ $sync.configs = @{
     "category": "多媒体工具",
     "choco": "mpc-hc-clsid2",
     "content": "MPC-HC 媒体播放器",
-    "description": "Media Player Classic - Home Cinema (MPC-HC) is a free and open-source video and audio player for Windows. MPC-HC is based on the original Guliverkli project and contains many additional features and bug fixes.",
+    "description": "Media Player Classic - Home Cinema (MPC-HC) 是一款免费开源的视频播放器",
     "link": "https://github.com/clsid2/mpc-hc/",
     "winget": "clsid2.mpc-hc",
     "foss": true
@@ -8527,7 +8527,7 @@ $sync.configs = @{
     "category": "多媒体工具",
     "choco": "obs-studio",
     "content": "OBS Studio 直播录屏",
-    "description": "OBS Studio is a free and open-source software for video recording and live streaming. It supports real-time video/audio capturing and mixing, making it popular among content creators.",
+    "description": "OBS Studio 是一款免费开源的视频录制和直播推流软件",
     "link": "https://obsproject.com/",
     "winget": "OBSProject.OBSStudio",
     "foss": true
@@ -8581,7 +8581,7 @@ $sync.configs = @{
     "category": "专业工具",
     "choco": "openvpn-connect",
     "content": "OpenVPN Connect 客户端",
-    "description": "OpenVPN Connect is a VPN client that allows you to connect securely to a VPN server. It provides a secure and encrypted connection for protecting your online privacy.",
+    "description": "OpenVPN Connect 是一款 VPN 客户端，可让你安全连接到 VPN 服务器",
     "link": "https://openvpn.net/",
     "winget": "OpenVPNTechnologies.OpenVPNConnect",
     "foss": false
@@ -8617,7 +8617,7 @@ $sync.configs = @{
     "category": "多媒体工具",
     "choco": "paint.net",
     "content": "Paint.NET 图像编辑",
-    "description": "Paint.NET is a free image and photo editing software for Windows. It features an intuitive user interface and supports a wide range of powerful editing tools.",
+    "description": "Paint.NET 是一款免费的 Windows 图像照片编辑软件",
     "link": "https://www.getpaint.net/",
     "winget": "dotPDN.PaintDotNet",
     "foss": false
@@ -8653,7 +8653,7 @@ $sync.configs = @{
     "category": "自托管工具",
     "choco": "plexmediaserver",
     "content": "Plex 媒体服务器",
-    "description": "Plex Media Server is a media server software that allows you to organize and stream your media library. It supports various media formats and offers a wide range of features.",
+    "description": "Plex Media Server 是一款媒体服务器软件，可让你管理和流式传输媒体文件",
     "link": "https://www.plex.tv/your-media/",
     "winget": "Plex.PlexMediaServer",
     "foss": false
@@ -8662,7 +8662,7 @@ $sync.configs = @{
     "category": "自托管工具",
     "choco": "plex",
     "content": "Plex 桌面客户端",
-    "description": "Plex Desktop for Windows 是 Plex Media Server 的前端界面。",
+    "description": "Plex Media Server 是一款媒体服务器软件，可让你管理和流式传输媒体文件",
     "link": "https://www.plex.tv",
     "winget": "Plex.Plex",
     "foss": false
@@ -8680,7 +8680,7 @@ $sync.configs = @{
     "category": "微软工具",
     "choco": "powershell-core",
     "content": "PowerShell",
-    "description": "PowerShell is a task automation framework and scripting language designed for system administrators, offering powerful command-line capabilities.",
+    "description": "PowerShell 是微软的自动化任务框架和脚本语言",
     "link": "https://github.com/PowerShell/PowerShell",
     "winget": "Microsoft.PowerShell",
     "foss": true
@@ -8707,7 +8707,7 @@ $sync.configs = @{
     "category": "工具类",
     "choco": "plasso",
     "content": "Process Lasso 进程优化",
-    "description": "Process Lasso is a system optimization and automation tool that improves system responsiveness and stability by adjusting process priorities and CPU affinities.",
+    "description": "Process Lasso 是一款系统优化和自动化工具，可优化 CPU 使用率",
     "link": "https://bitsum.com/",
     "winget": "BitSum.ProcessLasso",
     "foss": false
@@ -8770,7 +8770,7 @@ $sync.configs = @{
     "category": "专业工具",
     "choco": "putty",
     "content": "PuTTY 远程连接",
-    "description": "PuTTY is a free and open-source terminal emulator, serial console, and network file transfer application. It supports various network protocols such as SSH, Telnet, and SCP.",
+    "description": "PuTTY 是一款免费开源的终端仿真器、串行控制台和网络文件传输工具",
     "link": "https://www.chiark.greenend.org.uk/~sgtatham/putty/",
     "winget": "PuTTY.PuTTY",
     "foss": true
@@ -8788,7 +8788,7 @@ $sync.configs = @{
     "category": "工具类",
     "choco": "qbittorrent",
     "content": "qBittorrent 下载工具",
-    "description": "qBittorrent is a free and open-source BitTorrent client that aims to provide a feature-rich and lightweight alternative to other torrent clients.",
+    "description": "qBittorrent 是一款免费开源的 BitTorrent 客户端",
     "link": "https://www.qbittorrent.org/",
     "winget": "qBittorrent.qBittorrent",
     "foss": true
@@ -8851,7 +8851,7 @@ $sync.configs = @{
     "category": "多媒体工具",
     "choco": "sharex",
     "content": "ShareX 截图工具",
-    "description": "ShareX is a free and open-source screen capture and file sharing tool. It supports various capture methods and offers advanced features for editing and sharing screenshots.",
+    "description": "ShareX 是一款免费开源的屏幕截图和文件共享工具",
     "link": "https://getsharex.com/",
     "winget": "ShareX.ShareX",
     "foss": true
@@ -8995,7 +8995,7 @@ $sync.configs = @{
     "category": "微软工具",
     "choco": "microsoft-windows-terminal",
     "content": "Windows Terminal 终端",
-    "description": "Windows Terminal is a modern, fast, and efficient terminal application for command-line users, supporting multiple tabs, panes, and more.",
+    "description": "Windows Terminal 是一款现代、快速、高效的终端应用程序",
     "link": "https://aka.ms/terminal",
     "winget": "Microsoft.WindowsTerminal",
     "foss": true
@@ -9058,7 +9058,7 @@ $sync.configs = @{
     "category": "游戏",
     "choco": "ubisoft-connect",
     "content": "Ubisoft Connect 游戏平台",
-    "description": "Ubisoft Connect is Ubisoft's digital distribution and online gaming service, providing access to Ubisoft's games and services.",
+    "description": "Ubisoft Connect 是育碧的数字发行和在线多人游戏平台",
     "link": "https://ubisoftconnect.com/",
     "winget": "Ubisoft.Connect",
     "foss": false
@@ -9085,7 +9085,7 @@ $sync.configs = @{
     "category": "工具类",
     "choco": "everything",
     "content": "Everything 文件搜索",
-    "description": "Everything is a search engine that locates files and folders by filename instantly for Windows. Unlike Windows search Everything initially displays every file and folder on your computer (hence the name Everything). You type in a search filter to limit what files and folders are displayed.",
+    "description": "Everything 是一款极速文件搜索工具，可瞬间定位文件和文件夹",
     "link": "https://www.voidtools.com/",
     "winget": "voidtools.Everything",
     "foss": false
@@ -9112,7 +9112,7 @@ $sync.configs = @{
     "category": "专业工具",
     "choco": "ventoy",
     "content": "Ventoy 启动盘制作",
-    "description": "Ventoy is an open-source tool for creating bootable USB drives. It supports multiple ISO files on a single USB drive, making it a versatile solution for installing operating systems.",
+    "description": "Ventoy 是一款开源的启动 U 盘制作工具",
     "link": "https://www.ventoy.net/",
     "winget": "Ventoy.Ventoy",
     "foss": true
@@ -9166,7 +9166,7 @@ $sync.configs = @{
     "category": "多媒体工具",
     "choco": "vlc",
     "content": "VLC 视频播放器",
-    "description": "VLC Media Player is a free and open-source multimedia player that supports a wide range of audio and video formats. It is known for its versatility and cross-platform compatibility.",
+    "description": "VLC 媒体播放器是一款免费开源的多媒体播放器",
     "link": "https://www.videolan.org/vlc/",
     "winget": "VideoLAN.VLC",
     "foss": true
@@ -9238,7 +9238,7 @@ $sync.configs = @{
     "category": "专业工具",
     "choco": "winscp",
     "content": "WinSCP 文件传输",
-    "description": "WinSCP is a popular open-source SFTP, FTP, and SCP client for Windows. It allows secure file transfers between a local and a remote computer.",
+    "description": "WinSCP 是一款流行的开源 SFTP/FTP/SCP 客户端",
     "link": "https://winscp.net/",
     "winget": "WinSCP.WinSCP",
     "foss": true
@@ -9247,7 +9247,7 @@ $sync.configs = @{
     "category": "专业工具",
     "choco": "wireguard",
     "content": "WireGuard VPN",
-    "description": "WireGuard is a fast and modern VPN (Virtual Private Network) protocol. It aims to be simpler and more efficient than other VPN protocols, providing secure and reliable connections.",
+    "description": "WireGuard 是一款快速、现代的 VPN（虚拟专用网络）",
     "link": "https://www.wireguard.com/",
     "winget": "WireGuard.WireGuard",
     "foss": true
@@ -9256,7 +9256,7 @@ $sync.configs = @{
     "category": "专业工具",
     "choco": "wireshark",
     "content": "Wireshark 网络分析",
-    "description": "Wireshark is a widely-used open-source network protocol analyzer. It allows users to capture and analyze network traffic in real-time, providing detailed insights into network activities.",
+    "description": "Wireshark 是一款广泛使用的开源网络协议分析工具",
     "link": "https://www.wireshark.org/",
     "winget": "WiresharkFoundation.Wireshark",
     "foss": true
@@ -9265,7 +9265,7 @@ $sync.configs = @{
     "category": "工具类",
     "choco": "wiztree",
     "content": "WizTree 磁盘分析",
-    "description": "WizTree is a fast disk space analyzer that helps you quickly find the files and folders consuming the most space on your hard drive.",
+    "description": "WizTree 是一款快速的磁盘空间分析工具",
     "link": "https://wiztreefree.com/",
     "winget": "AntibodySoftware.WizTree",
     "foss": false
@@ -9310,7 +9310,7 @@ $sync.configs = @{
     "category": "工具类",
     "choco": "TightVNC",
     "content": "TightVNC 远程桌面",
-    "description": "TightVNC is a free and open-source remote desktop software that lets you access and control a computer over the network. With its intuitive interface, you can interact with the remote screen as if you were sitting in front of it. You can open files, launch applications, and perform other actions on the remote desktop almost as if you were physically there.",
+    "description": "TightVNC 是一款免费开源的远程桌面软件",
     "link": "https://www.tightvnc.com/",
     "winget": "GlavSoft.TightVNC",
     "foss": true
@@ -9382,7 +9382,7 @@ $sync.configs = @{
     "category": "开发工具",
     "choco": "lua",
     "winget": "rjpcomputing.luaforwindows",
-    "description": "A 'batteries included environment' for the Lua scripting language on Windows.",
+    "description": "Lua 脚本语言的电池齐全环境（含依赖库）",
     "content": "Lua 脚本语言",
     "link": "https://github.com/rjpcomputing/luaforwindows",
     "foss": true
@@ -9557,7 +9557,7 @@ $sync.configs = @{
   "WPFAppxMicrosoft_WindowsCrossDevice": {
     "Category": "微软生态系统",
     "Content": "移动设备",
-    "Description": "Manages system-level background connectivity with paired mobile devices. Removing this may disable cross-device features such as phone screen mirroring, file transfer, and mobile hotspot handoff integrated into Windows Settings.",
+    "Description": "管理与配对移动设备的系统级后台连接",
     "Panel": "0",
     "PackageId": "MicrosoftWindows.CrossDevice",
     "StoreId": "9NTXGKQ8P7N0"
@@ -9701,7 +9701,7 @@ $sync.configs = @{
   "WPFAppxMicrosoft_XboxIdentityProvider": {
     "Category": "Xbox与游戏",
     "Content": "Xbox 身份提供程序",
-    "Description": "Manages Xbox network user authentication and background account validation for connected titles. Warning: removing this may break Microsoft account sign-in for non-Xbox games and apps that rely on this authentication pipeline.",
+    "Description": "管理 Xbox 网络用户认证和后台账户访问",
     "Panel": "1",
     "PackageId": "Microsoft.XboxIdentityProvider",
     "StoreId": "9WZDNCRD1HKW"
@@ -9716,7 +9716,7 @@ $sync.configs = @{
   "WPFAppxMicrosoft_Xbox_TCUI": {
     "Category": "Xbox与游戏",
     "Content": "Xbox TCUI",
-    "Description": "Provides core account connection UI modules for single sign-on flows within game titles. Warning: removing this may break Microsoft account authentication in games and apps that do not otherwise require the Xbox app.",
+    "Description": "为 Xbox 提供核心账户连接 UI 模块",
     "Panel": "1",
     "PackageId": "Microsoft.Xbox.TCUI"
   },
@@ -9859,8 +9859,8 @@ $sync.configs = @{
     ],
     "InvokeScript": [
       "nfsadmin client stop",
-      "Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\ClientForNFS\\CurrentVersion\\Default' -Name 'AnonymousUID' -Type DWord -Value 0",
-      "Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\ClientForNFS\\CurrentVersion\\Default' -Name 'AnonymousGID' -Type DWord -Value 0",
+      "Set-ItemProperty -Path ''HKLM:\\SOFTWARE\\Microsoft\\ClientForNFS\\CurrentVersion\\Default'' -Name ''AnonymousUID'' -Type DWord -Value 0",
+      "Set-ItemProperty -Path ''HKLM:\\SOFTWARE\\Microsoft\\ClientForNFS\\CurrentVersion\\Default'' -Name ''AnonymousGID'' -Type DWord -Value 0",
       "nfsadmin client start",
       "nfsadmin client localhost config fileaccess=755 SecFlavors=+sys -krb5 -krb5i"
     ],
@@ -9873,7 +9873,7 @@ $sync.configs = @{
     "panel": "1",
     "feature": [],
     "InvokeScript": [
-      "      New-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Configuration Manager' -Name 'EnablePeriodicBackup' -Type DWord -Value 1 -Force      New-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Configuration Manager' -Name 'BackupCount' -Type DWord -Value 2 -Force      $action = New-ScheduledTaskAction -Execute 'schtasks' -Argument '/run /i /tn \"\\Microsoft\\Windows\\Registry\\RegIdleBackup\"'      $trigger = New-ScheduledTaskTrigger -Daily -At 00:30      Register-ScheduledTask -Action $action -Trigger $trigger -TaskName 'AutoRegBackup' -Description 'Create System Registry Backups' -User 'System'      "
+      "      New-ItemProperty -Path ''HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Configuration Manager'' -Name ''EnablePeriodicBackup'' -Type DWord -Value 1 -Force      New-ItemProperty -Path ''HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Configuration Manager'' -Name ''BackupCount'' -Type DWord -Value 2 -Force      $action = New-ScheduledTaskAction -Execute ''schtasks'' -Argument ''/run /i /tn \"\\Microsoft\\Windows\\Registry\\RegIdleBackup\"''      $trigger = New-ScheduledTaskTrigger -Daily -At 00:30      Register-ScheduledTask -Action $action -Trigger $trigger -TaskName ''AutoRegBackup'' -Description ''Create System Registry Backups'' -User ''System''      "
     ],
     "link": "https://winutil.christitus.com/dev/features/features/regbackup"
   },
@@ -10025,7 +10025,7 @@ $sync.configs = @{
     "Type": "Button",
     "ButtonWidth": "300",
     "InvokeScript": [
-      "Start-Process 'shell:::{A8A91A66-3A7D-4424-8D24-04E180695C7A}'"
+      "Start-Process ''shell:::{A8A91A66-3A7D-4424-8D24-04E180695C7A}''"
     ],
     "link": "https://winutil.christitus.com/dev/features/legacy-windows-panels/printer"
   },
@@ -10118,7 +10118,7 @@ $sync.configs = @{
     "link": "https://winutil.christitus.com/dev/features/legacy-windows-panels/restore"
   },
   "WPFWinUtilInstallPSProfile": {
-    "Content": "CTT PowerShell 配置文件 - 安装",
+    "Content": "PowerShell 是微软的自动化任务框架和脚本语言",
     "category": "PowerShell 配置文件 (仅 PowerShell 7+)",
     "panel": "2",
     "Type": "Button",
@@ -10127,7 +10127,7 @@ $sync.configs = @{
     "link": "https://winutil.christitus.com/dev/features/powershell-profile-powershell-7--only/installpsprofile"
   },
   "WPFWinUtilUninstallPSProfile": {
-    "Content": "CTT PowerShell 配置文件 - 移除",
+    "Content": "PowerShell 是微软的自动化任务框架和脚本语言",
     "category": "PowerShell 配置文件 (仅 PowerShell 7+)",
     "panel": "2",
     "Type": "Button",
@@ -10859,10 +10859,10 @@ $sync.configs = @{
       }
     ],
     "InvokeScript": [
-      "      # Disable Defender Auto Sample Submission      Set-MpPreference -SubmitSamplesConsent 2      # Disable (Connected User Experiences and Telemetry) Service      Set-Service -Name diagtrack -StartupType Disabled      # Disable (Windows Error Reporting Manager) Service      Set-Service -Name wermgr -StartupType Disabled      # Disable PowerShell 7 telemetry      [Environment]::SetEnvironmentVariable('POWERSHELL_TELEMETRY_OPTOUT', '1', 'Machine')      Remove-ItemProperty -Path \"HKCU:\\Software\\Microsoft\\Siuf\\Rules\" -Name PeriodInNanoSeconds      "
+      "      # Disable Defender Auto Sample Submission      Set-MpPreference -SubmitSamplesConsent 2      # Disable (Connected User Experiences and Telemetry) Service      Set-Service -Name diagtrack -StartupType Disabled      # Disable (Windows Error Reporting Manager) Service      Set-Service -Name wermgr -StartupType Disabled      # Disable PowerShell 7 telemetry      [Environment]::SetEnvironmentVariable(''POWERSHELL_TELEMETRY_OPTOUT'', ''1'', ''Machine'')      Remove-ItemProperty -Path \"HKCU:\\Software\\Microsoft\\Siuf\\Rules\" -Name PeriodInNanoSeconds      "
     ],
     "UndoScript": [
-      "      # Enable Defender Auto Sample Submission      Set-MpPreference -SubmitSamplesConsent 1      # Enable (Connected User Experiences and Telemetry) Service      Set-Service -Name diagtrack -StartupType Automatic      # Enable (Windows Error Reporting Manager) Service      Set-Service -Name wermgr -StartupType Automatic      # Enable PowerShell 7 telemetry      [Environment]::SetEnvironmentVariable('POWERSHELL_TELEMETRY_OPTOUT', '', 'Machine')      "
+      "      # Enable Defender Auto Sample Submission      Set-MpPreference -SubmitSamplesConsent 1      # Enable (Connected User Experiences and Telemetry) Service      Set-Service -Name diagtrack -StartupType Automatic      # Enable (Windows Error Reporting Manager) Service      Set-Service -Name wermgr -StartupType Automatic      # Enable PowerShell 7 telemetry      [Environment]::SetEnvironmentVariable(''POWERSHELL_TELEMETRY_OPTOUT'', '''', ''Machine'')      "
     ],
     "link": "https://winutil.christitus.com/dev/tweaks/essential-tweaks/telemetry"
   },
@@ -10884,7 +10884,7 @@ $sync.configs = @{
   },
   "WPFTweaksRemoveEdge": {
     "Content": "Microsoft Edge - 移除",
-    "Description": "Uninstalls Microsoft Edge by creating dummy MicrosoftEdge.exe file in the legacy Edge folder. This tricks Windows into unlocking the official Edge uninstaller allowing for a system-level removal.",
+    "Description": "通过创建虚拟 MicrosoftEdge.exe 文件解锁官方卸载程序，实现系统级移除 Microsoft Edge",
     "category": "高级优化 - 谨慎操作",
     "panel": "1",
     "InvokeScript": [
@@ -10930,7 +10930,7 @@ $sync.configs = @{
     "category": "高级优化 - 谨慎操作",
     "panel": "1",
     "InvokeScript": [
-      "      # Deny permission to remove OneDrive folder      icacls $Env:OneDrive /deny \"Administrators:(D,DC)\"      Write-Host \"Uninstalling OneDrive...\"      Start-Process -FilePath (Join-Path $Env:SystemRoot \"System32\\OneDriveSetup.exe\") -ArgumentList '/uninstall' -Wait      # Some of OneDrive files use explorer, and OneDrive uses FileCoAuth      Write-Host \"Removing leftover OneDrive Files...\"      Stop-Process -Name FileCoAuth,Explorer      Remove-Item \"$Env:LocalAppData\\Microsoft\\OneDrive\" -Recurse -Force      Remove-Item \"$Env:ProgramData\\Microsoft OneDrive\" -Recurse -Force      # Grant back permission to access OneDrive folder      icacls $Env:OneDrive /grant \"Administrators:(D,DC)\"      if (-not (Get-ChildItem -Path $Env:OneDrive)) {          Remove-Item -Path $Env:OneDrive -Recurse          [Environment]::SetEnvironmentVariable('OneDrive', $null, 'User')      }      # Disable OneSyncSvc      Set-Service -Name OneSyncSvc -StartupType Disabled      "
+      "      # Deny permission to remove OneDrive folder      icacls $Env:OneDrive /deny \"Administrators:(D,DC)\"      Write-Host \"Uninstalling OneDrive...\"      Start-Process -FilePath (Join-Path $Env:SystemRoot \"System32\\OneDriveSetup.exe\") -ArgumentList ''/uninstall'' -Wait      # Some of OneDrive files use explorer, and OneDrive uses FileCoAuth      Write-Host \"Removing leftover OneDrive Files...\"      Stop-Process -Name FileCoAuth,Explorer      Remove-Item \"$Env:LocalAppData\\Microsoft\\OneDrive\" -Recurse -Force      Remove-Item \"$Env:ProgramData\\Microsoft OneDrive\" -Recurse -Force      # Grant back permission to access OneDrive folder      icacls $Env:OneDrive /grant \"Administrators:(D,DC)\"      if (-not (Get-ChildItem -Path $Env:OneDrive)) {          Remove-Item -Path $Env:OneDrive -Recurse          [Environment]::SetEnvironmentVariable(''OneDrive'', $null, ''User'')      }      # Disable OneSyncSvc      Set-Service -Name OneSyncSvc -StartupType Disabled      "
     ],
     "UndoScript": [
       "      Write-Host \"Installing OneDrive\"      winget install Microsoft.Onedrive --source winget      # Enabled OneSyncSvc      Set-Service -Name OneSyncSvc -StartupType Automatic      "
@@ -11068,7 +11068,7 @@ $sync.configs = @{
   },
   "WPFTweaksReservedStorage": {
     "Content": "禁用预留存储",
-    "Description": "Disables Windows Reserved Storage (7-10 GB held for updates/temp files). Recommended only on small drives. Re-enable before major Windows feature updates to avoid installation failures.",
+    "Description": "禁用 Windows 预留存储（约 7-10 GB 用于更新和临时文件）。仅建议小容量硬盘使用",
     "category": "高级优化 - 谨慎操作",
     "panel": "1",
     "InvokeScript": [
@@ -11243,14 +11243,14 @@ $sync.configs = @{
   },
   "WPFTweaksBlockAdobeNet": {
     "Content": "Adobe URL 阻止列表 - 启用",
-    "Description": "Reduces user interruptions by selectively blocking connections to Adobe's activation and telemetry servers. Credit: Ruddernation-Designs",
+    "Description": "通过选择性阻止 Adobe 连接来减少不必要的用户干扰",
     "category": "高级优化 - 谨慎操作",
     "panel": "1",
     "InvokeScript": [
-      "      $hostsUrl = Invoke-RestMethod -Uri https://github.com/Ruddernation-Designs/Adobe-URL-Block-List/raw/refs/heads/master/hosts      Add-Content -Path \"$Env:SystemRoot\\System32\\drivers\\etc\\hosts\" -Value $hostsUrl      ipconfig /flushdns      Write-Host 'Added Adobe url block list from host file'      "
+      "      $hostsUrl = Invoke-RestMethod -Uri https://github.com/Ruddernation-Designs/Adobe-URL-Block-List/raw/refs/heads/master/hosts      Add-Content -Path \"$Env:SystemRoot\\System32\\drivers\\etc\\hosts\" -Value $hostsUrl      ipconfig /flushdns      Write-Host ''Added Adobe url block list from host file''      "
     ],
     "UndoScript": [
-      "      Set-Content \"$Env:SystemRoot\\System32\\drivers\\etc\\hosts\" (          (Get-Content \"$Env:SystemRoot\\System32\\drivers\\etc\\hosts\") -join \"`n\" -replace '(?s)#New Ver.*', ''      )      ipconfig /flushdns      Write-Host 'Removed Adobe url block list from host file'      "
+      "      Set-Content \"$Env:SystemRoot\\System32\\drivers\\etc\\hosts\" (          (Get-Content \"$Env:SystemRoot\\System32\\drivers\\etc\\hosts\") -join \"`n\" -replace ''(?s)#New Ver.*'', ''''      )      ipconfig /flushdns      Write-Host ''Removed Adobe url block list from host file''      "
     ],
     "link": "https://winutil.christitus.com/dev/tweaks/z--advanced-tweaks---caution/blockadobenet"
   },
