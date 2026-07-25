@@ -30,8 +30,6 @@
       background-attachment: fixed;
       overflow-x: hidden;
     }
-    body.manual-open { padding-top: 20px; justify-content: flex-start; }
-
     /* macOS 风格分段导航 */
     .nav {
       margin-bottom: 24px;
@@ -84,7 +82,11 @@
       overflow: hidden;
       min-height: 300px;
     }
-    .glass-panel.expand { max-width: 1100px; }
+    .glass-panel.expand {
+      max-width: 1100px;
+      max-height: 75vh;
+      overflow-y: auto;
+    }
 
     .tab-content { display: none; animation: fadeIn 0.25s ease; }
     .tab-content.active { display: block; }
@@ -185,39 +187,22 @@
     }
     .warning-note .icon { font-size: 16px; }
 
-    /* 关于页 */
-    .about-section h2 {
-      font-size: 18px;
-      font-weight: 600;
-      margin-bottom: 16px;
-      color: var(--app-text);
+    .winutil-footer {
+      text-align: center;
+      margin-top: 20px;
+      padding-top: 14px;
+      border-top: 0.5px solid var(--border-color);
     }
-    .about-section p {
-      font-size: 14px;
-      line-height: 1.7;
+    .winutil-footer a {
+      font-size: 12px;
       color: var(--app-secondary);
-      margin-bottom: 16px;
-    }
-    .about-section a {
-      color: var(--apple-blue);
       text-decoration: none;
       font-weight: 500;
+      transition: color 0.2s;
     }
-    .about-section a:hover { text-decoration: underline; }
+    .winutil-footer a:hover { color: var(--apple-blue); }
 
-    .version-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      background: rgba(0,122,255,0.1);
-      color: var(--apple-blue);
-      font-size: 12px;
-      font-weight: 600;
-      padding: 4px 12px;
-      border-radius: 20px;
-      margin-bottom: 20px;
-    }
-
+    /* 页脚 */
     .footer {
       margin-top: 20px;
       text-align: center;
@@ -407,13 +392,16 @@
     }
     @media (max-width: 600px) {
       body { padding: 12px; }
-      body.manual-open { padding-top: 12px; }
       .glass-panel { padding: 24px; border-radius: 16px; }
       .glass-panel.expand { max-width: 100%; }
       h1 { font-size: 24px; }
       .features { grid-template-columns: 1fr 1fr; }
       .cmd-box { flex-wrap: wrap; }
       .nav-tab { padding: 7px 18px; font-size: 12px; }
+    }
+
+    @media (max-width: 768px) and (max-height: 600px) {
+      .glass-panel.expand { max-height: 60vh; }
     }
   </style>
 </head>
@@ -423,7 +411,6 @@
   <div class="nav">
     <div class="nav-tab active" onclick="switchTab('winutil')">WinUtil</div>
     <div class="nav-tab" onclick="switchTab('manual')">使用教程</div>
-    <div class="nav-tab" onclick="switchTab('about')">关于</div>
   </div>
 
   <div class="container" id="mainContainer">
@@ -454,41 +441,9 @@
           <span class="icon">⚠️</span>
           <span>请在 <strong>PowerShell 管理员模式</strong> 中运行上述命令</span>
         </div>
-      </div>
 
-      <!-- About Tab -->
-      <div id="aboutUI" class="tab-content">
-        <h1 style="margin-bottom:4px;">💡 关于 WinUtil</h1>
-        <p class="subtitle" style="margin-bottom:24px;">项目介绍与版本信息</p>
-
-        <div class="version-badge">🔄 v26.07.24 · 持续更新</div>
-
-        <div class="about-section">
-          <h2>📖 什么是 WinUtil？</h2>
-          <p>
-            WinUtil（Windows Utility）是由 <a href="https://github.com/ChrisTitusTech/winutil" target="_blank">Chris Titus Tech</a> 开发的
-            开源 Windows 系统管理工具箱。本项目在原始基础上进行了 <strong>完整中文化</strong>，
-            包含界面、菜单、日志、预设方案在内的全部内容。
-          </p>
-
-          <h2>✨ 核心功能</h2>
-          <p>
-            • <strong>应用安装</strong> — 一键批量安装常用软件（Winget / Chocolatey）<br>
-            • <strong>系统优化</strong> — 数十项系统级优化开关，一键应用预设方案<br>
-            • <strong>功能配置</strong> — 灵活配置 Windows 隐藏功能与隐私选项<br>
-            • <strong>AppX 管理</strong> — 批量卸载预装应用，清理系统臃肿<br>
-            • <strong>Windows 更新控制</strong> — 精细管理更新策略与行为<br>
-            • <strong>Win11 创建工具</strong> — 一键生成纯净的、绕过 TPM/CPU 检查的 ISO
-          </p>
-
-          <h2>🔗 相关链接</h2>
-          <p>
-            <a href="https://github.com/missyouling/winutil-chinese" target="_blank"> GitHub 仓库</a>
-            &nbsp;·&nbsp;
-            <a href="https://img.mozui.cn" target="_blank"> MOZUI 图床</a>
-            &nbsp;·&nbsp;
-            <a href="https://t.mozui.cn" target="_blank"> MOZUI 短链接</a>
-          </p>
+        <div class="winutil-footer">
+          <a href="https://github.com/missyouling/winutil-chinese" target="_blank">🔗 GitHub 仓库</a>
         </div>
       </div>
 
@@ -1034,11 +989,10 @@
       if (tabId === 'manual') {
         panel.classList.add('expand');
         container.style.maxWidth = '1100px';
-        document.body.classList.add('manual-open');
+        panel.scrollTop = 0;
       } else {
         panel.classList.remove('expand');
         container.style.maxWidth = '680px';
-        document.body.classList.remove('manual-open');
       }
     }
 
@@ -1051,7 +1005,7 @@
           el.classList.add('active-toc');
         }
       });
-      document.querySelector('.manual-layout').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      document.querySelector('.manual-section.active-section').scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
     function toggleDetail(el) {
