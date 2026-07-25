@@ -24,13 +24,13 @@
       display: flex;
       flex-direction: column;
       align-items: center;
-      justify-content: center;
       background-image: url('https://random.mozuiapp.com/?day=random');
       background-size: cover;
       background-position: center;
       background-attachment: fixed;
       overflow-x: hidden;
     }
+    body.manual-open { padding-top: 20px; justify-content: flex-start; }
 
     /* macOS 风格分段导航 */
     .nav {
@@ -55,6 +55,7 @@
       color: #1D1D1F;
       opacity: 0.6;
       user-select: none;
+      text-decoration: none;
     }
     .nav-tab.active {
       background: #fff;
@@ -83,6 +84,7 @@
       overflow: hidden;
       min-height: 300px;
     }
+    .glass-panel.expand { max-width: 1100px; }
 
     .tab-content { display: none; animation: fadeIn 0.25s ease; }
     .tab-content.active { display: block; }
@@ -271,9 +273,143 @@
       to { transform: translateX(120%); opacity: 0; }
     }
 
+    /* ===== 用户手册 ===== */
+    .manual-layout {
+      display: flex;
+      gap: 24px;
+      min-height: 400px;
+    }
+    .manual-sidebar {
+      width: 200px;
+      flex-shrink: 0;
+      position: sticky;
+      top: 20px;
+      align-self: flex-start;
+    }
+    .manual-sidebar h3 {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--app-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 14px;
+      padding-bottom: 8px;
+      border-bottom: 0.5px solid var(--border-color);
+    }
+    .manual-toc a {
+      display: block;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--app-secondary);
+      text-decoration: none;
+      padding: 6px 10px;
+      border-radius: 6px;
+      margin-bottom: 2px;
+      transition: all 0.15s;
+      cursor: pointer;
+    }
+    .manual-toc a:hover { background: rgba(0,122,255,0.08); color: var(--apple-blue); }
+    .manual-toc a.active-toc {
+      background: rgba(0,122,255,0.12);
+      color: var(--apple-blue);
+      font-weight: 600;
+    }
+
+    .manual-body {
+      flex: 1;
+      min-width: 0;
+    }
+    .manual-section { display: none; }
+    .manual-section.active-section { display: block; }
+
+    .manual-section h2 {
+      font-size: 22px;
+      font-weight: 700;
+      text-align: left;
+      margin-bottom: 4px;
+      color: var(--app-text);
+    }
+    .manual-section .sec-desc {
+      font-size: 13px;
+      color: var(--app-secondary);
+      margin-bottom: 20px;
+      padding-bottom: 16px;
+      border-bottom: 0.5px solid var(--border-color);
+    }
+
+    .manual-item {
+      margin-bottom: 20px;
+      padding: 16px;
+      background: rgba(255,255,255,0.55);
+      border: 0.5px solid var(--border-color);
+      border-radius: 10px;
+      transition: box-shadow 0.2s;
+    }
+    .manual-item:hover { box-shadow: 0 2px 12px rgba(0,0,0,0.04); }
+    .manual-item h4 {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 4px;
+      color: var(--app-text);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .manual-item .tag {
+      font-size: 10px;
+      font-weight: 600;
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      margin-left: 6px;
+    }
+    .tag-blue { background: rgba(0,122,255,0.12); color: var(--apple-blue); }
+    .tag-green { background: rgba(52,199,89,0.12); color: #1D8B3C; }
+    .tag-orange { background: rgba(255,149,0,0.12); color: #C93400; }
+    .tag-red { background: rgba(255,69,58,0.12); color: #CF2A0A; }
+    .tag-purple { background: rgba(175,82,222,0.12); color: #8944AB; }
+    .tag-teal { background: rgba(90,200,250,0.12); color: #0071A4; }
+    .manual-item .desc {
+      font-size: 12.5px;
+      color: var(--app-secondary);
+      line-height: 1.65;
+    }
+    .manual-item .detail {
+      margin-top: 8px;
+      padding: 8px 10px;
+      background: rgba(0,0,0,0.03);
+      border-radius: 6px;
+      font-size: 12px;
+      color: var(--app-secondary);
+      line-height: 1.6;
+      display: none;
+    }
+    .manual-item .detail.show { display: block; }
+    .manual-item .toggle-detail {
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--apple-blue);
+      cursor: pointer;
+      margin-top: 6px;
+      display: inline-block;
+      user-select: none;
+    }
+    .manual-item .toggle-detail:hover { opacity: 0.7; }
+
+    @media (max-width: 768px) {
+      .manual-layout { flex-direction: column; }
+      .manual-sidebar {
+        width: 100%;
+        position: static;
+      }
+      .manual-toc { display: flex; flex-wrap: wrap; gap: 4px; }
+      .manual-toc a { font-size: 12px; padding: 4px 10px; }
+    }
     @media (max-width: 600px) {
       body { padding: 12px; }
+      body.manual-open { padding-top: 12px; }
       .glass-panel { padding: 24px; border-radius: 16px; }
+      .glass-panel.expand { max-width: 100%; }
       h1 { font-size: 24px; }
       .features { grid-template-columns: 1fr 1fr; }
       .cmd-box { flex-wrap: wrap; }
@@ -286,11 +422,12 @@
 
   <div class="nav">
     <div class="nav-tab active" onclick="switchTab('winutil')">WinUtil</div>
+    <div class="nav-tab" onclick="switchTab('manual')">使用教程</div>
     <div class="nav-tab" onclick="switchTab('about')">关于</div>
   </div>
 
-  <div class="container">
-    <div class="glass-panel">
+  <div class="container" id="mainContainer">
+    <div class="glass-panel" id="mainPanel">
 
       <!-- WinUtil Tab -->
       <div id="winutilUI" class="tab-content active">
@@ -355,7 +492,515 @@
         </div>
       </div>
 
-    </div>
+      <!-- Manual Tab -->
+      <div id="manualUI" class="tab-content">
+        <div class="manual-layout">
+          <!-- 左侧导航 -->
+          <div class="manual-sidebar">
+            <h3>📖 目录</h3>
+            <div class="manual-toc">
+              <a class="active-toc" onclick="showManualSection('sec-intro')">📌 快速入门</a>
+              <a onclick="showManualSection('sec-install')">📦 应用安装</a>
+              <a onclick="showManualSection('sec-tweaks')">⚡ 系统优化</a>
+              <a onclick="showManualSection('sec-config')">⚙️ 功能配置</a>
+              <a onclick="showManualSection('sec-appx')">🗑️ AppX 管理</a>
+              <a onclick="showManualSection('sec-updates')">🔄 更新控制</a>
+              <a onclick="showManualSection('sec-win11')">💿 Win11 创建</a>
+              <a onclick="showManualSection('sec-preset')">📋 预设方案</a>
+              <a onclick="showManualSection('sec-faq')">❓ 常见问题</a>
+            </div>
+          </div>
+
+          <!-- 右侧内容 -->
+          <div class="manual-body">
+
+            <!-- 快速入门 -->
+            <div id="sec-intro" class="manual-section active-section">
+              <h2>📌 快速入门</h2>
+              <p class="sec-desc">从零开始使用 WinUtil 中文版</p>
+
+              <div class="manual-item">
+                <h4>🚀 启动 WinUtil</h4>
+                <div class="desc">以<strong>管理员身份</strong>打开 Windows PowerShell，粘贴以下命令并回车：<br>
+                  <code style="display:block;background:rgba(0,0,0,0.05);padding:8px 10px;border-radius:6px;margin-top:6px;font-size:12px;font-family:monospace;user-select:all;">irm https://win.mozuiapp.com/win | iex</code>
+                </div>
+                <span class="toggle-detail" onclick="toggleDetail(this)">展开详情 ▾</span>
+                <div class="detail">
+                  <strong>说明：</strong><br>
+                  • <code>irm</code>（Invoke-RestMethod）从指定 URL 下载 PowerShell 脚本内容。<br>
+                  • <code>| iex</code>（Invoke-Expression）将下载的内容直接执行。<br>
+                  • 首次运行会显示 CTT 字符图案，随后自动弹出图形界面。<br>
+                  • 脚本会自动安装所需的 WPF 组件，无需额外配置。<br>
+                  • 如果界面未弹出，尝试在 PowerShell 5.1 中运行，不要使用 PowerShell 7。
+                </div>
+              </div>
+
+              <div class="manual-item">
+                <h4>🖥️ 界面概览</h4>
+                <div class="desc">WinUtil 采用标签式界面，顶部导航栏包含 5 个主要标签页</div>
+                <span class="toggle-detail" onclick="toggleDetail(this)">展开详情 ▾</span>
+                <div class="detail">
+                  <strong>标签页说明：</strong><br>
+                  • <strong>📦 应用安装</strong> — 浏览分类，选择软件，批量安装/卸载<br>
+                  • <strong>⚡ 系统优化</strong> — 数十项系统优化开关，可分项应用或使用预设方案<br>
+                  • <strong>⚙️ 功能配置</strong> — 配置 Windows 隐藏功能、隐私选项和注册表调整<br>
+                  • <strong>🔄 Windows 更新</strong> — 控制 Windows Update 行为，启用或禁用自动更新<br>
+                  • <strong>💿 Win11ISO</strong> — 创建绕过 TPM 2.0 和 CPU 检查的 Windows 11 安装镜像<br>
+                  右侧还有设置按钮（⚙️），可调整主题（自动/深色/浅色）和字体缩放。
+                </div>
+              </div>
+            </div>
+
+            <!-- 应用安装 -->
+            <div id="sec-install" class="manual-section">
+              <h2>📦 应用安装</h2>
+              <p class="sec-desc">一键批量安装 200+ 款常用软件，支持 Winget 和 Chocolatey 两种包管理器</p>
+
+              <div class="manual-item">
+                <h4>🔍 浏览与筛选应用 <span class="tag tag-blue">基础</span></h4>
+                <div class="desc">左侧分类栏按类别分组（浏览器、开发工具、多媒体、实用工具等），点击分类可筛选显示对应应用列表。顶部搜索框支持按名称或描述快速查找。</div>
+                <span class="toggle-detail" onclick="toggleDetail(this)">展开详情 ▾</span>
+                <div class="detail">
+                  <strong>操作步骤：</strong><br>
+                  1. 切换到「应用安装」标签页。<br>
+                  2. 在左侧「分类筛选」中点击感兴趣的分类（如「浏览器」）。<br>
+                  3. 右侧列表显示该分类下的所有应用。<br>
+                  4. 使用顶部的「搜索」框可按关键词过滤应用。<br>
+                  5. 点击「展开/折叠所有分类」可一键展开或收起全部类别。
+                </div>
+              </div>
+
+              <div class="manual-item">
+                <h4>✅ 选择与批量安装 <span class="tag tag-blue">基础</span></h4>
+                <div class="desc">勾选你想要安装的应用，点击「安装选中的应用」即可自动批量下载安装</div>
+                <span class="toggle-detail" onclick="toggleDetail(this)">展开详情 ▾</span>
+                <div class="detail">
+                  <strong>操作步骤：</strong><br>
+                  1. 勾选一个或多个应用前的复选框（☐）。<br>
+                  2. 右上角「已选应用」区域显示已选数量，点击可查看详情。<br>
+                  3. 点击「✅ 安装选中的应用」开始批量安装。<br>
+                  4. 任务栏会显示安装进度条，日志区域输出安装详情。<br>
+                  5. 安装完成后会有通知。<br>
+                  • 使用「清除选择」可一键取消所有勾选。<br>
+                  • 使用「显示已安装应用」可标记已通过包管理器安装的软件。
+                </div>
+              </div>
+
+              <div class="manual-item">
+                <h4>🔄 包管理器切换 <span class="tag tag-green">进阶</span></h4>
+                <div class="desc">WinUtil 支持 Winget 和 Chocolatey 两种包管理器，可在右上角设置区切换</div>
+                <span class="toggle-detail" onclick="toggleDetail(this)">展开详情 ▾</span>
+                <div class="detail">
+                  <strong>Winget</strong>（默认）—— Windows 原生命令行安装程序，无需额外安装。由 Microsoft 维护，更新及时。<br>
+                  <strong>Chocolatey</strong> —— 第三方包管理器，拥有更大的软件库。首次使用会自动安装。<br>
+                  切换方式：点击右上角「⚙️设置」按钮，在包管理器选项中选择 Winget 或 Chocolatey。
+                </div>
+              </div>
+            </div>
+
+            <!-- 系统优化 -->
+            <div id="sec-tweaks" class="manual-section">
+              <h2>⚡ 系统优化</h2>
+              <p class="sec-desc">数十项系统级优化开关，按照功能分类组织，点击开关即时生效</p>
+
+              <div class="manual-item">
+                <h4>🛡️ 隐私与遥测 <span class="tag tag-orange">推荐</span></h4>
+                <div class="desc">关闭 Windows 遥测、广告 ID、位置跟踪、诊断数据收集等隐私相关设置</div>
+                <span class="toggle-detail" onclick="toggleDetail(this)">展开详情 ▾</span>
+                <div class="detail">
+                  <strong>包含的优化项：</strong><br>
+                  • <strong>禁用遥测</strong> — 阻止 Microsoft 收集诊断和使用数据。对应注册表: HKLM\SOFTWARE\Policies\Microsoft\Windows\DataCollection\AllowTelemetry=0<br>
+                  • <strong>禁用广告 ID</strong> — 关闭用于个性化广告的匿名标识符。<br>
+                  • <strong>禁用位置跟踪</strong> — 阻止应用访问位置信息。<br>
+                  • <strong>禁用诊断数据</strong> — 限制系统发送的诊断信息量。<br>
+                  • <strong>禁用活动历史</strong> — 关闭时间线和活动记录收集。<br>
+                  • <strong>禁用 Cortana</strong> — 完全禁用 Cortana 语音助手功能。<br>
+                  <strong>注意：</strong>部分隐私优化可能在系统更新后恢复，需要重新应用。
+                </div>
+              </div>
+
+              <div class="manual-item">
+                <h4>🚀 性能优化 <span class="tag tag-orange">推荐</span></h4>
+                <div class="desc">通过禁用动画特效、后台应用、启动项等方式提升系统运行速度</div>
+                <span class="toggle-detail" onclick="toggleDetail(this)">展开详情 ▾</span>
+                <div class="detail">
+                  <strong>包含的优化项：</strong><br>
+                  • <strong>禁用动画特效</strong> — 关闭窗口淡入淡出、菜单动画等视觉特效，加快界面响应。<br>
+                  • <strong>禁用后台应用</strong> — 阻止 UWP 应用在后台运行以节省资源。<br>
+                  • <strong>禁用透明效果</strong> — 关闭「开始」菜单、任务栏和操作中心的透明效果，降低 GPU 开销。<br>
+                  • <strong>禁用阴影效果</strong> — 关闭窗口阴影，释放少量图形资源。<br>
+                  • <strong>禁用 Xbox Game Bar</strong> — 关闭游戏录制叠加层，节省系统资源。<br>
+                  • <strong>禁用鼠标加速</strong> — 关闭「提高指针精确度」选项，适合游戏玩家。<br>
+                  • <strong>禁用启动影响</strong> — 恢复系统启动项的性能影响跟踪。
+                </div>
+              </div>
+
+              <div class="manual-item">
+                <h4>🎯 体验优化 <span class="tag tag-blue">推荐</span></h4>
+                <div class="desc">关闭开始菜单广告、锁屏兴趣、Bing 搜索等影响使用体验的功能</div>
+                <span class="toggle-detail" onclick="toggleDetail(this)">展开详情 ▾</span>
+                <div class="detail">
+                  <strong>包含的优化项：</strong><br>
+                  • <strong>禁用开始菜单广告</strong> — 隐藏「开始」菜单中的应用推广（推荐应用）。<br>
+                  • <strong>禁用锁屏兴趣</strong> — 关闭锁屏界面上的 Windows 聚焦广告和资讯。<br>
+                  • <strong>禁用 Bing 搜索</strong> — 在开始菜单搜索中不显示网络搜索结果。<br>
+                  • <strong>禁用 OneDrive</strong> — 卸载或禁用 OneDrive 云同步服务。<br>
+                  • <strong>禁用资源管理器广告</strong> — 隐藏文件资源管理器中的 OneDrive/Office 横幅广告。<br>
+                  • <strong>禁用新的 Outlook</strong> — 阻止 Windows 推送新版 Outlook 应用。
+                </div>
+              </div>
+            </div>
+
+            <!-- 功能配置 -->
+            <div id="sec-config" class="manual-section">
+              <h2>⚙️ 功能配置</h2>
+              <p class="sec-desc">精细控制 Windows 的隐藏功能与各类设置</p>
+
+              <div class="manual-item">
+                <h4>🔐 安全配置 <span class="tag tag-red">谨慎</span></h4>
+                <div class="desc">配置用户账户控制(UAC)、Windows Defender、防火墙等安全相关的设置</div>
+                <span class="toggle-detail" onclick="toggleDetail(this)">展开详情 ▾</span>
+                <div class="detail">
+                  <strong>包含的配置项：</strong><br>
+                  • <strong>UAC 配置</strong> — 调整用户账户控制级别（始终通知 → 仅应用更改时通知 → 从不通知）。<br>
+                  • <strong>禁用 Defender</strong> — 通过注册表永久禁用 Windows Defender 防病毒（慎用！需确保有其他杀软保护）。<br>
+                  • <strong>启用 Defender</strong> — 恢复 Windows Defender 到默认启用状态。<br>
+                  • <strong>配置防火墙</strong> — 开放或关闭特定防火墙规则。<br>
+                  • <strong>禁用 Smartscreen</strong> — 关闭 Microsoft Defender Smartscreen 筛选器。<br>
+                  <strong>⚠️ 安全提示：</strong>修改安全设置前请确认自己了解后果。禁用 Defender 后请确保有替代防护方案。
+                </div>
+              </div>
+
+              <div class="manual-item">
+                <h4>🌐 网络配置 <span class="tag tag-teal">进阶</span></h4>
+                <div class="desc">配置 DNS 服务器、网络发现、远程桌面等网络相关功能</div>
+                <span class="toggle-detail" onclick="toggleDetail(this)">展开详情 ▾</span>
+                <div class="detail">
+                  <strong>包含的配置项：</strong><br>
+                  • <strong>DNS 切换</strong> — 一键切换 DNS 为 Cloudflare (1.1.1.1)、Google (8.8.8.8) 或自定义 DNS。<br>
+                  • <strong>网络发现</strong> — 启用或禁用网络发现功能和文件共享。<br>
+                  • <strong>远程桌面</strong> — 启用或禁用远程桌面连接。<br>
+                  • <strong>禁用 NetBIOS</strong> — 关闭 NetBIOS over TCP/IP（减少网络广播流量）。<br>
+                  • <strong>禁用 LLMNR</strong> — 关闭链接本地多播名称解析（提升安全性）。
+                </div>
+              </div>
+
+              <div class="manual-item">
+                <h4>📂 资源管理器设置 <span class="tag tag-blue">基础</span></h4>
+                <div class="desc">调整文件资源管理器的显示行为，包括隐藏文件、文件扩展名、紧凑模式等</div>
+                <span class="toggle-detail" onclick="toggleDetail(this)">展开详情 ▾</span>
+                <div class="detail">
+                  <strong>包含的配置项：</strong><br>
+                  • <strong>显示隐藏文件</strong> — 在资源管理器中显示隐藏的文件和文件夹。<br>
+                  • <strong>显示文件扩展名</strong> — 显示已知文件类型的扩展名（建议开启）。<br>
+                  • <strong>显示驱动器号</strong> — 在「此电脑」中显示驱动器号。<br>
+                  • <strong>紧凑模式</strong> — 启用资源管理器紧凑视图（类似 Windows 10 样式）。<br>
+                  • <strong>导航窗格展开</strong> — 控制导航窗格是否展开到当前文件夹。
+                </div>
+              </div>
+            </div>
+
+            <!-- AppX 管理 -->
+            <div id="sec-appx" class="manual-section">
+              <h2>🗑️ AppX 管理</h2>
+              <p class="sec-desc">批量管理 Windows 预装应用，释放磁盘空间，精简系统</p>
+
+              <div class="manual-item">
+                <h4>📋 查看已安装应用 <span class="tag tag-blue">基础</span></h4>
+                <div class="desc">显示当前系统中所有已安装的 AppX/UWP 应用列表，支持按名称筛选</div>
+                <span class="toggle-detail" onclick="toggleDetail(this)">展开详情 ▾</span>
+                <div class="detail">
+                  点击「显示已安装应用」按钮，WinUtil 会扫描当前系统的 AppX 包并显示列表。<br>
+                  该列表包含所有预装应用，如 Microsoft Store、Cortana、Xbox、OneNote、Office Hub、3D Builder、相机、邮件等。<br>
+                  使用搜索框可以快速筛选出特定应用。
+                </div>
+              </div>
+
+              <div class="manual-item">
+                <h4>🗑️ 卸载预装应用 <span class="tag tag-orange">推荐</span></h4>
+                <div class="desc">选择不需要的预装应用进行批量卸载，可节省大量磁盘空间</div>
+                <span class="toggle-detail" onclick="toggleDetail(this)">展开详情 ▾</span>
+                <div class="detail">
+                  <strong>建议卸载的常见应用：</strong><br>
+                  • <strong>Xbox 系列</strong> — Xbox Game Bar、Xbox Console Companion 等（非 Xbox 玩家）。<br>
+                  • <strong>Skype</strong> — 已整合到 Teams，如不使用可移除。<br>
+                  • <strong>Cortana</strong> — 中文地区基本不可用，可安全移除。<br>
+                  • <strong>OneNote for Windows 10</strong> — 如使用 Office 365 版 OneNote 可移除。<br>
+                  • <strong>3D Builder</strong> — 非 3D 打印用户可移除。<br>
+                  • <strong>People</strong> — 人脉应用，移动设备上较实用。<br>
+                  • <strong>Mixed Reality</strong> — 混合现实门户，无 VR 设备可移除。<br>
+                  • <strong>News/Finance/Sports</strong> — 资讯类应用，可从 Microsoft Store 重新安装。<br>
+                  <strong>注意：</strong>某些应用（如 Microsoft Store、计算器、照片）不建议卸载，可能影响系统功能。
+                </div>
+              </div>
+
+              <div class="manual-item">
+                <h4>🔄 重新安装应用 <span class="tag tag-green">进阶</span></h4>
+                <div class="desc">通过 Microsoft Store 重新安装已卸载的预装应用</div>
+                <span class="toggle-detail" onclick="toggleDetail(this)">展开详情 ▾</span>
+                <div class="detail">
+                  如果卸载后需要恢复某个应用，可以通过以下方式：<br>
+                  1. 打开 Microsoft Store 搜索该应用重新安装。<br>
+                  2. 或者在 PowerShell 中运行：<code style="display:inline;background:rgba(0,0,0,0.05);padding:1px 5px;border-radius:3px;">Get-AppxPackage -AllUsers *PackageName* | Foreach {Add-AppxPackage -DisableDevelopmentMode -Register "$($_.InstallLocation)\AppXManifest.xml"}</code><br>
+                  WinUtil 本身不提供 AppX 恢复功能，建议卸载前记录应用完整名称。
+                </div>
+              </div>
+            </div>
+
+            <!-- Windows 更新控制 -->
+            <div id="sec-updates" class="manual-section">
+              <h2>🔄 Windows 更新控制</h2>
+              <p class="sec-desc">精细管理 Windows Update 的行为，在安全与可控之间找到平衡</p>
+
+              <div class="manual-item">
+                <h4>⏸️ 暂停更新 <span class="tag tag-orange">推荐</span></h4>
+                <div class="desc">临时暂停 Windows 更新，避免在关键时刻被重启打断</div>
+                <span class="toggle-detail" onclick="toggleDetail(this)">展开详情 ▾</span>
+                <div class="detail">
+                  <strong>操作方式：</strong><br>
+                  1. 进入「Windows 更新」标签页。<br>
+                  2. 在「暂停更新」区域选择暂停时长（例如 7 天、30 天）。<br>
+                  3. 系统会将更新推迟到指定期限后才继续检查更新。<br>
+                  • 适合：正在进行重要工作、演示或不希望重启时。<br>
+                  • 注意：暂停期结束后，Windows 仍会自动更新。长期禁用更新可能带来安全风险。
+                </div>
+              </div>
+
+              <div class="manual-item">
+                <h4>🚫 禁用 Windows 更新 <span class="tag tag-red">谨慎</span></h4>
+                <div class="desc">通过禁用更新服务和计划任务，完全阻断 Windows 更新</div>
+                <span class="toggle-detail" onclick="toggleDetail(this)">展开详情 ▾</span>
+                <div class="detail">
+                  <strong>影响：</strong><br>
+                  • 停止并禁用 Windows Update 服务 (wuauserv)。<br>
+                  • 停止并禁用 BITS 后台智能传输服务。<br>
+                  • 停止并禁用更新 Orchestrator 服务 (UsoSvc)。<br>
+                  • 禁用所有与更新相关的计划任务。<br>
+                  • 清除 SoftwareDistribution 文件夹。<br>
+                  <strong>⚠️ 风险提示：</strong>完全禁用更新将使系统无法接收安全补丁。建议仅在以下情况使用：<br>
+                  • 配置较低的旧设备，更新后可能出现卡顿。<br>
+                  • 企业环境中由 IT 部门统一管理更新。<br>
+                  • 临时禁用以便进行长时间的不间断操作。<br>
+                  可通过「启用更新」按钮恢复默认更新行为。
+                </div>
+              </div>
+
+              <div class="manual-item">
+                <h4>🔄 更新策略配置 <span class="tag tag-green">进阶</span></h4>
+                <div class="desc">通过组策略注册表项精确控制 Windows 更新的行为</div>
+                <span class="toggle-detail" onclick="toggleDetail(this)">展开详情 ▾</span>
+                <div class="detail">
+                  <strong>包含的策略配置：</strong><br>
+                  • <strong>延迟功能更新</strong> — 推迟功能更新（每年大版本）最多 365 天。<br>
+                  • <strong>延迟质量更新</strong> — 推迟安全/质量更新（每月补丁）最多 30 天。<br>
+                  • <strong>P2P 更新分发</strong> — 关闭 Windows 更新对等分发（减少上传流量）。<br>
+                  • <strong>驱动更新</strong> — 禁止 Windows 更新自动更新驱动程序。<br>
+                  • <strong>重启调度</strong> — 配置更新的自动重启时间和通知策略。<br>
+                  • <strong>活跃时间</strong> — 设置在活跃时间内不重启。
+                </div>
+              </div>
+            </div>
+
+            <!-- Win11 创建工具 -->
+            <div id="sec-win11" class="manual-section">
+              <h2>💿 Win11 创建工具</h2>
+              <p class="sec-desc">一键创建绕过 TPM 2.0、CPU、内存检查的 Windows 11 安装镜像</p>
+
+              <div class="manual-item">
+                <h4>📥 下载并创建 ISO <span class="tag tag-blue">基础</span></h4>
+                <div class="desc">直接从 Microsoft 服务器下载最新 Windows 11 镜像，自动应用绕过检查补丁</div>
+                <span class="toggle-detail" onclick="toggleDetail(this)">展开详情 ▾</span>
+                <div class="detail">
+                  <strong>操作步骤：</strong><br>
+                  1. 进入「Win11ISO」标签页。<br>
+                  2. 点击「下载 Windows 11」按钮。<br>
+                  3. 脚本自动从官网下载并构建安装 ISO。<br>
+                  4. ISO 会在生成时包含绕过 TPM 2.0、CPU 系列/型号、4GB 内存、Secure Boot 等检查的配置文件。<br>
+                  5. 下载完成后，ISO 文件会保存在指定位置（默认桌面）。<br>
+                  • 整个过程需要良好的网络连接。<br>
+                  • ISO 包含 Windows 11 专业版/家庭版等多版本选择。
+                </div>
+              </div>
+
+              <div class="manual-item">
+                <h4>🔧 绕过检查说明 <span class="tag tag-green">进阶</span></h4>
+                <div class="desc">WinUtil 自动注入的绕过补丁及其原理</div>
+                <span class="toggle-detail" onclick="toggleDetail(this)">展开详情 ▾</span>
+                <div class="detail">
+                  <strong>WinUtil 会绕过以下硬件检查：</strong><br>
+                  • <strong>TPM 2.0</strong> — 跳过受信任平台模块 2.0 检测（注册表: BypassTPMCheck）。<br>
+                  • <strong>CPU</strong> — 跳过处理器系列/型号检查（注册表: BypassCPUCheck）。<br>
+                  • <strong>RAM</strong> — 跳过 4GB 内存下限检查（注册表: BypassRAMCheck）。<br>
+                  • <strong>Secure Boot</strong> — 跳过安全启动检查（注册表: BypassSecureBootCheck）。<br>
+                  • <strong>Storage</strong> — 跳过 64GB 存储空间检查（注册表: BypassStorageCheck）。<br>
+                  • <strong>磁盘类型</strong> — 允许在 IDE/SCSI 硬盘上升级。<br>
+                  • <strong>TpmCheck</strong> — 绕过 TPM 检查（注册表: BypassTpmCheck）。<br>
+                  <strong>注意：</strong>绕过硬件检查后，Windows 11 在不受支持的硬件上可能遇到稳定性、驱动或更新问题。
+                </div>
+              </div>
+            </div>
+
+            <!-- 预设方案 -->
+            <div id="sec-preset" class="manual-section">
+              <h2>📋 预设方案</h2>
+              <p class="sec-desc">一键应用组合优化方案，无需逐个开关手动操作</p>
+
+              <div class="manual-item">
+                <h4>📊 Standard 标准方案 <span class="tag tag-blue">推荐</span></h4>
+                <div class="desc">平衡的优化方案，适用于大多数用户，包含隐私保护和性能优化的核心调整</div>
+                <span class="toggle-detail" onclick="toggleDetail(this)">展开详情 ▾</span>
+                <div class="detail">
+                  <strong>包含的优化项：</strong><br>
+                  • 禁用遥测和诊断数据收集<br>
+                  • 禁用广告 ID<br>
+                  • 禁用开始菜单广告<br>
+                  • 禁用锁屏兴趣和 Bing 搜索<br>
+                  • 禁用 OneDrive<br>
+                  • 禁用 Xbox Game Bar<br>
+                  • 配置 UAC 保持默认安全级别<br>
+                  • 显示隐藏文件和扩展名<br>
+                  • 关闭远程协助<br>
+                  • 禁用 SIP 和 LLMNR<br>
+                  <strong>适用于：</strong>大多数普通用户，在隐私、性能和易用性之间取得平衡。
+                </div>
+              </div>
+
+              <div class="manual-item">
+                <h4>✂️ Minimal 精简方案 <span class="tag tag-teal">适用少</span></h4>
+                <div class="desc">最精简的优化方案，仅包含最基本的必要调整，对系统影响最小</div>
+                <span class="toggle-detail" onclick="toggleDetail(this)">展开详情 ▾</span>
+                <div class="detail">
+                  <strong>包含的优化项：</strong><br>
+                  • 禁用开始菜单广告<br>
+                  • 禁用 Xbox Game Bar<br>
+                  • 显示隐藏文件和扩展名<br>
+                  <strong>适用于：</strong>只想做最小调整的用户，或者不确定哪些优化安全时使用。
+                </div>
+              </div>
+
+              <div class="manual-item">
+                <h4>🔧 Advanced 高级方案 <span class="tag tag-red">谨慎</span></h4>
+                <div class="desc">最大强度的系统优化，适用于追求极致性能的进阶用户</div>
+                <span class="toggle-detail" onclick="toggleDetail(this)">展开详情 ▾</span>
+                <div class="detail">
+                  <strong>包含标准方案全部项目，额外增加：</strong><br>
+                  • 禁用 Cortana（完全禁用）<br>
+                  • 禁用活动历史<br>
+                  • 禁用位置跟踪<br>
+                  • 禁用所有动画特效<br>
+                  • 禁用透明度和阴影效果<br>
+                  • 禁用后台应用<br>
+                  • 禁用鼠标加速<br>
+                  • 禁用 Smartscreen<br>
+                  • 禁用打印机（如不常用打印）<br>
+                  • 禁用 Windows 更新（可选）<br>
+                  • 禁用 SMB 1.0/CIFS 文件共享（安全加固）<br>
+                  • 配置 NTP 服务器<br>
+                  <strong>⚠️ 注意：</strong>高级方案可能影响某些功能的正常使用（如 Cortana、定位服务）。建议在应用前创建系统还原点。
+                </div>
+              </div>
+
+              <div class="manual-item">
+                <h4>💡 使用技巧 <span class="tag tag-purple">提示</span></h4>
+                <div class="desc">如何有效使用预设方案</div>
+                <span class="toggle-detail" onclick="toggleDetail(this)">展开详情 ▾</span>
+                <div class="detail">
+                  • 选择预设方案后，WinUtil 会自动勾选方案包含的所有优化开关。<br>
+                  • 你可以在方案基础上额外勾选或取消勾选任意优化项。<br>
+                  • 调整完毕后点击「运行选中的优化(X)项」开始执行。<br>
+                  • 多数优化支持撤销（Undo），可在执行后反向恢复。<br>
+                  • 建议先使用标准方案，熟悉后再尝试高级方案。<br>
+                  • 执行系统优化前建议创建系统还原点。
+                </div>
+              </div>
+            </div>
+
+            <!-- 常见问题 -->
+            <div id="sec-faq" class="manual-section">
+              <h2>❓ 常见问题</h2>
+              <p class="sec-desc">使用 WinUtil 过程中常见的问题与解答</p>
+
+              <div class="manual-item">
+                <h4>❓ 运行后没有任何反应 / 界面不弹出</h4>
+                <div class="desc">可能的原因和解决方案</div>
+                <span class="toggle-detail" onclick="toggleDetail(this)">展开详情 ▾</span>
+                <div class="detail">
+                  • 确保以 <strong>管理员身份</strong> 运行 PowerShell。<br>
+                  • 确保使用的是 PowerShell 5.1（而非 PowerShell 7），WinUtil 基于 WPF 构建。<br>
+                  • 检查是否被 Windows Defender / 杀毒软件拦截了脚本执行。<br>
+                  • 尝试在命令行后添加 <code>-NoExit</code> 参数查看错误信息：<code>powershell -NoExit -Command \"irm https://win.mozuiapp.com/win | iex\"</code><br>
+                  • 如果输出包含中文乱码，说明编码有问题，建议使用最新的 Windows 10/11 版本。
+                </div>
+              </div>
+
+              <div class="manual-item">
+                <h4>❓ 提示「拒绝访问」错误</h4>
+                <div class="desc">权限不足导致某些操作无法执行</div>
+                <span class="toggle-detail" onclick="toggleDetail(this)">展开详情 ▾</span>
+                <div class="detail">
+                  • 部分优化项（如禁用 Windows Update 服务）需要 TrustedInstaller 权限。<br>
+                  • 以管理员身份运行即可解决大部分权限问题。<br>
+                  • 某些系统级操作（如修改 HKLM 注册表）需要管理员权限。<br>
+                  • 如果仍遇到拒绝访问，请在干净的 Windows 系统上执行（非企业域环境）。
+                </div>
+              </div>
+
+              <div class="manual-item">
+                <h4>❓ 如何撤销优化？</h4>
+                <div class="desc">恢复系统到优化前的状态</div>
+                <span class="toggle-detail" onclick="toggleDetail(this)">展开详情 ▾</span>
+                <div class="detail">
+                  • WinUtil 的多数优化开关支持撤销（Undo）。<br>
+                  • 取消勾选该优化项，点击「运行选中的优化」即可执行撤销。<br>
+                  • 部分优化（如注册表调整）会自动备份原始值。<br>
+                  • 如果遇到无法撤销的情况，可通过系统还原点恢复。<br>
+                  • 建议在重大优化前创建系统还原点。
+                </div>
+              </div>
+
+              <div class="manual-item">
+                <h4>❓ 应用安装功能不工作</h4>
+                <div class="desc">Winget 或 Chocolatey 安装失败</div>
+                <span class="toggle-detail" onclick="toggleDetail(this)">展开详情 ▾</span>
+                <div class="detail">
+                  • 确保系统已安装 Winget（Windows 10 1809+ / Windows 11 自带）。<br>
+                  • 如果使用 Chocolatey，首次运行会自动安装，需要管理员权限。<br>
+                  • 检查网络连接，部分安装源可能需要科学上网。<br>
+                  • 某些企业环境组策略可能禁止安装软件，需联系 IT 部门。<br>
+                  • 尝试切换包管理器（Winget ↔ Chocolatey）看能否解决问题。
+                </div>
+              </div>
+
+              <div class="manual-item">
+                <h4>❓ 显示乱码 / 中文不完整</h4>
+                <div class="desc">界面文字显示异常</div>
+                <span class="toggle-detail" onclick="toggleDetail(this)">展开详情 ▾</span>
+                <div class="detail">
+                  • 确保系统区域设置为中文（中国），PowerShell 控制台编码为 UTF-8。<br>
+                  • 在 PowerShell 中执行 <code>$OutputEncoding = [System.Console]::OutputEncoding</code> 查看编码。<br>
+                  • 如果日志区域显示乱码（如 æ­£å¨），尝试在运行前设置：<code>chcp 65001</code><br>
+                  • 新版 WinUtil 已使用 Base64 编码避免编码问题，如仍有问题请反馈。
+                </div>
+              </div>
+
+              <div class="manual-item">
+                <h4>❓ 如何获取帮助 / 反馈问题？</h4>
+                <div class="desc">联系开发者和社区</div>
+                <span class="toggle-detail" onclick="toggleDetail(this)">展开详情 ▾</span>
+                <div class="detail">
+                  • GitHub Issues: <a href="https://github.com/missyouling/winutil-chinese/issues" target="_blank" style="color:#007AFF;">missyouling/winutil-chinese</a><br>
+                  • 原始项目: <a href="https://github.com/ChrisTitusTech/winutil/issues" target="_blank" style="color:#007AFF;">ChrisTitusTech/winutil</a><br>
+                  • 提交问题前请搜索是否已有同类问题。<br>
+                  • 反馈时请提供：PowerShell 版本、Windows 版本、具体错误信息截图。
+                </div>
+              </div>
+            </div>
+
+          </div><!-- /manual-body -->
+        </div>
+      </div><!-- /manualUI -->
+
+    </div><!-- /glass-panel -->
 
     <div class="footer">
       <a href="https://github.com/missyouling/winutil-chinese" target="_blank">missyouling/winutil-chinese</a>
@@ -379,8 +1024,43 @@
       document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
       document.querySelectorAll('.nav-tab').forEach(el => el.classList.remove('active'));
       document.getElementById(tabId + 'UI').classList.add('active');
-      const target = document.querySelector('.nav-tab[onclick*="' + tabId + '"]');
-      if (target) target.classList.add('active');
+      document.querySelectorAll('.nav-tab').forEach(el => {
+        if (el.getAttribute('onclick') && el.getAttribute('onclick').includes(tabId)) {
+          el.classList.add('active');
+        }
+      });
+      const panel = document.getElementById('mainPanel');
+      const container = document.getElementById('mainContainer');
+      if (tabId === 'manual') {
+        panel.classList.add('expand');
+        container.style.maxWidth = '1100px';
+        document.body.classList.add('manual-open');
+      } else {
+        panel.classList.remove('expand');
+        container.style.maxWidth = '680px';
+        document.body.classList.remove('manual-open');
+      }
+    }
+
+    function showManualSection(sectionId) {
+      document.querySelectorAll('.manual-section').forEach(el => el.classList.remove('active-section'));
+      document.querySelectorAll('.manual-toc a').forEach(el => el.classList.remove('active-toc'));
+      document.getElementById(sectionId).classList.add('active-section');
+      document.querySelectorAll('.manual-toc a').forEach(el => {
+        if (el.getAttribute('onclick') && el.getAttribute('onclick').includes(sectionId)) {
+          el.classList.add('active-toc');
+        }
+      });
+      document.querySelector('.manual-layout').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    function toggleDetail(el) {
+      const parent = el.parentElement;
+      const detail = parent.querySelector('.detail');
+      if (detail) {
+        const isShow = detail.classList.toggle('show');
+        el.textContent = isShow ? '收起详情 ▴' : '展开详情 ▾';
+      }
     }
 
     function copyCmd() {
