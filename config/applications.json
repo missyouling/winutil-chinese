@@ -1,4 +1,24 @@
 {
+  "115life": {
+    "category": "网盘工具",
+    "choco": "",
+    "foss": false,
+    "content": "115生活",
+    "description": "115生活是115科技推出的云存储和个人数据中心服务。",
+    "link": "https://115.com/",
+    "winget": "",
+    "region": "domestic"
+  },
+  "123cloud": {
+    "category": "网盘工具",
+    "choco": "",
+    "foss": false,
+    "content": "123云盘",
+    "description": "123云盘是一款免费云存储服务，支持大文件上传和高速下载。",
+    "link": "https://www.123pan.com/",
+    "winget": "",
+    "region": "domestic"
+  },
   "1password": {
     "category": "工具类",
     "choco": "1password",
@@ -9,6 +29,16 @@
     "foss": false,
     "region": "foreign"
   },
+  "360antivirus": {
+    "category": "杀毒软件",
+    "choco": "",
+    "foss": false,
+    "content": "360杀毒",
+    "description": "360杀毒是360推出的免费杀毒软件，提供实时保护和病毒查杀功能。",
+    "link": "https://sd.360.cn/",
+    "winget": "",
+    "region": "domestic"
+  },
   "360chrome": {
     "category": "浏览器__办公/老网站兼容",
     "choco": "",
@@ -17,6 +47,66 @@
     "description": "360 极速浏览器在保证安全稳定的基础上把极速做到极致，启动快，打开网页快，界面简洁精致。",
     "link": "https://browser.360.cn/ee/",
     "winget": "360.360Chrome",
+    "region": "domestic"
+  },
+  "360clouddrive": {
+    "category": "网盘工具",
+    "choco": "",
+    "foss": false,
+    "content": "360AI云盘",
+    "description": "360AI云盘是360推出的云存储服务，集成AI智能分类和搜索功能。",
+    "link": "https://yunpan.360.cn/",
+    "winget": "",
+    "region": "domestic"
+  },
+  "360deskasst": {
+    "category": "桌面美化",
+    "choco": "",
+    "foss": false,
+    "content": "360桌面助手",
+    "description": "360桌面助手提供桌面整理、文件分类和一键加速等功能，让你的桌面更整洁。",
+    "link": "https://www.360.cn/",
+    "winget": "",
+    "region": "domestic"
+  },
+  "360driver": {
+    "category": "驱动工具",
+    "choco": "",
+    "foss": false,
+    "content": "360驱动大师",
+    "description": "360驱动大师是一款驱动管理工具，自动检测并安装最新硬件驱动。",
+    "link": "https://www.360.cn/",
+    "winget": "",
+    "region": "domestic"
+  },
+  "360rescue": {
+    "category": "杀毒软件",
+    "choco": "",
+    "foss": false,
+    "content": "360急救箱",
+    "description": "360急救箱是一款系统救援工具，可修复被病毒破坏的系统文件和系统设置。",
+    "link": "https://www.360.cn/",
+    "winget": "",
+    "region": "domestic"
+  },
+  "360se": {
+    "category": "浏览器__办公/老网站兼容",
+    "choco": "",
+    "foss": false,
+    "content": "360安全浏览器",
+    "description": "360安全浏览器是一款安全的双核浏览器，支持Chromium和Trident内核。",
+    "link": "https://browser.360.cn/se/",
+    "winget": "360.360SE",
+    "region": "domestic"
+  },
+  "360wallpaper": {
+    "category": "桌面美化",
+    "choco": "",
+    "foss": false,
+    "content": "360壁纸",
+    "description": "360壁纸提供海量精美壁纸，支持一键更换桌面壁纸和锁屏壁纸。",
+    "link": "https://www.360.cn/",
+    "winget": "",
     "region": "domestic"
   },
   "7zip": {
@@ -159,6 +249,16 @@
     "foss": false,
     "region": "foreign"
   },
+  "aida64": {
+    "category": "系统工具",
+    "choco": "aida64",
+    "foss": false,
+    "content": "AIDA64",
+    "description": "AIDA64是一款系统硬件检测和基准测试工具，提供详细的硬件信息和性能评估。",
+    "link": "https://www.aida64.com/",
+    "winget": "FinalWire.AIDA64",
+    "region": "foreign"
+  },
   "aimp": {
     "category": "多媒体工具",
     "choco": "aimp",
@@ -199,6 +299,16 @@
     "winget": "Alibaba.AliWorkbench",
     "region": "foreign"
   },
+  "aliyundrive": {
+    "category": "网盘工具",
+    "choco": "",
+    "foss": false,
+    "content": "阿里云盘",
+    "description": "阿里云盘是阿里巴巴推出的个人云存储服务，提供高速上传下载和文件管理。",
+    "link": "https://www.aliyundrive.com/",
+    "winget": "",
+    "region": "domestic"
+  },
   "angryipscanner": {
     "category": "专业工具",
     "choco": "angryip",
@@ -207,6 +317,16 @@
     "link": "https://angryip.org/",
     "winget": "angryziber.AngryIPScanner",
     "foss": true,
+    "region": "foreign"
+  },
+  "anyburn": {
+    "category": "压缩刻录",
+    "choco": "anyburn",
+    "foss": false,
+    "content": "AnyBurn",
+    "description": "AnyBurn是一款免费的光盘刻录软件，支持ISO制作和刻录。",
+    "link": "https://www.anyburn.com/",
+    "winget": "",
     "region": "foreign"
   },
   "anydesk": {
@@ -218,6 +338,26 @@
     "winget": "AnyDesk.AnyDesk",
     "foss": false,
     "region": "foreign"
+  },
+  "aomeipartition": {
+    "category": "系统工具",
+    "choco": "aomei-partition-assistant",
+    "foss": false,
+    "content": "傲梅分区助手",
+    "description": "傲梅分区助手是一款免费的磁盘分区管理工具，支持分区调整、合并和扩展。",
+    "link": "https://www.disktool.cn/",
+    "winget": "",
+    "region": "domestic"
+  },
+  "atrust": {
+    "category": "杀毒软件",
+    "choco": "",
+    "foss": false,
+    "content": "aTrust 零信任安全",
+    "description": "aTrust零信任安全接入客户端，提供安全远程接入和办公环境保障。",
+    "link": "https://www.atrust.com/",
+    "winget": "",
+    "region": "domestic"
   },
   "audacity": {
     "category": "多媒体工具",
@@ -247,6 +387,16 @@
     "link": "https://learn.microsoft.com/en-us/sysinternals/downloads/autoruns",
     "winget": "Microsoft.Sysinternals.Autoruns",
     "foss": false,
+    "region": "foreign"
+  },
+  "avira": {
+    "category": "杀毒软件",
+    "choco": "avira-antivirus",
+    "foss": false,
+    "content": "Avira 小红伞",
+    "description": "Avira小红伞是全球知名的免费杀毒软件，提供可靠的病毒防护。",
+    "link": "https://www.avira.com/",
+    "winget": "",
     "region": "foreign"
   },
   "baidunetdisk": {
@@ -279,6 +429,26 @@
     "winget": "Baidu.BaiduWenku",
     "region": "domestic"
   },
+  "bandizip": {
+    "category": "压缩刻录",
+    "choco": "bandizip",
+    "foss": false,
+    "content": "Bandizip",
+    "description": "Bandizip是一款轻量快速的压缩软件，支持多种格式和高速解压。",
+    "link": "https://www.bandisoft.com/bandizip/",
+    "winget": "Bandisoft.Bandizip",
+    "region": "foreign"
+  },
+  "baofengplayer": {
+    "category": "视频软件",
+    "choco": "baofengplayer",
+    "foss": false,
+    "content": "暴风影音",
+    "description": "暴风影音是一款本地视频播放器，支持多种视频格式和在线影视资源。",
+    "link": "https://www.baofeng.com/",
+    "winget": "",
+    "region": "domestic"
+  },
   "bcut": {
     "category": "多媒体工具",
     "choco": "",
@@ -299,6 +469,16 @@
     "foss": true,
     "region": "foreign"
   },
+  "bilibdown": {
+    "category": "下载工具",
+    "choco": "",
+    "foss": false,
+    "content": "bilibdown | B站视频下载",
+    "description": "B站视频下载工具，支持下载哔哩哔哩视频和音频。",
+    "link": "https://github.com/nickliqian/bilibdown",
+    "winget": "",
+    "region": "domestic"
+  },
   "bilibili": {
     "category": "多媒体工具",
     "choco": "",
@@ -307,6 +487,36 @@
     "description": "哔哩哔哩（B站）是国内知名的视频弹幕平台，涵盖动画、知识、音乐等内容。",
     "link": "https://www.bilibili.com/",
     "winget": "Bilibili.Bilibili",
+    "region": "domestic"
+  },
+  "binginput": {
+    "category": "输入法",
+    "choco": "",
+    "foss": false,
+    "content": "必应Bing输入法",
+    "description": "微软必应输入法，集成必应搜索功能，支持语音输入和智能纠错。",
+    "link": "https://www.microsoft.com/",
+    "winget": "",
+    "region": "foreign"
+  },
+  "bitcomet": {
+    "category": "下载工具",
+    "choco": "bitcomet",
+    "foss": false,
+    "content": "BitComet",
+    "description": "BitComet是一款BT下载客户端，支持BT、HTTP和FTP下载协议。",
+    "link": "https://www.bitcomet.com/",
+    "winget": "",
+    "region": "foreign"
+  },
+  "bitspirit": {
+    "category": "下载工具",
+    "choco": "",
+    "foss": false,
+    "content": "比特精灵",
+    "description": "比特精灵是一款BT下载工具，支持种子制作、DHT网络和UPnP自动端口映射。",
+    "link": "https://www.bitspirit.com/",
+    "winget": "",
     "region": "domestic"
   },
   "bitwarden": {
@@ -339,6 +549,16 @@
     "foss": true,
     "region": "foreign"
   },
+  "bodanmusic": {
+    "category": "音乐发烧友",
+    "choco": "",
+    "foss": false,
+    "content": "波点音乐",
+    "description": "一起用音乐穿越，年轻人都在用的音乐APP，发现属于你的BGM。",
+    "link": "https://www.bodian.com/",
+    "winget": "",
+    "region": "domestic"
+  },
   "brave": {
     "category": "浏览器__极简优先推荐",
     "choco": "brave",
@@ -359,6 +579,16 @@
     "foss": true,
     "region": "foreign"
   },
+  "cadviewer": {
+    "category": "图片图形",
+    "choco": "",
+    "foss": false,
+    "content": "CAD迷你看图",
+    "description": "CAD迷你看图是一款轻量级的CAD图纸查看工具，支持DWG/DXF格式。",
+    "link": "https://www.cad2020.com/",
+    "winget": "",
+    "region": "domestic"
+  },
   "calibre": {
     "category": "多媒体工具",
     "choco": "calibre",
@@ -377,6 +607,46 @@
     "description": "剪映是字节跳动的视频编辑工具，提供丰富滤镜和音乐，支持快速剪辑短视频。",
     "link": "https://www.capcut.cn/",
     "winget": "ByteDance.CapCut",
+    "region": "domestic"
+  },
+  "cctv": {
+    "category": "视频软件",
+    "choco": "",
+    "foss": false,
+    "content": "央视影音",
+    "description": "央视影音是中央电视台官方视频客户端，提供央视节目直播和点播服务。",
+    "link": "https://www.cctv.com/",
+    "winget": "",
+    "region": "domestic"
+  },
+  "cdburn": {
+    "category": "压缩刻录",
+    "choco": "cdburnerxp",
+    "foss": true,
+    "content": "光盘刻录",
+    "description": "免费的光盘刻录工具，支持CD/DVD/蓝光光盘的刻录和镜像制作。",
+    "link": "https://cdburnerxp.se/",
+    "winget": "",
+    "region": "foreign"
+  },
+  "cdrivecleaner": {
+    "category": "杀毒软件",
+    "choco": "",
+    "foss": false,
+    "content": "C盘清理专家",
+    "description": "C盘清理专家是一款系统清理工具，帮助用户快速释放C盘空间。",
+    "link": "https://www.qq.com/",
+    "winget": "",
+    "region": "domestic"
+  },
+  "cdriveoptimizer": {
+    "category": "系统工具",
+    "choco": "",
+    "foss": false,
+    "content": "C盘清理优化大师",
+    "description": "C盘清理优化大师专为C盘空间优化设计，一键清理系统垃圾文件。",
+    "link": "https://www.qq.com/",
+    "winget": "",
     "region": "domestic"
   },
   "cemu": {
@@ -399,6 +669,16 @@
     "winget": "CentStudio.CentBrowser",
     "region": "domestic"
   },
+  "chatbox": {
+    "category": "智能生成",
+    "choco": "",
+    "foss": false,
+    "content": "Chatbox",
+    "description": "Chatbox是一款AI对话客户端，支持多种AI模型的桌面聊天体验。",
+    "link": "https://chatboxai.app/",
+    "winget": "",
+    "region": "foreign"
+  },
   "chatgpt": {
     "category": "开发工具",
     "choco": "na",
@@ -418,6 +698,16 @@
     "winget": "ChatterinoTeam.Chatterino",
     "foss": true,
     "region": "foreign"
+  },
+  "cherrystudio": {
+    "category": "智能生成",
+    "choco": "",
+    "foss": false,
+    "content": "Cherry Studio",
+    "description": "Cherry Studio是一款AI桌面客户端，支持接入多种大模型API进行对话。",
+    "link": "https://cherrystudio.ai/",
+    "winget": "",
+    "region": "domestic"
   },
   "chrome": {
     "category": "浏览器__极简优先推荐",
@@ -489,6 +779,16 @@
     "foss": true,
     "region": "foreign"
   },
+  "cmcccloud": {
+    "category": "网盘工具",
+    "choco": "",
+    "foss": false,
+    "content": "中国移动云盘",
+    "description": "中国移动云盘是中国移动推出的个人云存储服务，提供文件备份和同步功能。",
+    "link": "https://cloud.139.com/",
+    "winget": "",
+    "region": "domestic"
+  },
   "codex": {
     "category": "开发工具",
     "choco": "codex",
@@ -498,6 +798,16 @@
     "winget": "OpenAI.Codex",
     "foss": true,
     "region": "foreign"
+  },
+  "coze": {
+    "category": "智能生成",
+    "choco": "",
+    "foss": false,
+    "content": "扣子 Coze",
+    "description": "扣子是字节跳动推出的AI Bot开发平台，支持创建和分享AI应用。",
+    "link": "https://www.coze.com/",
+    "winget": "ByteDance.Coze",
+    "region": "domestic"
   },
   "cpuz": {
     "category": "专业工具",
@@ -579,6 +889,26 @@
     "foss": false,
     "region": "foreign"
   },
+  "diskgenius": {
+    "category": "系统工具",
+    "choco": "",
+    "foss": false,
+    "content": "DiskGenius",
+    "description": "DiskGenius是一款专业的磁盘管理工具，支持分区管理、数据恢复和备份。",
+    "link": "https://www.diskgenius.cn/",
+    "winget": "",
+    "region": "domestic"
+  },
+  "dismplusplus": {
+    "category": "系统工具",
+    "choco": "",
+    "foss": true,
+    "content": "Dism++",
+    "description": "Dism++是一款开源的系统优化工具，基于DISM框架，提供系统清理和优化功能。",
+    "link": "https://github.com/Chuyu-Team/Dism-Multi-language",
+    "winget": "",
+    "region": "domestic"
+  },
   "dismtools": {
     "category": "微软工具",
     "choco": "dismtools",
@@ -659,6 +989,26 @@
     "winget": "ByteDance.Douyin",
     "region": "domestic"
   },
+  "drivergenius": {
+    "category": "驱动工具",
+    "choco": "",
+    "foss": false,
+    "content": "驱动精灵",
+    "description": "驱动精灵是一款驱动管理工具，支持一键检测和安装硬件驱动。",
+    "link": "https://www.drivergenius.com/",
+    "winget": "",
+    "region": "domestic"
+  },
+  "driverlife": {
+    "category": "驱动工具",
+    "choco": "",
+    "foss": false,
+    "content": "驱动人生",
+    "description": "驱动人生是一款驱动管理软件，支持驱动检测、安装和备份还原。",
+    "link": "https://www.drvlife.com/",
+    "winget": "",
+    "region": "domestic"
+  },
   "dropbox": {
     "category": "工具类",
     "choco": "dropbox",
@@ -699,6 +1049,16 @@
     "foss": false,
     "region": "foreign"
   },
+  "emule": {
+    "category": "下载工具",
+    "choco": "emule",
+    "foss": true,
+    "content": "电驴 (eMule)",
+    "description": "电驴是一款开源的文件分享工具，基于eD2k网络，支持大量资源共享。",
+    "link": "https://www.emule-project.net/",
+    "winget": "",
+    "region": "foreign"
+  },
   "enteauth": {
     "category": "工具类",
     "choco": "ente-auth",
@@ -719,6 +1079,16 @@
     "foss": false,
     "region": "foreign"
   },
+  "eset": {
+    "category": "杀毒软件",
+    "choco": "eset-internet-security",
+    "foss": false,
+    "content": "ESET",
+    "description": "ESET是一款高性能的防病毒软件，以其轻量级和高效检测能力著称。",
+    "link": "https://www.eset.com/",
+    "winget": "",
+    "region": "foreign"
+  },
   "everything": {
     "category": "工具类",
     "choco": "everything",
@@ -728,6 +1098,16 @@
     "winget": "voidtools.Everything",
     "foss": false,
     "region": "foreign"
+  },
+  "evrecord": {
+    "category": "视频软件",
+    "choco": "",
+    "foss": false,
+    "content": "EV录屏",
+    "description": "EV录屏是一款免费的屏幕录制工具，支持全屏/区域录制和摄像头画中画。",
+    "link": "https://www.ieway.cn/",
+    "winget": "",
+    "region": "domestic"
   },
   "feishu": {
     "category": "通讯工具",
@@ -798,6 +1178,36 @@
     "link": "https://www.foxmail.com/",
     "winget": "Tencent.Foxmail",
     "region": "domestic"
+  },
+  "furmark": {
+    "category": "系统工具",
+    "choco": "furmark",
+    "foss": false,
+    "content": "FurMark",
+    "description": "FurMark是一款GPU压力测试工具，用于检测显卡稳定性和散热性能。",
+    "link": "https://geeks3d.com/furmark/",
+    "winget": "Geeks3D.FurMark",
+    "region": "foreign"
+  },
+  "fxsound": {
+    "category": "音乐发烧友",
+    "choco": "fxsound",
+    "foss": false,
+    "content": "FxSound",
+    "description": "FxSound是一款全球知名的音质提升工具，通过智能均衡器增强音频体验。",
+    "link": "https://www.fxsound.com/",
+    "winget": "",
+    "region": "foreign"
+  },
+  "geekuninstall": {
+    "category": "杀毒软件",
+    "choco": "geekuninstaller",
+    "foss": false,
+    "content": "Geek Uninstaller",
+    "description": "Geek Uninstaller是一款轻量级卸载工具，可彻底清除软件残留文件和注册表项。",
+    "link": "https://geekuninstaller.com/",
+    "winget": "",
+    "region": "foreign"
   },
   "geforcenow": {
     "category": "游戏",
@@ -879,6 +1289,26 @@
     "foss": false,
     "region": "foreign"
   },
+  "googlepinyin": {
+    "category": "输入法",
+    "choco": "",
+    "foss": true,
+    "content": "谷歌拼音输入法",
+    "description": "谷歌拼音输入法由Google开发，支持拼音输入、词库同步和智能组词。",
+    "link": "https://www.google.com/ime/pinyin/",
+    "winget": "",
+    "region": "foreign"
+  },
+  "gopeed": {
+    "category": "下载工具",
+    "choco": "gopeed",
+    "foss": true,
+    "content": "Gopeed",
+    "description": "Gopeed是一款开源的高速下载器，支持HTTP、BitTorrent和Magnet协议。",
+    "link": "https://gopeed.com/",
+    "winget": "",
+    "region": "foreign"
+  },
   "gpuz": {
     "category": "专业工具",
     "choco": "gpu-z",
@@ -929,6 +1359,36 @@
     "foss": true,
     "region": "foreign"
   },
+  "hibituninstall": {
+    "category": "杀毒软件",
+    "choco": "hibit-uninstaller",
+    "foss": false,
+    "content": "HiBit Uninstaller",
+    "description": "HiBit Uninstaller是一款强大的软件卸载工具，支持强制卸载和批量操作。",
+    "link": "https://hibitsoft.ir/",
+    "winget": "",
+    "region": "foreign"
+  },
+  "honeyview": {
+    "category": "图片图形",
+    "choco": "honeyview",
+    "foss": false,
+    "content": "Honeyview",
+    "description": "Honeyview是一款简洁快速的图片查看器，支持多种图像格式和压缩包直接浏览。",
+    "link": "https://www.bandisoft.com/honeyview/",
+    "winget": "Bandisoft.Honeyview",
+    "region": "foreign"
+  },
+  "huaweicloud": {
+    "category": "网盘工具",
+    "choco": "",
+    "foss": false,
+    "content": "华为云空间",
+    "description": "华为云空间是华为提供的云存储服务，支持手机备份、文件同步和多端访问。",
+    "link": "https://cloud.huawei.com/",
+    "winget": "",
+    "region": "domestic"
+  },
   "hugo": {
     "category": "工具类",
     "choco": "hugo-extended",
@@ -938,6 +1398,26 @@
     "winget": "Hugo.Hugo.Extended",
     "foss": true,
     "region": "foreign"
+  },
+  "huorong": {
+    "category": "杀毒软件",
+    "choco": "",
+    "foss": false,
+    "content": "火绒安全软件",
+    "description": "火绒安全软件是一款轻量免费的安全防护软件，提供病毒查杀和系统防护。",
+    "link": "https://www.huorong.cn/",
+    "winget": "",
+    "region": "domestic"
+  },
+  "huya": {
+    "category": "看剧必备",
+    "choco": "",
+    "foss": false,
+    "content": "虎牙直播",
+    "description": "技术驱动娱乐，弹幕式互动直播平台，涵盖游戏、娱乐、体育等直播内容。",
+    "link": "https://www.huya.com/",
+    "winget": "Huya.Huya",
+    "region": "domestic"
   },
   "hwinfo": {
     "category": "专业工具",
@@ -958,6 +1438,16 @@
     "winget": "CPUID.HWMonitor",
     "foss": false,
     "region": "foreign"
+  },
+  "iflytekinput": {
+    "category": "输入法",
+    "choco": "",
+    "foss": false,
+    "content": "讯飞输入法",
+    "description": "讯飞输入法是科大讯飞出品，支持语音输入、拼音输入和手写输入，语音识别准确率高。",
+    "link": "https://srf.xunfei.cn/",
+    "winget": "",
+    "region": "domestic"
   },
   "imacopilot": {
     "category": "开发工具",
@@ -988,6 +1478,26 @@
     "winget": "Tonec.InternetDownloadManager",
     "foss": false,
     "region": "foreign"
+  },
+  "iobituninstaller": {
+    "category": "系统工具",
+    "choco": "iobit-uninstaller",
+    "foss": false,
+    "content": "IObit Uninstaller",
+    "description": "IObit Uninstaller是一款强大的卸载工具，可彻底清除顽固软件和浏览器插件。",
+    "link": "https://www.iobit.com/advanceduninstaller.php",
+    "winget": "IObit.Uninstaller",
+    "region": "foreign"
+  },
+  "iqiyi": {
+    "category": "看剧必备",
+    "choco": "",
+    "foss": false,
+    "content": "爱奇艺",
+    "description": "爱奇艺Windows客户端汇聚了电视剧、电影、综艺、动漫等海量高清视频内容。",
+    "link": "https://www.iqiyi.com/",
+    "winget": "",
+    "region": "domestic"
   },
   "irfanview": {
     "category": "多媒体工具",
@@ -1079,6 +1589,26 @@
     "foss": false,
     "region": "foreign"
   },
+  "jimeng": {
+    "category": "智能生成",
+    "choco": "",
+    "foss": false,
+    "content": "即梦AI",
+    "description": "即梦AI是字节跳动推出的AI创意生成平台，支持文生图和文生视频。",
+    "link": "https://jimeng.jianying.com/",
+    "winget": "",
+    "region": "domestic"
+  },
+  "jipinwubi": {
+    "category": "输入法",
+    "choco": "",
+    "foss": false,
+    "content": "极品五笔",
+    "description": "极品五笔输入法是一款经典的五笔输入软件，支持五笔拼音混输。",
+    "link": "https://www.jpwb.net/",
+    "winget": "",
+    "region": "domestic"
+  },
   "jpegview": {
     "category": "工具类",
     "choco": "jpegview",
@@ -1087,6 +1617,26 @@
     "link": "https://github.com/sylikc/jpegview",
     "winget": "sylikc.JPEGView",
     "foss": true,
+    "region": "foreign"
+  },
+  "kanpic": {
+    "category": "图片图形",
+    "choco": "",
+    "foss": false,
+    "content": "看图王",
+    "description": "2345看图王是一款极速图片查看软件，支持百余种图片格式，打开速度快。",
+    "link": "https://pic.2345.com/",
+    "winget": "",
+    "region": "domestic"
+  },
+  "kaspersky": {
+    "category": "杀毒软件",
+    "choco": "kaspersky-internet-security",
+    "foss": false,
+    "content": "卡巴斯基",
+    "description": "卡巴斯基是全球知名的网络安全公司，提供顶级的防病毒和反勒索软件保护。",
+    "link": "https://www.kaspersky.com/",
+    "winget": "",
     "region": "foreign"
   },
   "kdocs": {
@@ -1108,6 +1658,26 @@
     "winget": "KeePassXCTeam.KeePassXC",
     "foss": true,
     "region": "foreign"
+  },
+  "kimi": {
+    "category": "智能生成",
+    "choco": "",
+    "foss": false,
+    "content": "Kimi 智能助手",
+    "description": "Kimi是月之暗面推出的AI智能助手，擅长长文本处理和深度问答。",
+    "link": "https://kimi.moonshot.cn/",
+    "winget": "",
+    "region": "domestic"
+  },
+  "kingsoftav": {
+    "category": "杀毒软件",
+    "choco": "",
+    "foss": false,
+    "content": "金山毒霸",
+    "description": "金山毒霸是金山安全的杀毒软件，提供病毒查杀、系统清理和文档保护功能。",
+    "link": "https://www.duba.net/",
+    "winget": "",
+    "region": "domestic"
   },
   "kingsoftpdf": {
     "category": "办公工具",
@@ -1139,6 +1709,16 @@
     "winget": "Kingsoft.KMeeting",
     "region": "domestic"
   },
+  "kmplayer": {
+    "category": "视频软件",
+    "choco": "kmplayer",
+    "foss": false,
+    "content": "KMPlayer",
+    "description": "KMPlayer是一款功能强大的多媒体播放器，支持4K/8K超高清视频播放。",
+    "link": "https://www.kmplayer.com/",
+    "winget": "",
+    "region": "foreign"
+  },
   "kodi": {
     "category": "自托管工具",
     "choco": "kodi",
@@ -1148,6 +1728,36 @@
     "winget": "XBMCFoundation.Kodi",
     "foss": true,
     "region": "foreign"
+  },
+  "kuaidoudownloader": {
+    "category": "下载工具",
+    "choco": "",
+    "foss": false,
+    "content": "快抖下载器",
+    "description": "快手、抖音视频无水印下载工具，支持批量下载。",
+    "link": "https://www.kuaidous.com/",
+    "winget": "",
+    "region": "domestic"
+  },
+  "kugou": {
+    "category": "音乐发烧友",
+    "choco": "",
+    "foss": false,
+    "content": "酷狗音乐",
+    "description": "酷狗音乐，就是歌多。海量正版曲库，高品质音乐试听下载。",
+    "link": "https://www.kugou.com/",
+    "winget": "",
+    "region": "domestic"
+  },
+  "kuwo": {
+    "category": "音乐发烧友",
+    "choco": "",
+    "foss": false,
+    "content": "酷我音乐",
+    "description": "千万曲库，无损音质。酷我音乐为您提供高品质音乐体验。",
+    "link": "https://www.kuwo.cn/",
+    "winget": "",
+    "region": "domestic"
   },
   "lazygit": {
     "category": "开发工具",
@@ -1179,6 +1789,26 @@
     "foss": true,
     "region": "foreign"
   },
+  "livelywallpaper": {
+    "category": "桌面美化",
+    "choco": "",
+    "foss": true,
+    "content": "Lively Wallpaper",
+    "description": "Lively Wallpaper是一款开源免费动态壁纸软件，支持视频和网页壁纸。",
+    "link": "https://rocksdanister.github.io/lively/",
+    "winget": "",
+    "region": "foreign"
+  },
+  "livepartner": {
+    "category": "看剧必备",
+    "choco": "",
+    "foss": false,
+    "content": "直播伴侣",
+    "description": "电脑直播伴侣，完美适配西瓜视频、抖音等平台，提供专业直播推流功能。",
+    "link": "https://www.douyin.com/",
+    "winget": "",
+    "region": "domestic"
+  },
   "localsend": {
     "category": "自托管工具",
     "choco": "localsend.install",
@@ -1188,6 +1818,16 @@
     "winget": "LocalSend.LocalSend",
     "foss": true,
     "region": "foreign"
+  },
+  "ludashi": {
+    "category": "系统工具",
+    "choco": "",
+    "foss": false,
+    "content": "鲁大师",
+    "description": "鲁大师是一款免费的电脑硬件检测和系统优化工具，提供硬件性能评估。",
+    "link": "https://www.ludash.com/",
+    "winget": "",
+    "region": "domestic"
   },
   "mailmaster": {
     "category": "工具类",
@@ -1207,6 +1847,46 @@
     "link": "https://element.io/",
     "winget": "Element.Element",
     "foss": true,
+    "region": "foreign"
+  },
+  "maxthon": {
+    "category": "浏览器__其他",
+    "choco": "maxthon",
+    "foss": false,
+    "content": "遨游浏览器",
+    "description": "遨游浏览器（Maxthon）是一款多标签浏览器，支持云同步和扩展插件。",
+    "link": "https://www.maxthon.com/",
+    "winget": "Maxthon.Maxthon",
+    "region": "domestic"
+  },
+  "meitu": {
+    "category": "图片图形",
+    "choco": "",
+    "foss": false,
+    "content": "美图秀秀",
+    "description": "美图秀秀是一款简单易用的图片美化工具，提供美颜、滤镜、拼图等功能。",
+    "link": "https://xiuxiu.meitu.com/",
+    "winget": "",
+    "region": "domestic"
+  },
+  "mgtv": {
+    "category": "看剧必备",
+    "choco": "",
+    "foss": false,
+    "content": "芒果TV",
+    "description": "芒果TV汇集热门综艺、电视剧、动漫等精彩视频内容。",
+    "link": "https://www.mgtv.com/",
+    "winget": "",
+    "region": "domestic"
+  },
+  "microsoftoffice": {
+    "category": "办公教育",
+    "choco": "office365business",
+    "foss": false,
+    "content": "微软 Office 365",
+    "description": "Microsoft Office 365提供Word、Excel、PowerPoint等办公套件，支持云端协作。",
+    "link": "https://www.microsoft.com/microsoft-365",
+    "winget": "Microsoft.Office",
     "region": "foreign"
   },
   "minitoolpartitionwizard": {
@@ -1237,6 +1917,16 @@
     "link": "https://moonlight-stream.org/",
     "winget": "MoonlightGameStreamingProject.Moonlight",
     "foss": true,
+    "region": "foreign"
+  },
+  "motrix": {
+    "category": "下载工具",
+    "choco": "motrix",
+    "foss": true,
+    "content": "Motrix",
+    "description": "Motrix是一款开源的全能下载工具，支持HTTP、FTP、BT、磁力链等协议。",
+    "link": "https://motrix.app/",
+    "winget": "",
     "region": "foreign"
   },
   "mpc-qt": {
@@ -1309,6 +1999,16 @@
     "foss": true,
     "region": "foreign"
   },
+  "nanoai": {
+    "category": "智能生成",
+    "choco": "",
+    "foss": false,
+    "content": "纳米AI",
+    "description": "纳米AI是一款轻量级AI助手客户端，支持接入多种AI模型。",
+    "link": "https://www.nanoai.com/",
+    "winget": "",
+    "region": "domestic"
+  },
   "naps2": {
     "category": "多媒体工具",
     "choco": "naps2",
@@ -1317,6 +2017,16 @@
     "link": "https://www.naps2.com/",
     "winget": "Cyanfish.NAPS2",
     "foss": true,
+    "region": "foreign"
+  },
+  "ndm": {
+    "category": "下载工具",
+    "choco": "neatdownloadmanager",
+    "foss": false,
+    "content": "NDM (Neat Download Manager)",
+    "description": "NDM是一款轻量级下载管理器，支持多线程下载和浏览器集成。",
+    "link": "https://www.neatdownloadmanager.com/",
+    "winget": "",
     "region": "foreign"
   },
   "neovim": {
@@ -1338,6 +2048,16 @@
     "winget": "Netbird.Netbird",
     "foss": true,
     "region": "foreign"
+  },
+  "neteasepopcorn": {
+    "category": "视频软件",
+    "choco": "",
+    "foss": false,
+    "content": "网易爆米花",
+    "description": "网易推出的视频播放工具，提供流畅的本地视频播放体验。",
+    "link": "https://popcorn.netease.com/",
+    "winget": "",
+    "region": "domestic"
   },
   "nextclouddesktop": {
     "category": "自托管工具",
@@ -1397,6 +2117,16 @@
     "link": "https://nomacs.org/",
     "winget": "nomacs.nomacs",
     "foss": true,
+    "region": "foreign"
+  },
+  "norton": {
+    "category": "杀毒软件",
+    "choco": "norton-security",
+    "foss": false,
+    "content": "诺顿杀毒",
+    "description": "诺顿是Symantec旗下的杀毒品牌，提供全方位的网络安全保护。",
+    "link": "https://www.norton.com/",
+    "winget": "",
     "region": "foreign"
   },
   "notepadplus": {
@@ -1459,6 +2189,16 @@
     "foss": false,
     "region": "foreign"
   },
+  "officeai": {
+    "category": "智能生成",
+    "choco": "",
+    "foss": false,
+    "content": "Office AI助手",
+    "description": "Office AI助手是集成在办公软件中的AI辅助工具，提供写作、排版等智能支持。",
+    "link": "https://www.officeai.com/",
+    "winget": "",
+    "region": "domestic"
+  },
   "onedrive": {
     "category": "微软工具",
     "choco": "onedrive",
@@ -1508,6 +2248,36 @@
     "winget": "Giorgiotani.Peazip",
     "foss": true,
     "region": "foreign"
+  },
+  "perfectdecode": {
+    "category": "视频软件",
+    "choco": "",
+    "foss": false,
+    "content": "完美解码",
+    "description": "完美解码是一款集播放器和解码器于一体的视频播放方案，支持几乎所有视频格式。",
+    "link": "https://jm.wmzhe.com/",
+    "winget": "",
+    "region": "domestic"
+  },
+  "pikpak": {
+    "category": "网盘工具",
+    "choco": "",
+    "foss": false,
+    "content": "PikPak",
+    "description": "PikPak是一款高速云存储工具，支持种子离线下载和在线播放。",
+    "link": "https://mypikpak.com/",
+    "winget": "",
+    "region": "foreign"
+  },
+  "pixpin": {
+    "category": "图片图形",
+    "choco": "",
+    "foss": false,
+    "content": "PixPin",
+    "description": "PixPin是一款截图贴图工具，支持截图、贴图、OCR识别和长截图功能。",
+    "link": "https://pixpinapp.com/",
+    "winget": "",
+    "region": "domestic"
   },
   "playnite": {
     "category": "游戏",
@@ -1718,6 +2488,16 @@
     "foss": true,
     "region": "foreign"
   },
+  "qishuimusic": {
+    "category": "音乐发烧友",
+    "choco": "",
+    "foss": false,
+    "content": "汽水音乐",
+    "description": "汽水音乐电脑版是基于移动端汽水音乐APP打造的PC端音乐平台。",
+    "link": "https://music.163.com/qishui",
+    "winget": "",
+    "region": "domestic"
+  },
   "qq": {
     "category": "通讯工具",
     "choco": "",
@@ -1758,6 +2538,36 @@
     "winget": "Tencent.QQPinyin",
     "region": "domestic"
   },
+  "qqplayer": {
+    "category": "视频软件",
+    "choco": "",
+    "foss": false,
+    "content": "QQ影音",
+    "description": "腾讯推出的本地视频播放器，支持多种视频格式，界面简洁无广告。",
+    "link": "https://player.qq.com/",
+    "winget": "Tencent.QQPlayer",
+    "region": "domestic"
+  },
+  "qqretro": {
+    "category": "聊天社交",
+    "choco": "",
+    "foss": false,
+    "content": "QQ（怀旧版）",
+    "description": "免费的即时通讯平台，带来更多沟通乐趣。经典版QQ体验。",
+    "link": "https://im.qq.com/",
+    "winget": "Tencent.QQ",
+    "region": "domestic"
+  },
+  "qqwubi": {
+    "category": "输入法",
+    "choco": "",
+    "foss": false,
+    "content": "QQ五笔输入法",
+    "description": "腾讯推出的五笔输入法，支持五笔拼音混合输入和词库同步。",
+    "link": "https://wubi.qq.com/",
+    "winget": "Tencent.QQWubi",
+    "region": "domestic"
+  },
   "qtox": {
     "category": "通讯工具",
     "choco": "qtox",
@@ -1767,6 +2577,36 @@
     "winget": "Tox.qTox",
     "foss": true,
     "region": "foreign"
+  },
+  "quanminkge": {
+    "category": "音乐软件",
+    "choco": "",
+    "foss": false,
+    "content": "全民K歌",
+    "description": "全民K歌是腾讯推出的在线K歌平台，支持练歌、K歌和直播间互动。",
+    "link": "https://kg.qq.com/",
+    "winget": "",
+    "region": "domestic"
+  },
+  "quarkbrowser": {
+    "category": "浏览器__极简优先推荐",
+    "choco": "",
+    "foss": false,
+    "content": "夸克浏览器",
+    "description": "夸克浏览器是一款极速智能浏览器，采用AI技术提供高效搜索和浏览体验。",
+    "link": "https://www.quark.cn/",
+    "winget": "",
+    "region": "domestic"
+  },
+  "quarkdrive": {
+    "category": "网盘工具",
+    "choco": "",
+    "foss": false,
+    "content": "夸克网盘",
+    "description": "夸克网盘是夸克推出的云存储服务，支持文件备份、同步和分享。",
+    "link": "https://pan.quark.cn/",
+    "winget": "",
+    "region": "domestic"
   },
   "rdcman": {
     "category": "微软工具",
@@ -1787,6 +2627,26 @@
     "winget": "RevoUninstaller.RevoUninstaller",
     "foss": false,
     "region": "foreign"
+  },
+  "rime": {
+    "category": "输入法",
+    "choco": "rime",
+    "foss": true,
+    "content": "Rime小狼毫输入法",
+    "description": "Rime是一款开源输入法引擎，小狼毫是Windows版，支持高度自定义和多种输入方案。",
+    "link": "https://rime.im/",
+    "winget": "",
+    "region": "domestic"
+  },
+  "rising": {
+    "category": "杀毒软件",
+    "choco": "",
+    "foss": false,
+    "content": "瑞星杀毒",
+    "description": "瑞星杀毒软件是一款国产老牌杀毒软件，提供全面的病毒防护功能。",
+    "link": "https://www.rising.com.cn/",
+    "winget": "",
+    "region": "domestic"
   },
   "rufus": {
     "category": "工具类",
@@ -1868,6 +2728,16 @@
     "foss": false,
     "region": "foreign"
   },
+  "snipaste": {
+    "category": "图片图形",
+    "choco": "snipaste",
+    "foss": false,
+    "content": "Snipaste",
+    "description": "Snipaste是一款截图贴图工具，将截图贴回到屏幕上，提高工作效率。",
+    "link": "https://www.snipaste.com/",
+    "winget": "",
+    "region": "foreign"
+  },
   "sogouinput": {
     "category": "工具类",
     "choco": "",
@@ -1927,6 +2797,16 @@
     "winget": "SublimeHQ.SublimeText.4",
     "foss": false,
     "region": "foreign"
+  },
+  "sunlogin": {
+    "category": "办公教育",
+    "choco": "",
+    "foss": false,
+    "content": "向日葵远程控制",
+    "description": "向日葵远程控制软件支持远程桌面、远程文件传输和远程运维管理。",
+    "link": "https://sunlogin.oray.com/",
+    "winget": "",
+    "region": "domestic"
   },
   "sunshine": {
     "category": "自托管工具",
@@ -2018,6 +2898,16 @@
     "winget": "Tencent.TencentMeeting",
     "region": "domestic"
   },
+  "tencentpcmgr": {
+    "category": "杀毒软件",
+    "choco": "",
+    "foss": false,
+    "content": "腾讯电脑管家",
+    "description": "腾讯电脑管家提供病毒查杀、系统加速、垃圾清理和软件管理等一站式电脑维护功能。",
+    "link": "https://guanjia.qq.com/",
+    "winget": "",
+    "region": "domestic"
+  },
   "tencentvideo": {
     "category": "多媒体工具",
     "choco": "",
@@ -2048,6 +2938,16 @@
     "foss": true,
     "region": "foreign"
   },
+  "tianyicloud": {
+    "category": "网盘工具",
+    "choco": "",
+    "foss": false,
+    "content": "天翼云盘",
+    "description": "天翼云盘是中国电信推出的云存储服务，提供文件备份、同步和在线预览。",
+    "link": "https://cloud.189.cn/",
+    "winget": "",
+    "region": "domestic"
+  },
   "tightvnc": {
     "category": "工具类",
     "choco": "TightVNC",
@@ -2066,6 +2966,16 @@
     "description": "TIM 是腾讯推出的轻聊版 QQ，去除了广告和娱乐功能，专注于办公沟通。",
     "link": "https://tim.qq.com/",
     "winget": "Tencent.TIM",
+    "region": "domestic"
+  },
+  "todesk": {
+    "category": "办公教育",
+    "choco": "",
+    "foss": false,
+    "content": "ToDesk",
+    "description": "ToDesk是一款免费的远程控制软件，支持远程办公和远程桌面连接。",
+    "link": "https://www.todesk.com/",
+    "winget": "",
     "region": "domestic"
   },
   "tor": {
@@ -2088,6 +2998,16 @@
     "foss": false,
     "region": "foreign"
   },
+  "trae": {
+    "category": "智能生成",
+    "choco": "",
+    "foss": false,
+    "content": "TRAE - AI编程",
+    "description": "TRAE是字节跳动推出的AI编程助手，辅助代码编写和调试。",
+    "link": "https://www.trae.ai/",
+    "winget": "",
+    "region": "domestic"
+  },
   "treesize": {
     "category": "工具类",
     "choco": "treesizefree",
@@ -2107,6 +3027,26 @@
     "winget": "CharlesMilette.TranslucentTB",
     "foss": true,
     "region": "foreign"
+  },
+  "ttvoice": {
+    "category": "聊天社交",
+    "choco": "",
+    "foss": false,
+    "content": "TT语音",
+    "description": "超好用的游戏交友平台，找人快、语音稳，专为游戏玩家打造。",
+    "link": "https://www.ttyuyin.com/",
+    "winget": "",
+    "region": "domestic"
+  },
+  "tubatoolbox": {
+    "category": "系统工具",
+    "choco": "",
+    "foss": false,
+    "content": "图吧工具箱",
+    "description": "图吧工具箱集成了大量硬件检测、系统测试和系统维护工具，一站式解决电脑问题。",
+    "link": "https://www.tbtool.cn/",
+    "winget": "",
+    "region": "domestic"
   },
   "twinkstarbrowser": {
     "category": "浏览器__追求纯净无广告",
@@ -2128,6 +3068,36 @@
     "foss": false,
     "region": "foreign"
   },
+  "ucbrowser": {
+    "category": "浏览器__办公/老网站兼容",
+    "choco": "",
+    "foss": false,
+    "content": "UC浏览器",
+    "description": "UC浏览器是一款高速浏览器，支持极速网页加载和视频播放。",
+    "link": "https://www.uc.cn/",
+    "winget": "",
+    "region": "domestic"
+  },
+  "ucdrive": {
+    "category": "网盘工具",
+    "choco": "",
+    "foss": false,
+    "content": "UC网盘",
+    "description": "UC网盘是UC浏览器推出的云存储服务，支持文件备份和多端同步。",
+    "link": "https://drive.uc.cn/",
+    "winget": "",
+    "region": "domestic"
+  },
+  "ultraiso": {
+    "category": "压缩刻录",
+    "choco": "ultraiso",
+    "foss": false,
+    "content": "软碟通 (UltraISO)",
+    "description": "UltraISO是一款光盘映像文件编辑工具，支持ISO文件的制作、编辑和转换。",
+    "link": "https://www.ultraiso.com/",
+    "winget": "",
+    "region": "foreign"
+  },
   "ungoogled": {
     "category": "浏览器__追求纯净无广告",
     "choco": "ungoogled-chromium",
@@ -2146,6 +3116,26 @@
     "link": "https://unity.com/",
     "winget": "Unity.UnityHub",
     "foss": false,
+    "region": "foreign"
+  },
+  "universalplayer": {
+    "category": "看剧必备",
+    "choco": "",
+    "foss": false,
+    "content": "万能视频播放器",
+    "description": "轻量极速无广告播放器，纵享极致观影体验，支持多种视频格式。",
+    "link": "https://www.umpv.com/",
+    "winget": "",
+    "region": "domestic"
+  },
+  "utorrent": {
+    "category": "下载工具",
+    "choco": "utorrent",
+    "foss": false,
+    "content": "uTorrent",
+    "description": "uTorrent是一款轻量级的BT下载客户端，占用资源少，下载速度快。",
+    "link": "https://www.utorrent.com/",
+    "winget": "BitTorrent.uTorrent",
     "region": "foreign"
   },
   "uv": {
@@ -2308,6 +3298,16 @@
     "winget": "Tencent.WeCom",
     "region": "domestic"
   },
+  "weiyun": {
+    "category": "网盘工具",
+    "choco": "",
+    "foss": false,
+    "content": "腾讯微云",
+    "description": "腾讯微云是腾讯推出的云存储服务，支持文件备份、同步和分享。",
+    "link": "https://www.weiyun.com/",
+    "winget": "Tencent.Weiyun",
+    "region": "domestic"
+  },
   "wetype": {
     "category": "工具类",
     "choco": "",
@@ -2338,6 +3338,16 @@
     "foss": true,
     "region": "foreign"
   },
+  "winmaster": {
+    "category": "系统工具",
+    "choco": "",
+    "foss": false,
+    "content": "Windows优化大师",
+    "description": "Windows优化大师是一款系统优化工具，提供系统清理、加速和修复功能。",
+    "link": "https://www.youhua.com/",
+    "winget": "",
+    "region": "domestic"
+  },
   "winrar": {
     "category": "工具类",
     "choco": "winrar",
@@ -2356,6 +3366,16 @@
     "link": "https://winscp.net/",
     "winget": "WinSCP.WinSCP",
     "foss": true,
+    "region": "foreign"
+  },
+  "winzip": {
+    "category": "压缩刻录",
+    "choco": "winzip",
+    "foss": false,
+    "content": "WinZip",
+    "description": "WinZip是一款老牌压缩工具，支持ZIP、RAR等多种压缩格式。",
+    "link": "https://www.winzip.com/",
+    "winget": "WinZip.WinZip",
     "region": "foreign"
   },
   "wireguard": {
@@ -2378,6 +3398,16 @@
     "foss": true,
     "region": "foreign"
   },
+  "wisecare": {
+    "category": "系统工具",
+    "choco": "wise-care-365",
+    "foss": false,
+    "content": "Wise Care 365",
+    "description": "Wise Care 365是一款全面的系统优化工具，提供注册表清理和系统加速功能。",
+    "link": "https://www.wisecleaner.com/wise-care-365.html",
+    "winget": "Wise.WiseCare365",
+    "region": "foreign"
+  },
   "wiztree": {
     "category": "工具类",
     "choco": "wiztree",
@@ -2387,6 +3417,16 @@
     "winget": "AntibodySoftware.WizTree",
     "foss": false,
     "region": "foreign"
+  },
+  "workbuddy": {
+    "category": "智能生成",
+    "choco": "",
+    "foss": false,
+    "content": "WorkBuddy",
+    "description": "WorkBuddy是腾讯推出的AI办公助手，提升工作效率和协作体验。",
+    "link": "https://workbuddy.tencent.com/",
+    "winget": "Tencent.WorkBuddy",
+    "region": "domestic"
   },
   "wpsoffice": {
     "category": "办公工具",
@@ -2408,6 +3448,86 @@
     "foss": false,
     "region": "foreign"
   },
+  "xiaohongshu": {
+    "category": "聊天社交",
+    "choco": "",
+    "foss": false,
+    "content": "小红书",
+    "description": "3亿人的生活经验，都在小红书。分享生活、美食、旅行、美妆等实用内容。",
+    "link": "https://www.xiaohongshu.com/",
+    "winget": "",
+    "region": "domestic"
+  },
+  "xiaoniaowallpaper": {
+    "category": "桌面美化",
+    "choco": "",
+    "foss": false,
+    "content": "小鸟动态壁纸",
+    "description": "小鸟动态壁纸是一款轻量级动态壁纸软件，支持视频和动态壁纸设置。",
+    "link": "https://www.xiao-niao.com/",
+    "winget": "",
+    "region": "domestic"
+  },
+  "xiaoyaobi": {
+    "category": "输入法",
+    "choco": "",
+    "foss": false,
+    "content": "逍遥笔手写输入法",
+    "description": "逍遥笔手写输入法专为手写输入设计，支持鼠标、触控笔和触屏手写识别。",
+    "link": "https://www.xyinput.com/",
+    "winget": "",
+    "region": "domestic"
+  },
+  "xiaoyiinput": {
+    "category": "输入法",
+    "choco": "",
+    "foss": false,
+    "content": "华为小艺输入法",
+    "description": "华为小艺输入法是华为推出的智能输入法，支持拼音、语音和滑动输入。",
+    "link": "https://consumer.huawei.com/",
+    "winget": "",
+    "region": "domestic"
+  },
+  "ximalaya": {
+    "category": "音乐发烧友",
+    "choco": "",
+    "foss": false,
+    "content": "喜马拉雅",
+    "description": "免费听海量小说、相声、知识付费课程，下载送VIP会员。",
+    "link": "https://www.ximalaya.com/",
+    "winget": "Ximalaya.Ximalaya",
+    "region": "domestic"
+  },
+  "xnview": {
+    "category": "图片图形",
+    "choco": "xnview",
+    "foss": false,
+    "content": "XnView",
+    "description": "XnView是一款高效的图片查看和管理工具，支持500多种图像格式。",
+    "link": "https://www.xnview.com/",
+    "winget": "XnSoft.XnView",
+    "region": "foreign"
+  },
+  "xunlei": {
+    "category": "下载工具",
+    "choco": "",
+    "foss": false,
+    "content": "迅雷",
+    "description": "迅雷是一款高速下载工具，支持BT、磁力链、电驴等多种下载协议，拥有强大的加速引擎。",
+    "link": "https://www.xunlei.com/",
+    "winget": "",
+    "region": "domestic"
+  },
+  "xunleiplayer": {
+    "category": "视频软件",
+    "choco": "",
+    "foss": false,
+    "content": "迅雷影音",
+    "description": "迅雷影音是迅雷推出的本地视频播放器，支持边下边播和多种视频格式。",
+    "link": "https://video.xunlei.com/",
+    "winget": "",
+    "region": "domestic"
+  },
   "yarn": {
     "category": "开发工具",
     "choco": "yarn",
@@ -2426,6 +3546,36 @@
     "description": "有道笔记是网易的云笔记工具，支持多端同步和OCR识别。",
     "link": "https://note.youdao.com/",
     "winget": "NetEase.YoudaoNote",
+    "region": "domestic"
+  },
+  "youku": {
+    "category": "看剧必备",
+    "choco": "",
+    "foss": false,
+    "content": "优酷",
+    "description": "聚焦全网精品内容，涵盖电视剧、综艺、电影、动漫等海量视频资源。",
+    "link": "https://www.youku.com/",
+    "winget": "Youku.Youku",
+    "region": "domestic"
+  },
+  "yuanbao": {
+    "category": "智能生成",
+    "choco": "",
+    "foss": false,
+    "content": "元宝",
+    "description": "腾讯元宝是腾讯推出的AI智能助手，支持智能问答、创作辅助和知识咨询。",
+    "link": "https://yuanbao.tencent.com/",
+    "winget": "Tencent.Yuanbao",
+    "region": "domestic"
+  },
+  "yuanqiwallpaper": {
+    "category": "桌面美化",
+    "choco": "",
+    "foss": false,
+    "content": "元气桌面壁纸",
+    "description": "元气桌面壁纸提供海量高清动态壁纸和精美主题，让你的桌面焕然一新。",
+    "link": "https://www.yqdn.com/",
+    "winget": "",
     "region": "domestic"
   },
   "zoom": {
