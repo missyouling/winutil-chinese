@@ -78,7 +78,8 @@ function Invoke-WPFUIElements {
             ComboItems  = $entryInfo.ComboItems
             Checked     = $entryInfo.Checked
             ButtonWidth = $entryInfo.ButtonWidth
-            GroupName   = $entryInfo.GroupName  # Added for RadioButton groupings
+            GroupName   = $entryInfo.GroupName
+            Region      = if ($entryInfo.region) { $entryInfo.region } else { "foreign" }
         }
 
         if (-not $organizedData.ContainsKey($entryObject.Panel)) {
@@ -143,8 +144,13 @@ function Invoke-WPFUIElements {
             $itemsControl.Items.Add($label) | Out-Null
             $sync[$category] = $label
 
-            # Sort entries by type (checkboxes first, then buttons, then comboboxes) and then alphabetically by Content
+            # Sort entries: domestic first, then by type, then alphabetically by Content
             $entries = $organizedData[$panelKey][$category] | Sort-Object @{Expression = {
+                switch ($_.Region) {
+                    'domestic' { 0 }
+                    default { 1 }
+                }
+            }}, @{Expression = {
                 switch ($_.Type) {
                     'Button' { 1 }
                     'Combobox' { 2 }
