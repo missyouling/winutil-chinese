@@ -7,11 +7,17 @@ function Find-AppsByNameOrDescription {
             Filters application entries by name or description using literal string matching.
             Respects collapsed category state and handles null $sync gracefully.
 
+            When -Category is provided with a value like "浏览器", apps whose category
+            starts with "浏览器" or "浏览器__" both match (prefix + sub-category match).
+            This allows organized categories like "浏览器__极简优先推荐" to show under
+            the "浏览器" filter chip.
+
         .PARAMETER SearchString
             The string to be searched for. Wildcards are treated as literal characters.
 
         .PARAMETER Category
-            When provided, only applications in this exact category are shown.
+            When provided, only applications in this exact category or sub-category
+            (category__sub) are shown.
 
         .NOTES
             - Uses module-scope $sync (no parameter needed; inherits from caller's scope)
@@ -77,6 +83,9 @@ function Find-AppsByNameOrDescription {
         # Escape wildcard characters for literal matching
         $escapedSearchString = [System.Management.Automation.WildcardPattern]::Escape($SearchString)
 
+        # Determine if we are filtering by category
+        $hasCategoryFilter = -not [string]::IsNullOrWhiteSpace($Category)
+
         # Perform search
         $sync.ItemsControl.Items | ForEach-Object {
             # Each item is a StackPanel container with Children[0] = label, Children[1] = WrapPanel
@@ -100,14 +109,23 @@ function Find-AppsByNameOrDescription {
 
                     # Check if app matches search criteria
                     if ($null -ne $appEntry) {
-                        # Prefix match: "工具类" matches "工具类__输入法", "浏览器" matches "浏览器__极简优先推荐" etc.
-                        $catFilter = if (-not [string]::IsNullOrWhiteSpace($Category)) { $Category } else { "" }
-                        $appCat = if ($appEntry.Category) { $appEntry.Category } else { "" }
-                        $categoryMatch = $catFilter -ne "" -and ($appCat -eq $catFilter -or $appCat -like "$catFilter__*")
-                        $contentMatch = $catFilter -eq "" -and $appEntry.Content -like "*$escapedSearchString*"
-                        $descriptionMatch = $catFilter -eq "" -and $appEntry.Description -like "*$escapedSearchString*"
+                        $appCategory = if ($appEntry.Category) { $appEntry.Category } else { "" }
+                        $shouldShow = $false
 
-                        if ($categoryMatch -or $contentMatch -or $descriptionMatch) {
+                        if ($hasCategoryFilter) {
+                            # Category filter: exact match OR sub-category prefix match
+                            # "浏览器" matches both "浏览器" and  "浏览器__极简优先推荐"
+                            $shouldShow = ($appCategory -eq $Category) -or
+                                          ($appCategory -like ($Category + "__*"))
+                        }
+
+                        if (-not $hasCategoryFilter) {
+                            # Text search: match by content or description
+                            $shouldShow = $appEntry.Content -like "*$escapedSearchString*" -or
+                                          $appEntry.Description -like "*$escapedSearchString*"
+                        }
+
+                        if ($shouldShow) {
                             # Show the App and mark that this category has a match
                             $appControl.Visibility = [Windows.Visibility]::Visible
                             $categoryHasMatch = $true
@@ -128,7 +146,7 @@ function Find-AppsByNameOrDescription {
                     $_.Visibility = [Windows.Visibility]::Visible
                     # Update category label to show expanded state (-)
                     if ($categoryLabel.Content -like "+*") {
-                        $categoryLabel.Content = $categoryLabel.Content -replace "^\+ ", "- "
+                        $categoryLabel.Content = $categoryLabel.Content -replace "^\+\s", "- "
                     }
                 }
                 else {
