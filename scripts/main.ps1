@@ -197,51 +197,7 @@ $sync.SearchBarClearButton.Add_Click({
     $sync.SearchBar.SelectAll()
 })
 
-# add some shortcuts for people that don't like clicking
-function Invoke-WinUtilFontScaleStep([double]$Step) { $sync.FontScalingSlider.Value = [math]::Max(0.75, [math]::Min(2.0, $sync.FontScalingSlider.Value + $Step)); Invoke-WinUtilFontScaling -ScaleFactor $sync.FontScalingSlider.Value }
-
-$commonKeyEvents = {
-    # Prevent shortcuts from executing if a process is already running
-    if ($sync.ProcessRunning -eq $true) {
-        return
-    }
-
-    # Handle key presses of single keys
-    switch ($_.Key) {
-        "Escape" { $sync.SearchBar.Text = "" }
-    }
-    # Handle Alt key combinations for navigation
-    if ($_.KeyboardDevice.Modifiers -eq "Alt") {
-        $keyEventArgs = $_
-        switch ($_.SystemKey) {
-            "I" { Invoke-WPFButton "WPFTab1BT"; $keyEventArgs.Handled = $true } # Navigate to Install tab and suppress Windows Warning Sound
-            "T" { Invoke-WPFButton "WPFTab2BT"; $keyEventArgs.Handled = $true } # Navigate to Tweaks tab
-            "C" { Invoke-WPFButton "WPFTab3BT"; $keyEventArgs.Handled = $true } # Navigate to Config tab
-            "U" { Invoke-WPFButton "WPFTab4BT"; $keyEventArgs.Handled = $true } # Navigate to Updates tab
-            "W" { Invoke-WPFButton "WPFTab5BT"; $keyEventArgs.Handled = $true } # Navigate to Win11ISO tab
-        }
-    }
-    # Handle Ctrl key combinations for specific actions
-    if ($_.KeyboardDevice.Modifiers -eq "Ctrl") {
-        $keyEventArgs = $_
-        switch ($_.Key) {
-            "F" { $sync.SearchBar.Focus() } # Focus on the search bar
-            "Q" { $this.Close() } # Close the application
-        }
-    }
-    $ctrlShiftModifiers = [Windows.Input.ModifierKeys]::Control -bor [Windows.Input.ModifierKeys]::Shift
-    if ($_.KeyboardDevice.Modifiers -eq "Ctrl" -or $_.KeyboardDevice.Modifiers -eq $ctrlShiftModifiers) {
-        $keyEventArgs = $_
-        switch ($_.Key) {
-            { $_ -in "OemPlus", "Add" } { Invoke-WinUtilFontScaleStep 0.05; $keyEventArgs.Handled = $true }
-            { $_ -in "OemMinus", "Subtract" } { Invoke-WinUtilFontScaleStep -0.05; $keyEventArgs.Handled = $true }
-        }
-    }
-}
-$sync["Form"].Add_PreViewKeyDown($commonKeyEvents)
-$sync["Form"].Add_PreviewMouseWheel({
-    if ([Windows.Input.Keyboard]::Modifiers -eq "Ctrl") { Invoke-WinUtilFontScaleStep $(if ($_.Delta -gt 0) { 0.05 } else { -0.05 }); $_.Handled = $true }
-})
+# 键盘快捷键支持已移除（用户需求）
 
 $sync["Form"].Add_MouseLeftButtonDown({
     Invoke-WPFPopup -Action "Hide" -Popups @("Settings", "Theme", "FontScaling")
