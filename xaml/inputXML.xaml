@@ -1047,7 +1047,7 @@
                         </TextBlock>
                     </ToggleButton.Content>
                 </ToggleButton>
-                <ToggleButton Style="{StaticResource TabToggleButton}" Margin="0,0,5,0" Height="{DynamicResource TabButtonHeight}" Width="{DynamicResource TabButtonWidth}"
+                <ToggleButton Style="{StaticResource TabToggleButton}" Margin="0,0,5,0" Height="{DynamicResource TabButtonHeight}" Width="130"
                     Background="{DynamicResource ButtonUpdatesBackgroundColor}" Foreground="{DynamicResource ButtonUpdatesForegroundColor}" FontWeight="Bold" Name="WPFTab4BT">
                     <ToggleButton.Content>
                         <TextBlock FontSize="{DynamicResource TabButtonFontSize}" Background="Transparent" Foreground="{DynamicResource ButtonUpdatesForegroundColor}">
@@ -1244,6 +1244,8 @@
                     </Border>
                 </Popup>
 
+                    <!-- Separator + Window Control Buttons -->
+                    <Separator Width="1" Background="{DynamicResource BorderColor}" Margin="4,4,4,4"/>
                     <Button
                         Content="&#xE921;"
                         Style="{StaticResource HoverButtonStyle}"
@@ -1252,7 +1254,7 @@
                         Background="{DynamicResource MainBackgroundColor}"
                         Width="{DynamicResource IconButtonSize}" Height="{DynamicResource IconButtonSize}"
                         HorizontalAlignment="Right" VerticalAlignment="Center"
-                        Margin="0"
+                        Margin="2,0"
                         FontFamily="Segoe MDL2 Assets"
                         Foreground="{DynamicResource MainForegroundColor}"
                         FontSize="{DynamicResource CloseIconFontSize}"
@@ -1265,7 +1267,7 @@
                         Background="{DynamicResource MainBackgroundColor}"
                         Width="{DynamicResource IconButtonSize}" Height="{DynamicResource IconButtonSize}"
                         HorizontalAlignment="Right" VerticalAlignment="Center"
-                        Margin="0,0,0,0"
+                        Margin="2,0"
                         FontFamily="Segoe MDL2 Assets"
                         Foreground="{DynamicResource MainForegroundColor}"
                         FontSize="{DynamicResource CloseIconFontSize}"
@@ -1273,19 +1275,18 @@
                         <Button.Style>
                             <Style TargetType="Button" BasedOn="{StaticResource HoverButtonStyle}">
                                 <Setter Property="Content" Value="&#xE922;"/>
-                                <Setter Property="ToolTip" Value="Maximize"/>
+                                <Setter Property="ToolTip" Value="最大化"/>
                                 <Setter Property="AutomationProperties.Name" Value="Maximize"/>
                                 <Style.Triggers>
                                     <DataTrigger Binding="{Binding WindowState, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Value="Maximized">
                                         <Setter Property="Content" Value="&#xE923;"/>
-                                        <Setter Property="ToolTip" Value="Restore"/>
+                                        <Setter Property="ToolTip" Value="还原"/>
                                         <Setter Property="AutomationProperties.Name" Value="Restore"/>
                                     </DataTrigger>
                                 </Style.Triggers>
                             </Style>
                         </Button.Style>
                     </Button>
-
                     <Button
                         Content="&#xE8BB;"
                         Style="{StaticResource HoverButtonStyle}"
@@ -1294,7 +1295,7 @@
                         Background="{DynamicResource MainBackgroundColor}"
                         Width="{DynamicResource IconButtonSize}" Height="{DynamicResource IconButtonSize}"
                         HorizontalAlignment="Right" VerticalAlignment="Center"
-                        Margin="0"
+                        Margin="2,0"
                         FontFamily="Segoe MDL2 Assets"
                         Foreground="{DynamicResource MainForegroundColor}"
                         FontSize="{DynamicResource CloseIconFontSize}"
