@@ -46,7 +46,11 @@ function Get-WinUtilSelectedPackages {
                 }
             }
             "Winget" {
-                Add-PackageId -Target $packagesWinget -PackageId $package.winget
+                if ([string]::IsNullOrWhiteSpace([string]$package.winget) -or $package.winget -eq "na") {
+                    Add-PackageId -Target $packagesChoco -PackageId $package.choco
+                } else {
+                    Add-PackageId -Target $packagesWinget -PackageId $package.winget
+                }
             }
         }
     }
