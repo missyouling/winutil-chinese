@@ -43,7 +43,9 @@ function Initialize-InstallCategoryAppList {
 
             # Add category label to container
             $toggleButton = New-Object Windows.Controls.Label
-            $toggleButton.Content = "- $Category"
+            # Strip prefix "父分类__" for display: "工具类__输入法" → "输入法"
+            $displayCategory = if ($category -match "__") { $category -replace "^.*__", "" } else { $category }
+            $toggleButton.Content = "- $displayCategory"
             $toggleButton.Tag = "CategoryToggleButton"
             $toggleButton.SetResourceReference([Windows.Controls.Control]::FontSizeProperty, "HeaderFontSize")
             $toggleButton.SetResourceReference([Windows.Controls.Control]::FontFamilyProperty, "HeaderFontFamily")
@@ -94,7 +96,15 @@ function Initialize-InstallCategoryAppList {
             $sync.InstallAppRenderQueue.Enqueue([pscustomobject]@{
                 Category = $category
                 TargetElement = $wrapPanel
-                AppKeys = @($appsByCategory[$category] | Sort-Object)
+                AppKeys = @($appsByCategory[$category] | Sort-Object @{Expression = {
+                    # Sort by region: domestic first, then foreign
+                    $app = $Apps.$_
+                    if ($app.Region -eq "domestic") { 0 } else { 1 }
+                }}, @{Expression = {
+                    # Then sort by content name
+                    $app = $Apps.$_
+                    $app.Content
+                }})
             })
         }
 

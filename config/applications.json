@@ -1,6 +1,6 @@
 {
   "115life": {
-    "category": "网盘工具",
+    "category": "工具类__网盘工具",
     "choco": "",
     "foss": false,
     "content": "115生活",
@@ -10,7 +10,7 @@
     "region": "domestic"
   },
   "123cloud": {
-    "category": "网盘工具",
+    "category": "工具类__网盘工具",
     "choco": "",
     "foss": false,
     "content": "123云盘",
@@ -30,7 +30,7 @@
     "region": "foreign"
   },
   "360antivirus": {
-    "category": "杀毒软件",
+    "category": "工具类__杀毒软件",
     "choco": "",
     "foss": false,
     "content": "360杀毒",
@@ -50,7 +50,7 @@
     "region": "domestic"
   },
   "360clouddrive": {
-    "category": "网盘工具",
+    "category": "工具类__网盘工具",
     "choco": "",
     "foss": false,
     "content": "360AI云盘",
@@ -60,7 +60,7 @@
     "region": "domestic"
   },
   "360deskasst": {
-    "category": "桌面美化",
+    "category": "工具类__桌面美化",
     "choco": "",
     "foss": false,
     "content": "360桌面助手",
@@ -70,7 +70,7 @@
     "region": "domestic"
   },
   "360driver": {
-    "category": "驱动工具",
+    "category": "工具类__驱动工具",
     "choco": "",
     "foss": false,
     "content": "360驱动大师",
@@ -80,7 +80,7 @@
     "region": "domestic"
   },
   "360rescue": {
-    "category": "杀毒软件",
+    "category": "工具类__杀毒软件",
     "choco": "",
     "foss": false,
     "content": "360急救箱",
@@ -100,7 +100,7 @@
     "region": "domestic"
   },
   "360wallpaper": {
-    "category": "桌面美化",
+    "category": "工具类__桌面美化",
     "choco": "",
     "foss": false,
     "content": "360壁纸",
@@ -250,7 +250,7 @@
     "region": "foreign"
   },
   "aida64": {
-    "category": "系统工具",
+    "category": "工具类__系统工具",
     "choco": "aida64",
     "foss": false,
     "content": "AIDA64",
@@ -300,7 +300,7 @@
     "region": "foreign"
   },
   "aliyundrive": {
-    "category": "网盘工具",
+    "category": "工具类__网盘工具",
     "choco": "",
     "foss": false,
     "content": "阿里云盘",
@@ -320,7 +320,7 @@
     "region": "foreign"
   },
   "anyburn": {
-    "category": "压缩刻录",
+    "category": "工具类__压缩刻录",
     "choco": "anyburn",
     "foss": false,
     "content": "AnyBurn",
@@ -340,7 +340,7 @@
     "region": "foreign"
   },
   "aomeipartition": {
-    "category": "系统工具",
+    "category": "工具类__系统工具",
     "choco": "aomei-partition-assistant",
     "foss": false,
     "content": "傲梅分区助手",
@@ -350,7 +350,7 @@
     "region": "domestic"
   },
   "atrust": {
-    "category": "杀毒软件",
+    "category": "工具类__杀毒软件",
     "choco": "",
     "foss": false,
     "content": "aTrust 零信任安全",
@@ -390,7 +390,7 @@
     "region": "foreign"
   },
   "avira": {
-    "category": "杀毒软件",
+    "category": "工具类__杀毒软件",
     "choco": "avira-antivirus",
     "foss": false,
     "content": "Avira 小红伞",
@@ -430,7 +430,7 @@
     "region": "domestic"
   },
   "bandizip": {
-    "category": "压缩刻录",
+    "category": "工具类__压缩刻录",
     "choco": "bandizip",
     "foss": false,
     "content": "Bandizip",
@@ -440,7 +440,7 @@
     "region": "foreign"
   },
   "baofengplayer": {
-    "category": "视频软件",
+    "category": "多媒体工具__视频软件",
     "choco": "baofengplayer",
     "foss": false,
     "content": "暴风影音",
@@ -470,7 +470,7 @@
     "region": "foreign"
   },
   "bilibdown": {
-    "category": "下载工具",
+    "category": "工具类__下载工具",
     "choco": "",
     "foss": false,
     "content": "bilibdown | B站视频下载",
@@ -490,7 +490,7 @@
     "region": "domestic"
   },
   "binginput": {
-    "category": "输入法",
+    "category": "工具类__输入法",
     "choco": "",
     "foss": false,
     "content": "必应Bing输入法",
@@ -500,7 +500,7 @@
     "region": "foreign"
   },
   "bitcomet": {
-    "category": "下载工具",
+    "category": "工具类__下载工具",
     "choco": "bitcomet",
     "foss": false,
     "content": "BitComet",
@@ -510,7 +510,7 @@
     "region": "foreign"
   },
   "bitspirit": {
-    "category": "下载工具",
+    "category": "工具类__下载工具",
     "choco": "",
     "foss": false,
     "content": "比特精灵",
@@ -550,7 +550,7 @@
     "region": "foreign"
   },
   "bodanmusic": {
-    "category": "音乐发烧友",
+    "category": "多媒体工具__音乐发烧友",
     "choco": "",
     "foss": false,
     "content": "波点音乐",
@@ -580,7 +580,7 @@
     "region": "foreign"
   },
   "cadviewer": {
-    "category": "图片图形",
+    "category": "工具类__图片图形",
     "choco": "",
     "foss": false,
     "content": "CAD迷你看图",
@@ -610,7 +610,7 @@
     "region": "domestic"
   },
   "cctv": {
-    "category": "视频软件",
+    "category": "多媒体工具__视频软件",
     "choco": "",
     "foss": false,
     "content": "央视影音",
@@ -620,7 +620,7 @@
     "region": "domestic"
   },
   "cdburn": {
-    "category": "压缩刻录",
+    "category": "工具类__压缩刻录",
     "choco": "cdburnerxp",
     "foss": true,
     "content": "光盘刻录",
@@ -630,7 +630,7 @@
     "region": "foreign"
   },
   "cdrivecleaner": {
-    "category": "杀毒软件",
+    "category": "工具类__杀毒软件",
     "choco": "",
     "foss": false,
     "content": "C盘清理专家",
@@ -640,7 +640,7 @@
     "region": "domestic"
   },
   "cdriveoptimizer": {
-    "category": "系统工具",
+    "category": "工具类__系统工具",
     "choco": "",
     "foss": false,
     "content": "C盘清理优化大师",
@@ -670,7 +670,7 @@
     "region": "domestic"
   },
   "chatbox": {
-    "category": "智能生成",
+    "category": "工具类__智能生成",
     "choco": "",
     "foss": false,
     "content": "Chatbox",
@@ -700,7 +700,7 @@
     "region": "foreign"
   },
   "cherrystudio": {
-    "category": "智能生成",
+    "category": "工具类__智能生成",
     "choco": "",
     "foss": false,
     "content": "Cherry Studio",
@@ -780,7 +780,7 @@
     "region": "foreign"
   },
   "cmcccloud": {
-    "category": "网盘工具",
+    "category": "工具类__网盘工具",
     "choco": "",
     "foss": false,
     "content": "中国移动云盘",
@@ -800,7 +800,7 @@
     "region": "foreign"
   },
   "coze": {
-    "category": "智能生成",
+    "category": "工具类__智能生成",
     "choco": "",
     "foss": false,
     "content": "扣子 Coze",
@@ -890,7 +890,7 @@
     "region": "foreign"
   },
   "diskgenius": {
-    "category": "系统工具",
+    "category": "工具类__系统工具",
     "choco": "",
     "foss": false,
     "content": "DiskGenius",
@@ -900,7 +900,7 @@
     "region": "domestic"
   },
   "dismplusplus": {
-    "category": "系统工具",
+    "category": "工具类__系统工具",
     "choco": "",
     "foss": true,
     "content": "Dism++",
@@ -990,7 +990,7 @@
     "region": "domestic"
   },
   "drivergenius": {
-    "category": "驱动工具",
+    "category": "工具类__驱动工具",
     "choco": "",
     "foss": false,
     "content": "驱动精灵",
@@ -1000,7 +1000,7 @@
     "region": "domestic"
   },
   "driverlife": {
-    "category": "驱动工具",
+    "category": "工具类__驱动工具",
     "choco": "",
     "foss": false,
     "content": "驱动人生",
@@ -1050,7 +1050,7 @@
     "region": "foreign"
   },
   "emule": {
-    "category": "下载工具",
+    "category": "工具类__下载工具",
     "choco": "emule",
     "foss": true,
     "content": "电驴 (eMule)",
@@ -1080,7 +1080,7 @@
     "region": "foreign"
   },
   "eset": {
-    "category": "杀毒软件",
+    "category": "工具类__杀毒软件",
     "choco": "eset-internet-security",
     "foss": false,
     "content": "ESET",
@@ -1100,7 +1100,7 @@
     "region": "foreign"
   },
   "evrecord": {
-    "category": "视频软件",
+    "category": "多媒体工具__视频软件",
     "choco": "",
     "foss": false,
     "content": "EV录屏",
@@ -1180,7 +1180,7 @@
     "region": "domestic"
   },
   "furmark": {
-    "category": "系统工具",
+    "category": "工具类__系统工具",
     "choco": "furmark",
     "foss": false,
     "content": "FurMark",
@@ -1190,7 +1190,7 @@
     "region": "foreign"
   },
   "fxsound": {
-    "category": "音乐发烧友",
+    "category": "多媒体工具__音乐发烧友",
     "choco": "fxsound",
     "foss": false,
     "content": "FxSound",
@@ -1200,7 +1200,7 @@
     "region": "foreign"
   },
   "geekuninstall": {
-    "category": "杀毒软件",
+    "category": "工具类__杀毒软件",
     "choco": "geekuninstaller",
     "foss": false,
     "content": "Geek Uninstaller",
@@ -1290,7 +1290,7 @@
     "region": "foreign"
   },
   "googlepinyin": {
-    "category": "输入法",
+    "category": "工具类__输入法",
     "choco": "",
     "foss": true,
     "content": "谷歌拼音输入法",
@@ -1300,7 +1300,7 @@
     "region": "foreign"
   },
   "gopeed": {
-    "category": "下载工具",
+    "category": "工具类__下载工具",
     "choco": "gopeed",
     "foss": true,
     "content": "Gopeed",
@@ -1360,7 +1360,7 @@
     "region": "foreign"
   },
   "hibituninstall": {
-    "category": "杀毒软件",
+    "category": "工具类__杀毒软件",
     "choco": "hibit-uninstaller",
     "foss": false,
     "content": "HiBit Uninstaller",
@@ -1370,7 +1370,7 @@
     "region": "foreign"
   },
   "honeyview": {
-    "category": "图片图形",
+    "category": "工具类__图片图形",
     "choco": "honeyview",
     "foss": false,
     "content": "Honeyview",
@@ -1380,7 +1380,7 @@
     "region": "foreign"
   },
   "huaweicloud": {
-    "category": "网盘工具",
+    "category": "工具类__网盘工具",
     "choco": "",
     "foss": false,
     "content": "华为云空间",
@@ -1400,7 +1400,7 @@
     "region": "foreign"
   },
   "huorong": {
-    "category": "杀毒软件",
+    "category": "工具类__杀毒软件",
     "choco": "",
     "foss": false,
     "content": "火绒安全软件",
@@ -1410,7 +1410,7 @@
     "region": "domestic"
   },
   "huya": {
-    "category": "看剧必备",
+    "category": "多媒体工具__看剧必备",
     "choco": "",
     "foss": false,
     "content": "虎牙直播",
@@ -1440,7 +1440,7 @@
     "region": "foreign"
   },
   "iflytekinput": {
-    "category": "输入法",
+    "category": "工具类__输入法",
     "choco": "",
     "foss": false,
     "content": "讯飞输入法",
@@ -1480,7 +1480,7 @@
     "region": "foreign"
   },
   "iobituninstaller": {
-    "category": "系统工具",
+    "category": "工具类__系统工具",
     "choco": "iobit-uninstaller",
     "foss": false,
     "content": "IObit Uninstaller",
@@ -1490,7 +1490,7 @@
     "region": "foreign"
   },
   "iqiyi": {
-    "category": "看剧必备",
+    "category": "多媒体工具__看剧必备",
     "choco": "",
     "foss": false,
     "content": "爱奇艺",
@@ -1590,7 +1590,7 @@
     "region": "foreign"
   },
   "jimeng": {
-    "category": "智能生成",
+    "category": "工具类__智能生成",
     "choco": "",
     "foss": false,
     "content": "即梦AI",
@@ -1600,7 +1600,7 @@
     "region": "domestic"
   },
   "jipinwubi": {
-    "category": "输入法",
+    "category": "工具类__输入法",
     "choco": "",
     "foss": false,
     "content": "极品五笔",
@@ -1620,7 +1620,7 @@
     "region": "foreign"
   },
   "kanpic": {
-    "category": "图片图形",
+    "category": "工具类__图片图形",
     "choco": "",
     "foss": false,
     "content": "看图王",
@@ -1630,7 +1630,7 @@
     "region": "domestic"
   },
   "kaspersky": {
-    "category": "杀毒软件",
+    "category": "工具类__杀毒软件",
     "choco": "kaspersky-internet-security",
     "foss": false,
     "content": "卡巴斯基",
@@ -1660,7 +1660,7 @@
     "region": "foreign"
   },
   "kimi": {
-    "category": "智能生成",
+    "category": "工具类__智能生成",
     "choco": "",
     "foss": false,
     "content": "Kimi 智能助手",
@@ -1670,7 +1670,7 @@
     "region": "domestic"
   },
   "kingsoftav": {
-    "category": "杀毒软件",
+    "category": "工具类__杀毒软件",
     "choco": "",
     "foss": false,
     "content": "金山毒霸",
@@ -1710,7 +1710,7 @@
     "region": "domestic"
   },
   "kmplayer": {
-    "category": "视频软件",
+    "category": "多媒体工具__视频软件",
     "choco": "kmplayer",
     "foss": false,
     "content": "KMPlayer",
@@ -1730,7 +1730,7 @@
     "region": "foreign"
   },
   "kuaidoudownloader": {
-    "category": "下载工具",
+    "category": "工具类__下载工具",
     "choco": "",
     "foss": false,
     "content": "快抖下载器",
@@ -1740,7 +1740,7 @@
     "region": "domestic"
   },
   "kugou": {
-    "category": "音乐发烧友",
+    "category": "多媒体工具__音乐发烧友",
     "choco": "",
     "foss": false,
     "content": "酷狗音乐",
@@ -1750,7 +1750,7 @@
     "region": "domestic"
   },
   "kuwo": {
-    "category": "音乐发烧友",
+    "category": "多媒体工具__音乐发烧友",
     "choco": "",
     "foss": false,
     "content": "酷我音乐",
@@ -1790,7 +1790,7 @@
     "region": "foreign"
   },
   "livelywallpaper": {
-    "category": "桌面美化",
+    "category": "工具类__桌面美化",
     "choco": "",
     "foss": true,
     "content": "Lively Wallpaper",
@@ -1800,7 +1800,7 @@
     "region": "foreign"
   },
   "livepartner": {
-    "category": "看剧必备",
+    "category": "多媒体工具__看剧必备",
     "choco": "",
     "foss": false,
     "content": "直播伴侣",
@@ -1820,7 +1820,7 @@
     "region": "foreign"
   },
   "ludashi": {
-    "category": "系统工具",
+    "category": "工具类__系统工具",
     "choco": "",
     "foss": false,
     "content": "鲁大师",
@@ -1860,7 +1860,7 @@
     "region": "domestic"
   },
   "meitu": {
-    "category": "图片图形",
+    "category": "工具类__图片图形",
     "choco": "",
     "foss": false,
     "content": "美图秀秀",
@@ -1870,7 +1870,7 @@
     "region": "domestic"
   },
   "mgtv": {
-    "category": "看剧必备",
+    "category": "多媒体工具__看剧必备",
     "choco": "",
     "foss": false,
     "content": "芒果TV",
@@ -1880,7 +1880,7 @@
     "region": "domestic"
   },
   "microsoftoffice": {
-    "category": "办公教育",
+    "category": "工具类__办公教育",
     "choco": "office365business",
     "foss": false,
     "content": "微软 Office 365",
@@ -1920,7 +1920,7 @@
     "region": "foreign"
   },
   "motrix": {
-    "category": "下载工具",
+    "category": "工具类__下载工具",
     "choco": "motrix",
     "foss": true,
     "content": "Motrix",
@@ -2000,7 +2000,7 @@
     "region": "foreign"
   },
   "nanoai": {
-    "category": "智能生成",
+    "category": "工具类__智能生成",
     "choco": "",
     "foss": false,
     "content": "纳米AI",
@@ -2020,7 +2020,7 @@
     "region": "foreign"
   },
   "ndm": {
-    "category": "下载工具",
+    "category": "工具类__下载工具",
     "choco": "neatdownloadmanager",
     "foss": false,
     "content": "NDM (Neat Download Manager)",
@@ -2050,7 +2050,7 @@
     "region": "foreign"
   },
   "neteasepopcorn": {
-    "category": "视频软件",
+    "category": "多媒体工具__视频软件",
     "choco": "",
     "foss": false,
     "content": "网易爆米花",
@@ -2120,7 +2120,7 @@
     "region": "foreign"
   },
   "norton": {
-    "category": "杀毒软件",
+    "category": "工具类__杀毒软件",
     "choco": "norton-security",
     "foss": false,
     "content": "诺顿杀毒",
@@ -2190,7 +2190,7 @@
     "region": "foreign"
   },
   "officeai": {
-    "category": "智能生成",
+    "category": "工具类__智能生成",
     "choco": "",
     "foss": false,
     "content": "Office AI助手",
@@ -2250,7 +2250,7 @@
     "region": "foreign"
   },
   "perfectdecode": {
-    "category": "视频软件",
+    "category": "多媒体工具__视频软件",
     "choco": "",
     "foss": false,
     "content": "完美解码",
@@ -2260,7 +2260,7 @@
     "region": "domestic"
   },
   "pikpak": {
-    "category": "网盘工具",
+    "category": "工具类__网盘工具",
     "choco": "",
     "foss": false,
     "content": "PikPak",
@@ -2270,7 +2270,7 @@
     "region": "foreign"
   },
   "pixpin": {
-    "category": "图片图形",
+    "category": "工具类__图片图形",
     "choco": "",
     "foss": false,
     "content": "PixPin",
@@ -2489,7 +2489,7 @@
     "region": "foreign"
   },
   "qishuimusic": {
-    "category": "音乐发烧友",
+    "category": "多媒体工具__音乐发烧友",
     "choco": "",
     "foss": false,
     "content": "汽水音乐",
@@ -2539,7 +2539,7 @@
     "region": "domestic"
   },
   "qqplayer": {
-    "category": "视频软件",
+    "category": "多媒体工具__视频软件",
     "choco": "",
     "foss": false,
     "content": "QQ影音",
@@ -2549,7 +2549,7 @@
     "region": "domestic"
   },
   "qqretro": {
-    "category": "聊天社交",
+    "category": "通讯工具__聊天社交",
     "choco": "",
     "foss": false,
     "content": "QQ（怀旧版）",
@@ -2559,7 +2559,7 @@
     "region": "domestic"
   },
   "qqwubi": {
-    "category": "输入法",
+    "category": "工具类__输入法",
     "choco": "",
     "foss": false,
     "content": "QQ五笔输入法",
@@ -2579,7 +2579,7 @@
     "region": "foreign"
   },
   "quanminkge": {
-    "category": "音乐软件",
+    "category": "多媒体工具__音乐软件",
     "choco": "",
     "foss": false,
     "content": "全民K歌",
@@ -2599,7 +2599,7 @@
     "region": "domestic"
   },
   "quarkdrive": {
-    "category": "网盘工具",
+    "category": "工具类__网盘工具",
     "choco": "",
     "foss": false,
     "content": "夸克网盘",
@@ -2629,7 +2629,7 @@
     "region": "foreign"
   },
   "rime": {
-    "category": "输入法",
+    "category": "工具类__输入法",
     "choco": "rime",
     "foss": true,
     "content": "Rime小狼毫输入法",
@@ -2639,7 +2639,7 @@
     "region": "domestic"
   },
   "rising": {
-    "category": "杀毒软件",
+    "category": "工具类__杀毒软件",
     "choco": "",
     "foss": false,
     "content": "瑞星杀毒",
@@ -2729,7 +2729,7 @@
     "region": "foreign"
   },
   "snipaste": {
-    "category": "图片图形",
+    "category": "工具类__图片图形",
     "choco": "snipaste",
     "foss": false,
     "content": "Snipaste",
@@ -2799,7 +2799,7 @@
     "region": "foreign"
   },
   "sunlogin": {
-    "category": "办公教育",
+    "category": "工具类__办公教育",
     "choco": "",
     "foss": false,
     "content": "向日葵远程控制",
@@ -2899,7 +2899,7 @@
     "region": "domestic"
   },
   "tencentpcmgr": {
-    "category": "杀毒软件",
+    "category": "工具类__杀毒软件",
     "choco": "",
     "foss": false,
     "content": "腾讯电脑管家",
@@ -2939,7 +2939,7 @@
     "region": "foreign"
   },
   "tianyicloud": {
-    "category": "网盘工具",
+    "category": "工具类__网盘工具",
     "choco": "",
     "foss": false,
     "content": "天翼云盘",
@@ -2969,7 +2969,7 @@
     "region": "domestic"
   },
   "todesk": {
-    "category": "办公教育",
+    "category": "工具类__办公教育",
     "choco": "",
     "foss": false,
     "content": "ToDesk",
@@ -2999,7 +2999,7 @@
     "region": "foreign"
   },
   "trae": {
-    "category": "智能生成",
+    "category": "工具类__智能生成",
     "choco": "",
     "foss": false,
     "content": "TRAE - AI编程",
@@ -3029,7 +3029,7 @@
     "region": "foreign"
   },
   "ttvoice": {
-    "category": "聊天社交",
+    "category": "通讯工具__聊天社交",
     "choco": "",
     "foss": false,
     "content": "TT语音",
@@ -3039,7 +3039,7 @@
     "region": "domestic"
   },
   "tubatoolbox": {
-    "category": "系统工具",
+    "category": "工具类__系统工具",
     "choco": "",
     "foss": false,
     "content": "图吧工具箱",
@@ -3079,7 +3079,7 @@
     "region": "domestic"
   },
   "ucdrive": {
-    "category": "网盘工具",
+    "category": "工具类__网盘工具",
     "choco": "",
     "foss": false,
     "content": "UC网盘",
@@ -3089,7 +3089,7 @@
     "region": "domestic"
   },
   "ultraiso": {
-    "category": "压缩刻录",
+    "category": "工具类__压缩刻录",
     "choco": "ultraiso",
     "foss": false,
     "content": "软碟通 (UltraISO)",
@@ -3119,7 +3119,7 @@
     "region": "foreign"
   },
   "universalplayer": {
-    "category": "看剧必备",
+    "category": "多媒体工具__看剧必备",
     "choco": "",
     "foss": false,
     "content": "万能视频播放器",
@@ -3129,7 +3129,7 @@
     "region": "domestic"
   },
   "utorrent": {
-    "category": "下载工具",
+    "category": "工具类__下载工具",
     "choco": "utorrent",
     "foss": false,
     "content": "uTorrent",
@@ -3299,7 +3299,7 @@
     "region": "domestic"
   },
   "weiyun": {
-    "category": "网盘工具",
+    "category": "工具类__网盘工具",
     "choco": "",
     "foss": false,
     "content": "腾讯微云",
@@ -3339,7 +3339,7 @@
     "region": "foreign"
   },
   "winmaster": {
-    "category": "系统工具",
+    "category": "工具类__系统工具",
     "choco": "",
     "foss": false,
     "content": "Windows优化大师",
@@ -3369,7 +3369,7 @@
     "region": "foreign"
   },
   "winzip": {
-    "category": "压缩刻录",
+    "category": "工具类__压缩刻录",
     "choco": "winzip",
     "foss": false,
     "content": "WinZip",
@@ -3399,7 +3399,7 @@
     "region": "foreign"
   },
   "wisecare": {
-    "category": "系统工具",
+    "category": "工具类__系统工具",
     "choco": "wise-care-365",
     "foss": false,
     "content": "Wise Care 365",
@@ -3419,7 +3419,7 @@
     "region": "foreign"
   },
   "workbuddy": {
-    "category": "智能生成",
+    "category": "工具类__智能生成",
     "choco": "",
     "foss": false,
     "content": "WorkBuddy",
@@ -3449,7 +3449,7 @@
     "region": "foreign"
   },
   "xiaohongshu": {
-    "category": "聊天社交",
+    "category": "通讯工具__聊天社交",
     "choco": "",
     "foss": false,
     "content": "小红书",
@@ -3459,7 +3459,7 @@
     "region": "domestic"
   },
   "xiaoniaowallpaper": {
-    "category": "桌面美化",
+    "category": "工具类__桌面美化",
     "choco": "",
     "foss": false,
     "content": "小鸟动态壁纸",
@@ -3469,7 +3469,7 @@
     "region": "domestic"
   },
   "xiaoyaobi": {
-    "category": "输入法",
+    "category": "工具类__输入法",
     "choco": "",
     "foss": false,
     "content": "逍遥笔手写输入法",
@@ -3479,7 +3479,7 @@
     "region": "domestic"
   },
   "xiaoyiinput": {
-    "category": "输入法",
+    "category": "工具类__输入法",
     "choco": "",
     "foss": false,
     "content": "华为小艺输入法",
@@ -3489,7 +3489,7 @@
     "region": "domestic"
   },
   "ximalaya": {
-    "category": "音乐发烧友",
+    "category": "多媒体工具__音乐发烧友",
     "choco": "",
     "foss": false,
     "content": "喜马拉雅",
@@ -3499,7 +3499,7 @@
     "region": "domestic"
   },
   "xnview": {
-    "category": "图片图形",
+    "category": "工具类__图片图形",
     "choco": "xnview",
     "foss": false,
     "content": "XnView",
@@ -3509,7 +3509,7 @@
     "region": "foreign"
   },
   "xunlei": {
-    "category": "下载工具",
+    "category": "工具类__下载工具",
     "choco": "",
     "foss": false,
     "content": "迅雷",
@@ -3519,7 +3519,7 @@
     "region": "domestic"
   },
   "xunleiplayer": {
-    "category": "视频软件",
+    "category": "多媒体工具__视频软件",
     "choco": "",
     "foss": false,
     "content": "迅雷影音",
@@ -3549,7 +3549,7 @@
     "region": "domestic"
   },
   "youku": {
-    "category": "看剧必备",
+    "category": "多媒体工具__看剧必备",
     "choco": "",
     "foss": false,
     "content": "优酷",
@@ -3559,7 +3559,7 @@
     "region": "domestic"
   },
   "yuanbao": {
-    "category": "智能生成",
+    "category": "工具类__智能生成",
     "choco": "",
     "foss": false,
     "content": "元宝",
@@ -3569,7 +3569,7 @@
     "region": "domestic"
   },
   "yuanqiwallpaper": {
-    "category": "桌面美化",
+    "category": "工具类__桌面美化",
     "choco": "",
     "foss": false,
     "content": "元气桌面壁纸",

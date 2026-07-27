@@ -100,9 +100,12 @@ function Find-AppsByNameOrDescription {
 
                     # Check if app matches search criteria
                     if ($null -ne $appEntry) {
-                        $categoryMatch = -not [string]::IsNullOrWhiteSpace($Category) -and $appEntry.Category -eq $Category
-                        $contentMatch = [string]::IsNullOrWhiteSpace($Category) -and $appEntry.Content -like "*$escapedSearchString*"
-                        $descriptionMatch = [string]::IsNullOrWhiteSpace($Category) -and $appEntry.Description -like "*$escapedSearchString*"
+                        # Prefix match: "工具类" matches "工具类__输入法", "浏览器" matches "浏览器__极简优先推荐" etc.
+                        $catFilter = if (-not [string]::IsNullOrWhiteSpace($Category)) { $Category } else { "" }
+                        $appCat = if ($appEntry.Category) { $appEntry.Category } else { "" }
+                        $categoryMatch = $catFilter -ne "" -and ($appCat -eq $catFilter -or $appCat -like "$catFilter__*")
+                        $contentMatch = $catFilter -eq "" -and $appEntry.Content -like "*$escapedSearchString*"
+                        $descriptionMatch = $catFilter -eq "" -and $appEntry.Description -like "*$escapedSearchString*"
 
                         if ($categoryMatch -or $contentMatch -or $descriptionMatch) {
                             # Show the App and mark that this category has a match
