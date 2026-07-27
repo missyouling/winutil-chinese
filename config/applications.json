@@ -17,6 +17,105 @@
     "winget": "7zip.7zip",
     "foss": true
   },
+  "Lua": {
+    "category": "开发工具",
+    "choco": "lua",
+    "winget": "rjpcomputing.luaforwindows",
+    "description": "Lua 脚本语言的电池齐全环境（含依赖库）",
+    "content": "Lua 脚本语言",
+    "link": "https://github.com/rjpcomputing/luaforwindows",
+    "foss": true
+  },
+  "OFGB": {
+    "category": "工具类",
+    "choco": "ofgb",
+    "content": "OFGB Windows广告移除",
+    "description": "从 Windows 11 各处移除广告的 GUI 工具。",
+    "link": "https://github.com/xM4ddy/OFGB",
+    "winget": "xM4ddy.OFGB",
+    "foss": true
+  },
+  "OPAutoClicker": {
+    "category": "工具类",
+    "choco": "autoclicker",
+    "content": "OPAutoClicker 自动点击",
+    "description": "功能齐全的自动点击器，支持动态光标位置或预设位置两种自动点击模式。",
+    "link": "https://www.opautoclicker.com",
+    "winget": "OPAutoClicker.OPAutoClicker",
+    "foss": false
+  },
+  "OVirtualBox": {
+    "category": "工具类",
+    "choco": "virtualbox",
+    "content": "Oracle VirtualBox 虚拟机",
+    "description": "Oracle VirtualBox 是一款功能强大且免费开源的虚拟化工具。",
+    "link": "https://www.virtualbox.org/",
+    "winget": "Oracle.VirtualBox",
+    "foss": true
+  },
+  "OpenVPN": {
+    "category": "专业工具",
+    "choco": "openvpn-connect",
+    "content": "OpenVPN Connect 客户端",
+    "description": "OpenVPN Connect 是一款 VPN 客户端，可让你安全连接到 VPN 服务器",
+    "link": "https://openvpn.net/",
+    "winget": "OpenVPNTechnologies.OpenVPNConnect",
+    "foss": false
+  },
+  "Overwolf": {
+    "category": "游戏",
+    "choco": "overwolf",
+    "content": "Overwolf 游戏插件平台",
+    "description": "流行的游戏覆盖层和辅助应用平台，广泛被游戏玩家使用。",
+    "link": "https://www.overwolf.com/app/overwolf-curseforge",
+    "winget": "Overwolf.CurseForge",
+    "foss": false
+  },
+  "Paintdotnet": {
+    "category": "多媒体工具",
+    "choco": "paint.net",
+    "content": "Paint.NET 图像编辑",
+    "description": "Paint.NET 是一款免费的 Windows 图像照片编辑软件",
+    "link": "https://www.getpaint.net/",
+    "winget": "dotPDN.PaintDotNet",
+    "foss": false
+  },
+  "Ruby": {
+    "category": "开发工具",
+    "choco": "ruby",
+    "winget": "RubyInstallerTeam.Ruby.4.0",
+    "description": "包含 MSYS2 安装的 Ruby 语言执行环境。",
+    "content": "Ruby 编程语言",
+    "link": "https://rubyinstaller.org/",
+    "foss": true
+  },
+  "WiseProgramUninstaller": {
+    "category": "工具类",
+    "choco": "na",
+    "content": "Wise Program Uninstaller 卸载工具",
+    "description": "Wise Program Uninstaller 是卸载 Windows 程序的完美解决方案。",
+    "link": "https://www.wisecleaner.com/wise-program-uninstaller.html",
+    "winget": "WiseCleaner.WiseProgramUninstaller",
+    "foss": false
+  },
+  "Zed": {
+    "category": "开发工具",
+    "choco": "zed",
+    "content": "Zed 代码编辑器",
+    "description": "Zed 是一款现代高性能代码编辑器，从头设计以追求速度和协作。",
+    "link": "https://zed.dev/",
+    "winget": "ZedIndustries.Zed",
+    "foss": true
+  },
+  "ZenBrowser": {
+    "category": "浏览器",
+    "choco": "zen-browser",
+    "content": "Zen 浏览器",
+    "description": "基于 Firefox 构建的现代、注重隐私、性能驱动的浏览器。",
+    "link": "https://zen-browser.app/",
+    "winget": "Zen-Team.Zen-Browser",
+    "foss": true
+  },
   "adobe": {
     "category": "多媒体工具",
     "choco": "adobereader",
@@ -43,6 +142,33 @@
     "link": "https://www.aimp.ru/",
     "winget": "AIMP.AIMP",
     "foss": false
+  },
+  "alibabaqianwen": {
+    "category": "工具类",
+    "choco": "",
+    "foss": false,
+    "content": "通义千问",
+    "description": "通义千问是阿里巴巴的AI助手，支持问答、文案创作和代码生成。",
+    "link": "https://tongyi.aliyun.com/",
+    "winget": "Alibaba.Qianwen"
+  },
+  "aliim": {
+    "category": "工具类",
+    "choco": "",
+    "foss": false,
+    "content": "阿里旺旺",
+    "description": "阿里旺旺是淘宝/天猫的即时通讯工具，方便买卖双方沟通交易。",
+    "link": "https://www.taobao.com/",
+    "winget": "Alibaba.AliIM"
+  },
+  "aliworkbench": {
+    "category": "专业工具",
+    "choco": "",
+    "foss": false,
+    "content": "千牛卖家中心",
+    "description": "千牛是阿里巴巴为淘宝卖家提供的工作台，支持商品管理和订单处理。",
+    "link": "https://work.taobao.com/",
+    "winget": "Alibaba.AliWorkbench"
   },
   "angryipscanner": {
     "category": "专业工具",
@@ -71,6 +197,15 @@
     "winget": "Audacity.Audacity",
     "foss": true
   },
+  "autohotkey": {
+    "category": "工具类",
+    "choco": "autohotkey",
+    "content": "AutoHotkey 自动脚本",
+    "description": "AutoHotkey 是一款 Windows 脚本语言，允许用户创建自定义自动化脚本和宏。",
+    "link": "https://www.autohotkey.com/",
+    "winget": "AutoHotkey.AutoHotkey",
+    "foss": true
+  },
   "autoruns": {
     "category": "微软工具",
     "choco": "autoruns",
@@ -80,23 +215,59 @@
     "winget": "Microsoft.Sysinternals.Autoruns",
     "foss": false
   },
-  "rdcman": {
-    "category": "微软工具",
-    "choco": "rdcman",
-    "content": "RDCMan 远程桌面管理",
-    "description": "RDCMan 管理多个远程桌面连接，适用于需要定期访问每台机器的服务器实验室。",
-    "link": "https://learn.microsoft.com/en-us/sysinternals/downloads/rdcman",
-    "winget": "Microsoft.Sysinternals.RDCMan",
-    "foss": false
-  },
-  "autohotkey": {
+  "baidunetdisk": {
     "category": "工具类",
-    "choco": "autohotkey",
-    "content": "AutoHotkey 自动脚本",
-    "description": "AutoHotkey 是一款 Windows 脚本语言，允许用户创建自定义自动化脚本和宏。",
-    "link": "https://www.autohotkey.com/",
-    "winget": "AutoHotkey.AutoHotkey",
+    "choco": "",
+    "foss": false,
+    "content": "百度网盘",
+    "description": "百度网盘是百度提供的云存储服务，支持文件备份、分享和在线预览。",
+    "link": "https://pan.baidu.com/",
+    "winget": "Baidu.BaiduNetdisk"
+  },
+  "baidupinyin": {
+    "category": "工具类",
+    "choco": "",
+    "foss": false,
+    "content": "百度输入法",
+    "description": "百度输入法支持拼音、语音和手写输入，拥有AI智能组词功能。",
+    "link": "https://shurufa.baidu.com/",
+    "winget": "Baidu.BaiduPinyin"
+  },
+  "baiduwenku": {
+    "category": "办公工具",
+    "choco": "",
+    "foss": false,
+    "content": "百度文库",
+    "description": "百度文库提供文档阅读和下载服务，涵盖教育资料和专业文档。",
+    "link": "https://wenku.baidu.com/",
+    "winget": "Baidu.BaiduWenku"
+  },
+  "bcut": {
+    "category": "多媒体工具",
+    "choco": "",
+    "foss": false,
+    "content": "必剪",
+    "description": "必剪是B站推出的视频剪辑工具，支持剪辑和一键投稿。",
+    "link": "https://bcut.bilibili.com/",
+    "winget": "Bilibili.Bcut"
+  },
+  "betterbird": {
+    "category": "通讯工具",
+    "choco": "betterbird",
+    "content": "Betterbird 邮件客户端(优化版)",
+    "description": "Betterbird 是 Mozilla Thunderbird 的分支，具有额外功能和错误修复。",
+    "link": "https://www.betterbird.eu/",
+    "winget": "Betterbird.Betterbird",
     "foss": true
+  },
+  "bilibili": {
+    "category": "多媒体工具",
+    "choco": "",
+    "foss": false,
+    "content": "哔哩哔哩",
+    "description": "哔哩哔哩（B站）是国内知名的视频弹幕平台，涵盖动画、知识、音乐等内容。",
+    "link": "https://www.bilibili.com/",
+    "winget": "Bilibili.Bilibili"
   },
   "bitwarden": {
     "category": "工具类",
@@ -114,6 +285,15 @@
     "description": "Blender 是一款功能强大的开源 3D 创作套件，提供建模、雕刻、动画和渲染工具。",
     "link": "https://www.blender.org/",
     "winget": "BlenderFoundation.Blender",
+    "foss": true
+  },
+  "blurautoclicker": {
+    "category": "工具类",
+    "choco": "na",
+    "content": "BlurAutoClicker 自动点击器",
+    "description": "一款具有高级功能且性能优于同类产品的自动点击器。",
+    "link": "https://blur009.vercel.app/projects/blur-autoclicker/",
+    "winget": "Blur009.BlurAutoClicker",
     "foss": true
   },
   "brave": {
@@ -134,15 +314,6 @@
     "winget": "Klocman.BulkCrapUninstaller",
     "foss": true
   },
-  "blurautoclicker": {
-    "category": "工具类",
-    "choco": "na",
-    "content": "BlurAutoClicker 自动点击器",
-    "description": "一款具有高级功能且性能优于同类产品的自动点击器。",
-    "link": "https://blur009.vercel.app/projects/blur-autoclicker/",
-    "winget": "Blur009.BlurAutoClicker",
-    "foss": true
-  },
   "calibre": {
     "category": "多媒体工具",
     "choco": "calibre",
@@ -151,6 +322,15 @@
     "link": "https://calibre-ebook.com/",
     "winget": "calibre.calibre",
     "foss": true
+  },
+  "capcut": {
+    "category": "多媒体工具",
+    "choco": "",
+    "foss": false,
+    "content": "剪映",
+    "description": "剪映是字节跳动的视频编辑工具，提供丰富滤镜和音乐，支持快速剪辑短视频。",
+    "link": "https://www.capcut.cn/",
+    "winget": "ByteDance.CapCut"
   },
   "cemu": {
     "category": "游戏",
@@ -224,6 +404,15 @@
     "winget": "Anthropic.ClaudeCode",
     "foss": false
   },
+  "cloudmusic": {
+    "category": "多媒体工具",
+    "choco": "",
+    "foss": false,
+    "content": "网易云音乐",
+    "description": "网易云音乐通过歌单和社区推荐优质音乐，支持在线试听和下载。",
+    "link": "https://music.163.com/",
+    "winget": "NetEase.CloudMusic"
+  },
   "cmake": {
     "category": "开发工具",
     "choco": "cmake",
@@ -287,6 +476,24 @@
     "winget": "Wagnardsoft.DisplayDriverUninstaller",
     "foss": true
   },
+  "deskflow": {
+    "category": "工具类",
+    "choco": "deskflow",
+    "content": "Deskflow 键鼠共享",
+    "description": "Deskflow 是一款免费开源的软件 KVM，让您在多台计算机之间共享键盘和鼠标。",
+    "link": "https://github.com/deskflow/deskflow",
+    "winget": "Deskflow.Deskflow",
+    "foss": true
+  },
+  "dingtalk": {
+    "category": "通讯工具",
+    "choco": "",
+    "foss": false,
+    "content": "钉钉",
+    "description": "钉钉是阿里巴巴的企业级协同办公平台，支持即时通讯、视频会议、考勤和审批。",
+    "link": "https://www.dingtalk.com/",
+    "winget": "Alibaba.DingTalk"
+  },
   "discord": {
     "category": "通讯工具",
     "choco": "discord",
@@ -305,15 +512,6 @@
     "winget": "CodingWondersSoftware.DISMTools.Stable",
     "foss": true
   },
-  "ntlite": {
-    "category": "微软工具",
-    "choco": "ntlite-free",
-    "content": "NTLite 系统精简",
-    "description": "集成更新、驱动程序，自动化 Windows 和应用程序设置，加速 Windows 部署流程。",
-    "link": "https://ntlite.com",
-    "winget": "Nlitesoft.NTLite",
-    "foss": false
-  },
   "dorion": {
     "category": "通讯工具",
     "choco": "dorion",
@@ -321,6 +519,15 @@
     "description": "轻量级 Discord 替代客户端，占用更小、启动更快，支持主题和插件！",
     "link": "https://github.com/SpikeHD/Dorion",
     "winget": "SpikeHD.Dorion",
+    "foss": true
+  },
+  "dotnet10": {
+    "category": "微软工具",
+    "choco": "dotnet-10.0-runtime",
+    "content": ".NET 桌面运行时 10",
+    "description": ".NET 桌面运行时 10 是运行使用 .NET 10 开发的应用程序所需的运行时环境。",
+    "link": "https://dotnet.microsoft.com/download/dotnet/10.0",
+    "winget": "Microsoft.DotNet.DesktopRuntime.10",
     "foss": true
   },
   "dotnet6": {
@@ -350,14 +557,23 @@
     "winget": "Microsoft.DotNet.DesktopRuntime.9",
     "foss": true
   },
-  "dotnet10": {
-    "category": "微软工具",
-    "choco": "dotnet-10.0-runtime",
-    "content": ".NET 桌面运行时 10",
-    "description": ".NET 桌面运行时 10 是运行使用 .NET 10 开发的应用程序所需的运行时环境。",
-    "link": "https://dotnet.microsoft.com/download/dotnet/10.0",
-    "winget": "Microsoft.DotNet.DesktopRuntime.10",
-    "foss": true
+  "doubao": {
+    "category": "工具类",
+    "choco": "",
+    "foss": false,
+    "content": "豆包",
+    "description": "豆包是字节跳动的AI对话助手，支持智能问答和创作辅助。",
+    "link": "https://www.doubao.com/",
+    "winget": "ByteDance.Doubao"
+  },
+  "douyin": {
+    "category": "多媒体工具",
+    "choco": "",
+    "foss": false,
+    "content": "抖音",
+    "description": "抖音是字节跳动的短视频社交平台。",
+    "link": "https://www.douyin.com/",
+    "winget": "ByteDance.Douyin"
   },
   "dropbox": {
     "category": "工具类",
@@ -413,6 +629,24 @@
     "winget": "EpicGames.EpicGamesLauncher",
     "foss": false
   },
+  "everything": {
+    "category": "工具类",
+    "choco": "everything",
+    "content": "Everything 文件搜索",
+    "description": "Everything 是一款极速文件搜索工具，可瞬间定位文件和文件夹",
+    "link": "https://www.voidtools.com/",
+    "winget": "voidtools.Everything",
+    "foss": false
+  },
+  "feishu": {
+    "category": "通讯工具",
+    "choco": "",
+    "foss": false,
+    "content": "飞书",
+    "description": "飞书是字节跳动的一站式企业协作平台，整合即时通讯、云文档、日历和视频会议。",
+    "link": "https://www.feishu.cn/",
+    "winget": "ByteDance.Feishu"
+  },
   "files": {
     "category": "工具类",
     "choco": "files",
@@ -458,6 +692,15 @@
     "winget": "flux.flux",
     "foss": false
   },
+  "foxmail": {
+    "category": "通讯工具",
+    "choco": "",
+    "foss": false,
+    "content": "Foxmail 邮箱",
+    "description": "Foxmail 是腾讯推出的邮件客户端，支持多账户管理和加密传输。",
+    "link": "https://www.foxmail.com/",
+    "winget": "Tencent.Foxmail"
+  },
   "geforcenow": {
     "category": "游戏",
     "choco": "nvidia-geforce-now",
@@ -492,6 +735,15 @@
     "description": "GitHub Desktop 是一款可视化 Git 客户端，通过易用的界面简化 GitHub 仓库的协作。",
     "link": "https://desktop.github.com/",
     "winget": "GitHub.GitHubDesktop",
+    "foss": true
+  },
+  "glazewm": {
+    "category": "工具类",
+    "choco": "glazewm",
+    "content": "GlazeWM 平铺窗口管理器",
+    "description": "GlazeWM 是一款受 i3 和 Polybar 启发的 Windows 平铺窗口管理器。",
+    "link": "https://github.com/glzr-io/glazewm",
+    "winget": "glzr-io.glazewm",
     "foss": true
   },
   "gog": {
@@ -539,24 +791,6 @@
     "winget": "gerardog.gsudo",
     "foss": true
   },
-  "helium": {
-    "category": "浏览器",
-    "choco": "helium",
-    "content": "Helium 浏览器",
-    "description": "私密、快速、诚实的网页浏览器。",
-    "link": "https://github.com/imputnet/helium/",
-    "winget": "ImputNet.Helium",
-    "foss": true
-  },
-  "hugo": {
-    "category": "工具类",
-    "choco": "hugo-extended",
-    "content": "Hugo 网站构建",
-    "description": "世界上最快速的网站构建框架。",
-    "link": "https://github.com/gohugoio/hugo/",
-    "winget": "Hugo.Hugo.Extended",
-    "foss": true
-  },
   "handbrake": {
     "category": "多媒体工具",
     "choco": "handbrake",
@@ -566,6 +800,15 @@
     "winget": "HandBrake.HandBrake",
     "foss": true
   },
+  "helium": {
+    "category": "浏览器",
+    "choco": "helium",
+    "content": "Helium 浏览器",
+    "description": "私密、快速、诚实的网页浏览器。",
+    "link": "https://github.com/imputnet/helium/",
+    "winget": "ImputNet.Helium",
+    "foss": true
+  },
   "heroiclauncher": {
     "category": "游戏",
     "choco": "heroic-games-launcher",
@@ -573,6 +816,15 @@
     "description": "Heroic Games Launcher 是 Epic Games Store 的开源替代游戏启动器。",
     "link": "https://heroicgameslauncher.com/",
     "winget": "HeroicGamesLauncher.HeroicGamesLauncher",
+    "foss": true
+  },
+  "hugo": {
+    "category": "工具类",
+    "choco": "hugo-extended",
+    "content": "Hugo 网站构建",
+    "description": "世界上最快速的网站构建框架。",
+    "link": "https://github.com/gohugoio/hugo/",
+    "winget": "Hugo.Hugo.Extended",
     "foss": true
   },
   "hwinfo": {
@@ -592,6 +844,15 @@
     "link": "https://www.cpuid.com/softwares/hwmonitor.html",
     "winget": "CPUID.HWMonitor",
     "foss": false
+  },
+  "imacopilot": {
+    "category": "开发工具",
+    "choco": "",
+    "foss": false,
+    "content": "ima copilot",
+    "description": "ima copilot 是腾讯的AI编程助手，集成大模型助力高效编码。",
+    "link": "https://ima.qq.com/",
+    "winget": "Tencent.ima-copilot"
   },
   "imageglass": {
     "category": "多媒体工具",
@@ -638,15 +899,6 @@
     "winget": "Apple.iTunes",
     "foss": false
   },
-  "java8": {
-    "category": "开发工具",
-    "choco": "corretto8jdk",
-    "content": "Amazon Corretto 8 (LTS) JDK",
-    "description": "Amazon Corretto 是一款免费、多平台、生产就绪的 OpenJDK 发行版。",
-    "link": "https://aws.amazon.com/corretto",
-    "winget": "Amazon.Corretto.8.JDK",
-    "foss": true
-  },
   "java21": {
     "category": "开发工具",
     "choco": "corretto21jdk",
@@ -663,6 +915,15 @@
     "description": "Amazon Corretto 是一款免费、多平台、生产就绪的 OpenJDK 发行版。",
     "link": "https://aws.amazon.com/corretto",
     "winget": "Amazon.Corretto.25.JDK",
+    "foss": true
+  },
+  "java8": {
+    "category": "开发工具",
+    "choco": "corretto8jdk",
+    "content": "Amazon Corretto 8 (LTS) JDK",
+    "description": "Amazon Corretto 是一款免费、多平台、生产就绪的 OpenJDK 发行版。",
+    "link": "https://aws.amazon.com/corretto",
+    "winget": "Amazon.Corretto.8.JDK",
     "foss": true
   },
   "jellyfinmediaplayer": {
@@ -701,6 +962,15 @@
     "winget": "sylikc.JPEGView",
     "foss": true
   },
+  "kdocs": {
+    "category": "办公工具",
+    "choco": "",
+    "foss": false,
+    "content": "金山文档",
+    "description": "金山文档是多人实时协作在线文档平台，支持文档、表格、演示协同编辑。",
+    "link": "https://www.kdocs.cn/",
+    "winget": "Kingsoft.KDocs"
+  },
   "keepassxc": {
     "category": "工具类",
     "choco": "keepassxc",
@@ -710,6 +980,15 @@
     "winget": "KeePassXCTeam.KeePassXC",
     "foss": true
   },
+  "kingsoftpdf": {
+    "category": "办公工具",
+    "choco": "",
+    "foss": false,
+    "content": "金山 PDF",
+    "description": "金山 PDF 是金山办公推出的PDF阅读编辑工具，支持查看、注释和格式转换。",
+    "link": "https://pdf.wps.com/",
+    "winget": "Kingsoft.KingsoftPDF"
+  },
   "klite": {
     "category": "多媒体工具",
     "choco": "k-litecodecpack-standard",
@@ -718,6 +997,15 @@
     "link": "https://www.codecguide.com/",
     "winget": "CodecGuide.K-LiteCodecPack.Standard",
     "foss": false
+  },
+  "kmeeting": {
+    "category": "办公工具",
+    "choco": "",
+    "foss": false,
+    "content": "金山会议",
+    "description": "金山会议是金山办公推出的在线会议工具，支持远程会议和屏幕共享。",
+    "link": "https://meeting.wps.cn/",
+    "winget": "Kingsoft.KMeeting"
   },
   "kodi": {
     "category": "自托管工具",
@@ -764,14 +1052,14 @@
     "winget": "LocalSend.LocalSend",
     "foss": true
   },
-  "mpc-qt": {
-    "category": "多媒体工具",
-    "choco": "mediainfo",
-    "content": "mpc-qt 媒体播放器",
-    "description": "Media Player Classic Qute Theater 媒体播放器",
-    "link": "https://github.com/mpc-qt/mpc-qt",
-    "winget": "mpc-qt.mpc-qt",
-    "foss": true
+  "mailmaster": {
+    "category": "工具类",
+    "choco": "",
+    "foss": false,
+    "content": "网易邮箱大师",
+    "description": "网易邮箱大师支持管理多个邮箱账户，提供快速收发邮件服务。",
+    "link": "https://mail.163.com/",
+    "winget": "NetEase.MailMaster"
   },
   "matrix": {
     "category": "通讯工具",
@@ -809,6 +1097,15 @@
     "winget": "MoonlightGameStreamingProject.Moonlight",
     "foss": true
   },
+  "mpc-qt": {
+    "category": "多媒体工具",
+    "choco": "mediainfo",
+    "content": "mpc-qt 媒体播放器",
+    "description": "Media Player Classic Qute Theater 媒体播放器",
+    "link": "https://github.com/mpc-qt/mpc-qt",
+    "winget": "mpc-qt.mpc-qt",
+    "foss": true
+  },
   "mpchc": {
     "category": "多媒体工具",
     "choco": "mpc-hc-clsid2",
@@ -836,15 +1133,6 @@
     "winget": "Guru3D.Afterburner",
     "foss": false
   },
-  "mullvadvpn": {
-    "category": "专业工具",
-    "choco": "mullvad-app",
-    "content": "Mullvad VPN",
-    "description": "这是 Mullvad VPN 服务的 VPN 客户端软件。",
-    "link": "https://github.com/mullvad/mullvadvpn-app",
-    "winget": "MullvadVPN.MullvadVPN",
-    "foss": true
-  },
   "mullvadbrowser": {
     "category": "浏览器",
     "choco": "na",
@@ -854,13 +1142,13 @@
     "winget": "MullvadVPN.MullvadBrowser",
     "foss": true
   },
-  "nomacs": {
-    "category": "多媒体工具",
-    "choco": "nomacs",
-    "content": "nomacs 图片查看器",
-    "description": "nomacs 是一款免费开源多平台图片查看器，支持所有常见图片格式。",
-    "link": "https://nomacs.org/",
-    "winget": "nomacs.nomacs",
+  "mullvadvpn": {
+    "category": "专业工具",
+    "choco": "mullvad-app",
+    "content": "Mullvad VPN",
+    "description": "这是 Mullvad VPN 服务的 VPN 客户端软件。",
+    "link": "https://github.com/mullvad/mullvadvpn-app",
+    "winget": "MullvadVPN.MullvadVPN",
     "foss": true
   },
   "nanazip": {
@@ -870,15 +1158,6 @@
     "description": "NanaZip 是一款快速高效的文件压缩和解压缩工具。",
     "link": "https://github.com/M2Team/NanaZip",
     "winget": "M2Team.NanaZip",
-    "foss": true
-  },
-  "netbird": {
-    "category": "自托管工具",
-    "choco": "netbird",
-    "content": "NetBird 网络工具",
-    "description": "NetBird 是与 TailScale 相当的开源替代品，可连接到自托管服务器。",
-    "link": "https://netbird.io/",
-    "winget": "Netbird.Netbird",
     "foss": true
   },
   "naps2": {
@@ -899,6 +1178,15 @@
     "winget": "Neovim.Neovim",
     "foss": true
   },
+  "netbird": {
+    "category": "自托管工具",
+    "choco": "netbird",
+    "content": "NetBird 网络工具",
+    "description": "NetBird 是与 TailScale 相当的开源替代品，可连接到自托管服务器。",
+    "link": "https://netbird.io/",
+    "winget": "Netbird.Netbird",
+    "foss": true
+  },
   "nextclouddesktop": {
     "category": "自托管工具",
     "choco": "nextcloud-client",
@@ -907,6 +1195,15 @@
     "link": "https://nextcloud.com/install/#install-clients",
     "winget": "Nextcloud.NextcloudDesktop",
     "foss": true
+  },
+  "nilesoftShell": {
+    "category": "工具类",
+    "choco": "nilesoft-shell",
+    "content": "Nilesoft Shell 右键菜单",
+    "description": "Shell 是一款 Windows 右键菜单扩展工具，添加额外功能和自定义选项。",
+    "link": "https://nilesoft.org/",
+    "winget": "Nilesoft.Shell",
+    "foss": false
   },
   "nmap": {
     "category": "专业工具",
@@ -935,12 +1232,13 @@
     "winget": "OpenJS.NodeJS.LTS",
     "foss": true
   },
-  "pnpm": {
-    "category": "开发工具",
-    "content": "pnpm 包管理器",
-    "description": "pnpm 是一款快速且节省磁盘空间的 JavaScript 和 Node.js 包管理器。",
-    "link": "https://pnpm.io/",
-    "winget": "pnpm.pnpm",
+  "nomacs": {
+    "category": "多媒体工具",
+    "choco": "nomacs",
+    "content": "nomacs 图片查看器",
+    "description": "nomacs 是一款免费开源多平台图片查看器，支持所有常见图片格式。",
+    "link": "https://nomacs.org/",
+    "winget": "nomacs.nomacs",
     "foss": true
   },
   "notepadplus": {
@@ -951,6 +1249,15 @@
     "link": "https://notepad-plus-plus.org/",
     "winget": "Notepad++.Notepad++",
     "foss": true
+  },
+  "ntlite": {
+    "category": "微软工具",
+    "choco": "ntlite-free",
+    "content": "NTLite 系统精简",
+    "description": "集成更新、驱动程序，自动化 Windows 和应用程序设置，加速 Windows 部署流程。",
+    "link": "https://ntlite.com",
+    "winget": "Nlitesoft.NTLite",
+    "foss": false
   },
   "nuget": {
     "category": "微软工具",
@@ -1006,15 +1313,6 @@
     "winget": "ONLYOFFICE.DesktopEditors",
     "foss": true
   },
-  "OPAutoClicker": {
-    "category": "工具类",
-    "choco": "autoclicker",
-    "content": "OPAutoClicker 自动点击",
-    "description": "功能齐全的自动点击器，支持动态光标位置或预设位置两种自动点击模式。",
-    "link": "https://www.opautoclicker.com",
-    "winget": "OPAutoClicker.OPAutoClicker",
-    "foss": false
-  },
   "openrgb": {
     "category": "工具类",
     "choco": "openrgb",
@@ -1023,51 +1321,6 @@
     "link": "https://openrgb.org/",
     "winget": "OpenRGB.OpenRGB",
     "foss": true
-  },
-  "OpenVPN": {
-    "category": "专业工具",
-    "choco": "openvpn-connect",
-    "content": "OpenVPN Connect 客户端",
-    "description": "OpenVPN Connect 是一款 VPN 客户端，可让你安全连接到 VPN 服务器",
-    "link": "https://openvpn.net/",
-    "winget": "OpenVPNTechnologies.OpenVPNConnect",
-    "foss": false
-  },
-  "OVirtualBox": {
-    "category": "工具类",
-    "choco": "virtualbox",
-    "content": "Oracle VirtualBox 虚拟机",
-    "description": "Oracle VirtualBox 是一款功能强大且免费开源的虚拟化工具。",
-    "link": "https://www.virtualbox.org/",
-    "winget": "Oracle.VirtualBox",
-    "foss": true
-  },
-  "policyplus": {
-    "category": "工具类",
-    "choco": "na",
-    "content": "Policy Plus 组策略编辑",
-    "description": "本地组策略编辑器增强版，适用于所有 Windows 版本。",
-    "link": "https://github.com/Fleex255/PolicyPlus",
-    "winget": "Fleex255.PolicyPlus",
-    "foss": true
-  },
-  "processexplorer": {
-    "category": "微软工具",
-    "choco": "procexp",
-    "content": "Process Explorer 进程管理",
-    "description": "Process Explorer 是任务管理器和系统监视器。",
-    "link": "https://learn.microsoft.com/sysinternals/downloads/process-explorer",
-    "winget": "Microsoft.Sysinternals.ProcessExplorer",
-    "foss": false
-  },
-  "Paintdotnet": {
-    "category": "多媒体工具",
-    "choco": "paint.net",
-    "content": "Paint.NET 图像编辑",
-    "description": "Paint.NET 是一款免费的 Windows 图像照片编辑软件",
-    "link": "https://www.getpaint.net/",
-    "winget": "dotPDN.PaintDotNet",
-    "foss": false
   },
   "parsec": {
     "category": "工具类",
@@ -1114,6 +1367,23 @@
     "winget": "Plex.Plex",
     "foss": false
   },
+  "pnpm": {
+    "category": "开发工具",
+    "content": "pnpm 包管理器",
+    "description": "pnpm 是一款快速且节省磁盘空间的 JavaScript 和 Node.js 包管理器。",
+    "link": "https://pnpm.io/",
+    "winget": "pnpm.pnpm",
+    "foss": true
+  },
+  "policyplus": {
+    "category": "工具类",
+    "choco": "na",
+    "content": "Policy Plus 组策略编辑",
+    "description": "本地组策略编辑器增强版，适用于所有 Windows 版本。",
+    "link": "https://github.com/Fleex255/PolicyPlus",
+    "winget": "Fleex255.PolicyPlus",
+    "foss": true
+  },
   "posh": {
     "category": "开发工具",
     "choco": "oh-my-posh",
@@ -1141,6 +1411,15 @@
     "winget": "Microsoft.PowerToys",
     "foss": true
   },
+  "powerword": {
+    "category": "工具类",
+    "choco": "",
+    "foss": false,
+    "content": "金山词霸",
+    "description": "金山词霸是专业的翻译和词典工具，支持划词翻译、整句翻译和生词本。",
+    "link": "https://www.iciba.com/",
+    "winget": "Kingsoft.PowerWord"
+  },
   "prismlauncher": {
     "category": "游戏",
     "choco": "prismlauncher",
@@ -1150,6 +1429,15 @@
     "winget": "PrismLauncher.PrismLauncher",
     "foss": true
   },
+  "processexplorer": {
+    "category": "微软工具",
+    "choco": "procexp",
+    "content": "Process Explorer 进程管理",
+    "description": "Process Explorer 是任务管理器和系统监视器。",
+    "link": "https://learn.microsoft.com/sysinternals/downloads/process-explorer",
+    "winget": "Microsoft.Sysinternals.ProcessExplorer",
+    "foss": false
+  },
   "processlasso": {
     "category": "工具类",
     "choco": "plasso",
@@ -1157,6 +1445,15 @@
     "description": "Process Lasso 是一款系统优化和自动化工具，可优化 CPU 使用率",
     "link": "https://bitsum.com/",
     "winget": "BitSum.ProcessLasso",
+    "foss": false
+  },
+  "processmonitor": {
+    "category": "微软工具",
+    "choco": "procexp",
+    "content": "Process Monitor 进程监控",
+    "description": "SysInternals Process Monitor 是一款高级监控工具，实时显示系统和进程活动。",
+    "link": "https://docs.microsoft.com/en-us/sysinternals/downloads/procmon",
+    "winget": "Microsoft.Sysinternals.ProcessMonitor",
     "foss": false
   },
   "protonauth": {
@@ -1168,15 +1465,6 @@
     "winget": "Proton.ProtonAuthenticator",
     "foss": true
   },
-  "protonmail": {
-    "category": "通讯工具",
-    "choco": "protonmail",
-    "content": "Proton Mail 加密邮箱",
-    "description": "Proton Mail 是 Proton 的端到端加密电子邮件服务。",
-    "link": "https://proton.me/mail",
-    "winget": "Proton.ProtonMail",
-    "foss": true
-  },
   "protondrive": {
     "category": "工具类",
     "choco": "protondrive",
@@ -1184,6 +1472,15 @@
     "description": "Proton Drive 是端到端加密的瑞士文件保险库。",
     "link": "https://proton.me/drive",
     "winget": "Proton.ProtonDrive",
+    "foss": true
+  },
+  "protonmail": {
+    "category": "通讯工具",
+    "choco": "protonmail",
+    "content": "Proton Mail 加密邮箱",
+    "description": "Proton Mail 是 Proton 的端到端加密电子邮件服务。",
+    "link": "https://proton.me/mail",
+    "winget": "Proton.ProtonMail",
     "foss": true
   },
   "protonpass": {
@@ -1203,15 +1500,6 @@
     "link": "https://protonvpn.com/",
     "winget": "Proton.ProtonVPN",
     "foss": true
-  },
-  "processmonitor": {
-    "category": "微软工具",
-    "choco": "procexp",
-    "content": "Process Monitor 进程监控",
-    "description": "SysInternals Process Monitor 是一款高级监控工具，实时显示系统和进程活动。",
-    "link": "https://docs.microsoft.com/en-us/sysinternals/downloads/procmon",
-    "winget": "Microsoft.Sysinternals.ProcessMonitor",
-    "foss": false
   },
   "putty": {
     "category": "专业工具",
@@ -1240,6 +1528,42 @@
     "winget": "qBittorrent.qBittorrent",
     "foss": true
   },
+  "qq": {
+    "category": "通讯工具",
+    "choco": "",
+    "foss": false,
+    "content": "QQ",
+    "description": "QQ 是腾讯推出的即时通讯软件，支持文字聊天、语音视频通话、文件传输和群组交流。",
+    "link": "https://im.qq.com/",
+    "winget": "Tencent.QQ"
+  },
+  "qqbrowser": {
+    "category": "浏览器",
+    "choco": "",
+    "foss": false,
+    "content": "QQ 浏览器",
+    "description": "QQ 浏览器是腾讯的多核浏览器，支持 Chrome 和 IE 双内核。",
+    "link": "https://browser.qq.com/",
+    "winget": "Tencent.QQBrowser"
+  },
+  "qqmusic": {
+    "category": "多媒体工具",
+    "choco": "",
+    "foss": false,
+    "content": "QQ 音乐",
+    "description": "QQ 音乐是腾讯的音乐平台，提供海量正版音乐在线试听和下载。",
+    "link": "https://y.qq.com/",
+    "winget": "Tencent.QQMusic"
+  },
+  "qqpinyin": {
+    "category": "工具类",
+    "choco": "",
+    "foss": false,
+    "content": "QQ 拼音输入法",
+    "description": "QQ 拼音输入法支持拼音、五笔、手写输入和个性化皮肤。",
+    "link": "https://py.qq.com/",
+    "winget": "Tencent.QQPinyin"
+  },
   "qtox": {
     "category": "通讯工具",
     "choco": "qtox",
@@ -1249,6 +1573,15 @@
     "winget": "Tox.qTox",
     "foss": true
   },
+  "rdcman": {
+    "category": "微软工具",
+    "choco": "rdcman",
+    "content": "RDCMan 远程桌面管理",
+    "description": "RDCMan 管理多个远程桌面连接，适用于需要定期访问每台机器的服务器实验室。",
+    "link": "https://learn.microsoft.com/en-us/sysinternals/downloads/rdcman",
+    "winget": "Microsoft.Sysinternals.RDCMan",
+    "foss": false
+  },
   "revo": {
     "category": "工具类",
     "choco": "revo-uninstaller",
@@ -1256,15 +1589,6 @@
     "description": "Revo Uninstaller 是一款高级卸载工具，帮助您删除不需要的软件并清理系统。",
     "link": "https://www.revouninstaller.com/",
     "winget": "RevoUninstaller.RevoUninstaller",
-    "foss": false
-  },
-  "WiseProgramUninstaller": {
-    "category": "工具类",
-    "choco": "na",
-    "content": "Wise Program Uninstaller 卸载工具",
-    "description": "Wise Program Uninstaller 是卸载 Windows 程序的完美解决方案。",
-    "link": "https://www.wisecleaner.com/wise-program-uninstaller.html",
-    "winget": "WiseCleaner.WiseProgramUninstaller",
     "foss": false
   },
   "rufus": {
@@ -1303,24 +1627,6 @@
     "winget": "ShareX.ShareX",
     "foss": true
   },
-  "nilesoftShell": {
-    "category": "工具类",
-    "choco": "nilesoft-shell",
-    "content": "Nilesoft Shell 右键菜单",
-    "description": "Shell 是一款 Windows 右键菜单扩展工具，添加额外功能和自定义选项。",
-    "link": "https://nilesoft.org/",
-    "winget": "Nilesoft.Shell",
-    "foss": false
-  },
-  "systeminformer": {
-    "category": "开发工具",
-    "choco": "systeminformer",
-    "content": "System Informer 系统监控",
-    "description": "一款免费、强大、多用途的工具，帮助您监控系统资源、调试软件和检测恶意软件。",
-    "link": "https://systeminformer.com/",
-    "winget": "WinsiderSS.SystemInformer",
-    "foss": true
-  },
   "signal": {
     "category": "通讯工具",
     "choco": "signal",
@@ -1356,6 +1662,24 @@
     "link": "https://slack.com/",
     "winget": "SlackTechnologies.Slack",
     "foss": false
+  },
+  "sogouinput": {
+    "category": "工具类",
+    "choco": "",
+    "foss": false,
+    "content": "搜狗输入法",
+    "description": "搜狗输入法是主流的拼音输入法，支持手写、语音和云词库同步。",
+    "link": "https://pinyin.sogou.com/",
+    "winget": "Sogou.SogouInput"
+  },
+  "sogouwubi": {
+    "category": "工具类",
+    "choco": "",
+    "foss": false,
+    "content": "搜狗五笔输入法",
+    "description": "搜狗五笔输入法专为五笔用户设计，支持五笔拼音混输。",
+    "link": "https://wubi.sogou.com/",
+    "winget": "Sogou.SogouWBInput"
   },
   "startallback": {
     "category": "工具类",
@@ -1393,6 +1717,15 @@
     "winget": "LizardByte.Sunshine",
     "foss": true
   },
+  "systeminformer": {
+    "category": "开发工具",
+    "choco": "systeminformer",
+    "content": "System Informer 系统监控",
+    "description": "一款免费、强大、多用途的工具，帮助您监控系统资源、调试软件和检测恶意软件。",
+    "link": "https://systeminformer.com/",
+    "winget": "WinsiderSS.SystemInformer",
+    "foss": true
+  },
   "tcpview": {
     "category": "微软工具",
     "choco": "tcpview",
@@ -1411,15 +1744,6 @@
     "winget": "Microsoft.Teams",
     "foss": false
   },
-  "teamviewer": {
-    "category": "工具类",
-    "choco": "teamviewer9",
-    "content": "TeamViewer 远程协助",
-    "description": "TeamViewer 是一款流行的远程访问和支持软件。",
-    "link": "https://www.teamviewer.com/",
-    "winget": "TeamViewer.TeamViewer",
-    "foss": false
-  },
   "teamspeak3": {
     "category": "通讯工具",
     "choco": "teamspeak",
@@ -1427,6 +1751,15 @@
     "description": "TEAMSPEAK. YOUR TEAM. YOUR RULES. Use crystal clear sound to communicate with your teammates cross-platform with military-grade security, lag-free performance & unparalleled reliability and uptime.",
     "link": "https://www.teamspeak.com/",
     "winget": "TeamSpeakSystems.TeamSpeakClient",
+    "foss": false
+  },
+  "teamviewer": {
+    "category": "工具类",
+    "choco": "teamviewer9",
+    "content": "TeamViewer 远程协助",
+    "description": "TeamViewer 是一款流行的远程访问和支持软件。",
+    "link": "https://www.teamviewer.com/",
+    "winget": "TeamViewer.TeamViewer",
     "foss": false
   },
   "telegram": {
@@ -1437,6 +1770,33 @@
     "link": "https://telegram.org/",
     "winget": "Telegram.TelegramDesktop",
     "foss": true
+  },
+  "tencentdocs": {
+    "category": "办公工具",
+    "choco": "",
+    "foss": false,
+    "content": "腾讯文档",
+    "description": "腾讯文档是一款支持多人协作的在线文档工具，支持多端同步。",
+    "link": "https://docs.qq.com/",
+    "winget": "Tencent.TencentDocs"
+  },
+  "tencentmeeting": {
+    "category": "通讯工具",
+    "choco": "",
+    "foss": false,
+    "content": "腾讯会议",
+    "description": "腾讯会议是一款云视频会议产品，支持在线会议、屏幕共享和会议录制。",
+    "link": "https://meeting.tencent.com/",
+    "winget": "Tencent.TencentMeeting"
+  },
+  "tencentvideo": {
+    "category": "多媒体工具",
+    "choco": "",
+    "foss": false,
+    "content": "腾讯视频",
+    "description": "腾讯视频提供海量热播影视剧、综艺和动漫等视频内容。",
+    "link": "https://v.qq.com/",
+    "winget": "Tencent.TencentVideo"
   },
   "terminal": {
     "category": "微软工具",
@@ -1456,14 +1816,23 @@
     "winget": "Mozilla.Thunderbird",
     "foss": true
   },
-  "betterbird": {
-    "category": "通讯工具",
-    "choco": "betterbird",
-    "content": "Betterbird 邮件客户端(优化版)",
-    "description": "Betterbird 是 Mozilla Thunderbird 的分支，具有额外功能和错误修复。",
-    "link": "https://www.betterbird.eu/",
-    "winget": "Betterbird.Betterbird",
+  "tightvnc": {
+    "category": "工具类",
+    "choco": "TightVNC",
+    "content": "TightVNC 远程桌面",
+    "description": "TightVNC 是一款免费开源的远程桌面软件",
+    "link": "https://www.tightvnc.com/",
+    "winget": "GlavSoft.TightVNC",
     "foss": true
+  },
+  "tim": {
+    "category": "通讯工具",
+    "choco": "",
+    "foss": false,
+    "content": "TIM",
+    "description": "TIM 是腾讯推出的轻聊版 QQ，去除了广告和娱乐功能，专注于办公沟通。",
+    "link": "https://tim.qq.com/",
+    "winget": "Tencent.TIM"
   },
   "tor": {
     "category": "浏览器",
@@ -1528,14 +1897,14 @@
     "winget": "Unity.UnityHub",
     "foss": false
   },
-  "everything": {
-    "category": "工具类",
-    "choco": "everything",
-    "content": "Everything 文件搜索",
-    "description": "Everything 是一款极速文件搜索工具，可瞬间定位文件和文件夹",
-    "link": "https://www.voidtools.com/",
-    "winget": "voidtools.Everything",
-    "foss": false
+  "uv": {
+    "category": "开发工具",
+    "choco": "uv",
+    "content": "uv Python包管理器",
+    "description": "uv 是一款用 Rust 编写的快速 Python 包和项目管理器。",
+    "link": "https://docs.astral.sh/uv/getting-started/installation/",
+    "winget": "astral-sh.uv",
+    "foss": true
   },
   "vc2015_32": {
     "category": "微软工具",
@@ -1654,6 +2023,33 @@
     "winget": "Waterfox.Waterfox",
     "foss": true
   },
+  "wechat": {
+    "category": "通讯工具",
+    "choco": "",
+    "foss": false,
+    "content": "微信",
+    "description": "微信是一款跨平台的通讯工具，支持即时消息、语音视频通话、朋友圈和移动支付等功能。",
+    "link": "https://weixin.qq.com/",
+    "winget": "Tencent.WeChat"
+  },
+  "wecom": {
+    "category": "通讯工具",
+    "choco": "",
+    "foss": false,
+    "content": "企业微信",
+    "description": "企业微信是腾讯为企业打造的通讯与办公工具，与微信互通，支持内部沟通、考勤和审批。",
+    "link": "https://work.weixin.qq.com/",
+    "winget": "Tencent.WeCom"
+  },
+  "wetype": {
+    "category": "工具类",
+    "choco": "",
+    "foss": false,
+    "content": "微信输入法",
+    "description": "微信输入法支持跨设备同步词库和剪贴板，保护输入隐私。",
+    "link": "https://z.weixin.qq.com/",
+    "winget": "Tencent.WeType"
+  },
   "whatsapp": {
     "category": "通讯工具",
     "choco": "na",
@@ -1717,6 +2113,15 @@
     "winget": "AntibodySoftware.WizTree",
     "foss": false
   },
+  "wpsoffice": {
+    "category": "办公工具",
+    "choco": "",
+    "foss": false,
+    "content": "WPS Office",
+    "description": "WPS Office 是金山开发的办公套件，含文字、表格、演示三大组件，兼容Office格式。",
+    "link": "https://www.wps.com/",
+    "winget": "Kingsoft.WPSOffice"
+  },
   "xeheditor": {
     "category": "工具类",
     "choco": "HxD",
@@ -1735,6 +2140,15 @@
     "winget": "Yarn.Yarn",
     "foss": true
   },
+  "youdaonote": {
+    "category": "工具类",
+    "choco": "",
+    "foss": false,
+    "content": "有道笔记",
+    "description": "有道笔记是网易的云笔记工具，支持多端同步和OCR识别。",
+    "link": "https://note.youdao.com/",
+    "winget": "NetEase.YoudaoNote"
+  },
   "zoom": {
     "category": "通讯工具",
     "choco": "zoom",
@@ -1743,95 +2157,5 @@
     "link": "https://zoom.us/",
     "winget": "Zoom.Zoom",
     "foss": false
-  },
-  "uv": {
-    "category": "开发工具",
-    "choco": "uv",
-    "content": "uv Python包管理器",
-    "description": "uv 是一款用 Rust 编写的快速 Python 包和项目管理器。",
-    "link": "https://docs.astral.sh/uv/getting-started/installation/",
-    "winget": "astral-sh.uv",
-    "foss": true
-  },
-  "tightvnc": {
-    "category": "工具类",
-    "choco": "TightVNC",
-    "content": "TightVNC 远程桌面",
-    "description": "TightVNC 是一款免费开源的远程桌面软件",
-    "link": "https://www.tightvnc.com/",
-    "winget": "GlavSoft.TightVNC",
-    "foss": true
-  },
-  "glazewm": {
-    "category": "工具类",
-    "choco": "glazewm",
-    "content": "GlazeWM 平铺窗口管理器",
-    "description": "GlazeWM 是一款受 i3 和 Polybar 启发的 Windows 平铺窗口管理器。",
-    "link": "https://github.com/glzr-io/glazewm",
-    "winget": "glzr-io.glazewm",
-    "foss": true
-  },
-  "Overwolf": {
-    "category": "游戏",
-    "choco": "overwolf",
-    "content": "Overwolf 游戏插件平台",
-    "description": "流行的游戏覆盖层和辅助应用平台，广泛被游戏玩家使用。",
-    "link": "https://www.overwolf.com/app/overwolf-curseforge",
-    "winget": "Overwolf.CurseForge",
-    "foss": false
-  },
-  "OFGB": {
-    "category": "工具类",
-    "choco": "ofgb",
-    "content": "OFGB Windows广告移除",
-    "description": "从 Windows 11 各处移除广告的 GUI 工具。",
-    "link": "https://github.com/xM4ddy/OFGB",
-    "winget": "xM4ddy.OFGB",
-    "foss": true
-  },
-  "ZenBrowser": {
-    "category": "浏览器",
-    "choco": "zen-browser",
-    "content": "Zen 浏览器",
-    "description": "基于 Firefox 构建的现代、注重隐私、性能驱动的浏览器。",
-    "link": "https://zen-browser.app/",
-    "winget": "Zen-Team.Zen-Browser",
-    "foss": true
-  },
-  "Zed": {
-    "category": "开发工具",
-    "choco": "zed",
-    "content": "Zed 代码编辑器",
-    "description": "Zed 是一款现代高性能代码编辑器，从头设计以追求速度和协作。",
-    "link": "https://zed.dev/",
-    "winget": "ZedIndustries.Zed",
-    "foss": true
-  },
-  "deskflow": {
-    "category": "工具类",
-    "choco": "deskflow",
-    "content": "Deskflow 键鼠共享",
-    "description": "Deskflow 是一款免费开源的软件 KVM，让您在多台计算机之间共享键盘和鼠标。",
-    "link": "https://github.com/deskflow/deskflow",
-    "winget": "Deskflow.Deskflow",
-    "foss": true
-  },
-  "Ruby": {
-    "category": "开发工具",
-    "choco": "ruby",
-    "winget": "RubyInstallerTeam.Ruby.4.0",
-    "description": "包含 MSYS2 安装的 Ruby 语言执行环境。",
-    "content": "Ruby 编程语言",
-    "link": "https://rubyinstaller.org/",
-    "foss": true
-  },
-  "Lua": {
-    "category": "开发工具",
-    "choco": "lua",
-    "winget": "rjpcomputing.luaforwindows",
-    "description": "Lua 脚本语言的电池齐全环境（含依赖库）",
-    "content": "Lua 脚本语言",
-    "link": "https://github.com/rjpcomputing/luaforwindows",
-    "foss": true
   }
 }
