@@ -1,11 +1,12 @@
 function Invoke-WPFInstall {
     <#
     .SYNOPSIS
-        Installs the selected programs using winget, if one or more of the selected programs are already installed on the system, winget will try and perform an upgrade if there's a newer version to install.
+        Installs the selected programs using winget, choco, or scoop with automatic
+        fallback and timeout. If the preferred manager fails (non-zero exit code or
+        timeout), the next available manager for that app is tried automatically.
     #>
 
     $PackagesToInstall = $sync.selectedApps | Foreach-Object { $sync.configs.applicationsHashtable.$_ }
-
 
     if($sync.ProcessRunning) {
         $msg = "[安装应用] An安装过程正在进行中。"
@@ -27,15 +28,19 @@ function Invoke-WPFInstall {
     Invoke-WPFRunspace -ParameterList @(("PackagesToInstall", $PackagesToInstall),("ManagerPreference", $ManagerPreference)) -ScriptBlock {
         param($PackagesToInstall, $ManagerPreference)
 
-        $packagesSorted = Get-WinUtilSelectedPackages -PackageList $PackagesToInstall -Preference $ManagerPreference
-
-        $packagesWinget = $packagesSorted['Winget']
-        $packagesChoco = $packagesSorted['Choco']
-        $packagesScoop = $packagesSorted['Scoop']
-        $totalPackages = @($packagesWinget).Count + @($packagesChoco).Count + @($packagesScoop).Count
+        $totalPackages = @($PackagesToInstall).Count
         $completedPackages = 0
         $hasUI = $null -ne $sync.Form -and $null -ne $sync.Form.Dispatcher
-        Write-WinUtilLog -Component "Install" -Message "Install package manager split: winget=$(@($packagesWinget).Count), choco=$(@($packagesChoco).Count), scoop=$(@($packagesScoop).Count)"
+        Write-WinUtilLog -Component "Install" -Message "Install packages count: $totalPackages"
+
+        # Build per-package manager order from preference
+        # E.g. Winget preference → try winget first, fallback choco, then scoop
+        $managerPriority = switch ($ManagerPreference) {
+            "Winget" { @("winget", "choco", "scoop") }
+            "Choco"  { @("choco", "winget", "scoop") }
+            "Scoop"  { @("scoop", "winget", "choco") }
+            default  { @("winget", "choco", "scoop") }
+        }
 
         try {
             $sync.ProcessRunning = $true
@@ -49,56 +54,87 @@ function Invoke-WPFInstall {
                 }
             }
 
-            if($packagesWinget.Count -gt 0 -and $packagesWinget -ne "0") {
-                Install-WinUtilWinget
-                foreach ($program in $packagesWinget) {
-                    $position = $completedPackages + 1
-                    $startPercent = [int](($completedPackages / $totalPackages) * 100)
-                    if ($hasUI) {
-                        Set-WinUtilTweaksProgressIndicator -Visible $true -Label "Installing $program ($position/$totalPackages)" -Percent $startPercent
+            foreach ($package in $PackagesToInstall) {
+                $position = $completedPackages + 1
+                $startPercent = [int](($completedPackages / $totalPackages) * 100)
+                $installed = $false
+                $appName = $package.content
+                $lastError = ""
+
+                foreach ($manager in $managerPriority) {
+                    $packageId = $package.$manager
+                    if ([string]::IsNullOrWhiteSpace($packageId) -or $packageId -eq "na") {
+                        continue
                     }
 
-                    Install-WinUtilProgramWinget -Action Install -Programs @($program) -FailedPackages $failedPackages
-                    $completedPackages++
-                    $completedPercent = [int](($completedPackages / $totalPackages) * 100)
                     if ($hasUI) {
-                        Set-WinUtilTweaksProgressIndicator -Visible $true -Label "Installed $program ($completedPackages/$totalPackages)" -Percent $completedPercent
+                        Set-WinUtilTweaksProgressIndicator -Visible $true -Label "尝试 $manager 安装 $appName ($position/$totalPackages)" -Percent $startPercent
+                    }
+
+                    $currentStatus = "skipped"
+                    switch ($manager) {
+                        "winget" {
+                            Install-WinUtilWinget
+                            $process = Start-Process -FilePath winget -ArgumentList @("install", "--id", $packageId, "--accept-package-agreements", "--accept-source-agreements", "--source", "winget", "--silent") -NoNewWindow -PassThru
+                            $exited = $process.WaitForExit(300000)  # 5 min timeout
+                            if (-not $exited) {
+                                $process.Kill()
+                                $lastError = "winget:超时"
+                            } else {
+                                if ($process.ExitCode -eq 0) { $installed = $true; $currentStatus = "ok" }
+                                else { $lastError = "winget($($process.ExitCode))" }
+                            }
+                            Write-WinUtilLog -Component "Package" -Message "Install winget package: $packageId → exit=$($process.ExitCode) installed=$installed"
+                        }
+                        "choco" {
+                            Install-WinUtilChoco
+                            $process = Start-Process -FilePath choco -ArgumentList @("install", $packageId, "-y") -NoNewWindow -PassThru
+                            $exited = $process.WaitForExit(300000)
+                            if (-not $exited) {
+                                $process.Kill()
+                                $lastError = "choco:超时"
+                            } else {
+                                if ($process.ExitCode -eq 0) { $installed = $true; $currentStatus = "ok" }
+                                else { $lastError = "choco($($process.ExitCode))" }
+                            }
+                            Write-WinUtilLog -Component "Package" -Message "Install choco package: $packageId → exit=$($process.ExitCode) installed=$installed"
+                        }
+                        "scoop" {
+                            Install-WinUtilScoop
+                            $process = Start-Process -FilePath scoop -ArgumentList @("install", $packageId) -NoNewWindow -PassThru
+                            $exited = $process.WaitForExit(300000)
+                            if (-not $exited) {
+                                $process.Kill()
+                                $lastError = "scoop:超时"
+                            } else {
+                                if ($process.ExitCode -eq 0) { $installed = $true; $currentStatus = "ok" }
+                                else { $lastError = "scoop($($process.ExitCode))" }
+                            }
+                            Write-WinUtilLog -Component "Package" -Message "Install scoop package: $packageId → exit=$($process.ExitCode) installed=$installed"
+                        }
+                    }
+
+                    if ($installed) { break }
+                }
+
+                $completedPackages++
+                $completedPercent = [int](($completedPackages / $totalPackages) * 100)
+
+                if ($installed) {
+                    if ($hasUI) {
+                        Set-WinUtilTweaksProgressIndicator -Visible $true -Label "已安装 $appName ($completedPackages/$totalPackages)" -Percent $completedPercent
                         Invoke-WPFUIThread -ScriptBlock { Set-WinUtilTaskbaritem -value ($completedPercent / 100) }
                     }
+                } else {
+                    if ($hasUI) {
+                        Set-WinUtilTweaksProgressIndicator -Visible $true -Label "安装失败 $appName ($completedPackages/$totalPackages)" -Percent $completedPercent
+                    }
+                    if ($null -ne $failedPackages) {
+                        [void]$failedPackages.Add("$appName ($lastError)")
+                    }
                 }
             }
-            if($packagesChoco.Count -gt 0) {
-                $position = $completedPackages + 1
-                $startPercent = [int](($completedPackages / $totalPackages) * 100)
-                if ($hasUI) {
-                    Set-WinUtilTweaksProgressIndicator -Visible $true -Label "Installing Chocolatey packages ($position/$totalPackages)" -Percent $startPercent
-                }
 
-                Install-WinUtilChoco
-                Install-WinUtilProgramChoco -Action Install -Programs $packagesChoco -FailedPackages $failedPackages
-                $completedPackages += @($packagesChoco).Count
-                $completedPercent = [int](($completedPackages / $totalPackages) * 100)
-                if ($hasUI) {
-                    Set-WinUtilTweaksProgressIndicator -Visible $true -Label "Installed Chocolatey packages ($completedPackages/$totalPackages)" -Percent $completedPercent
-                    Invoke-WPFUIThread -ScriptBlock { Set-WinUtilTaskbaritem -value ($completedPercent / 100) }
-                }
-            }
-            if($packagesScoop.Count -gt 0) {
-                $position = $completedPackages + 1
-                $startPercent = [int](($completedPackages / $totalPackages) * 100)
-                if ($hasUI) {
-                    Set-WinUtilTweaksProgressIndicator -Visible $true -Label "Installing Scoop packages ($position/$totalPackages)" -Percent $startPercent
-                }
-
-                Install-WinUtilScoop
-                Install-WinUtilProgramScoop -Action Install -Programs $packagesScoop -FailedPackages $failedPackages
-                $completedPackages += @($packagesScoop).Count
-                $completedPercent = [int](($completedPackages / $totalPackages) * 100)
-                if ($hasUI) {
-                    Set-WinUtilTweaksProgressIndicator -Visible $true -Label "Installed Scoop packages ($completedPackages/$totalPackages)" -Percent $completedPercent
-                    Invoke-WPFUIThread -ScriptBlock { Set-WinUtilTaskbaritem -value ($completedPercent / 100) }
-                }
-            }
             Write-Host "==========================================="
             if ($failedPackages.Count -gt 0) {
                 Write-Host "--      安装完成（部分失败）  ---"
