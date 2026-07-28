@@ -209,6 +209,16 @@
     "winget": "",
     "region": "foreign"
   },
+  "baidumusic": {
+    "category": "多媒体工具__音乐发烧友",
+    "choco": "",
+    "content": "千千音乐",
+    "description": "千千音乐（原百度音乐）是百度推出的音乐平台，提供在线听歌和音乐下载服务。",
+    "link": "https://music.baidu.com/",
+    "winget": "",
+    "foss": false,
+    "region": "domestic"
+  },
   "baidunetdisk": {
     "category": "工具类__网盘工具",
     "choco": "",
@@ -1159,6 +1169,16 @@
     "winget": "IObit.Uninstaller",
     "region": "foreign"
   },
+  "iobitunlocker": {
+    "category": "工具类__系统工具",
+    "choco": "iobit-unlocker",
+    "content": "IObit Unlocker",
+    "description": "IObit Unlocker 是一款文件解锁工具，可以解除被系统占用的文件，强制删除或移动。",
+    "link": "https://www.iobit.com/en/iobit-unlocker.php",
+    "winget": "",
+    "foss": false,
+    "region": "foreign"
+  },
   "iqiyi": {
     "category": "多媒体工具__看剧必备",
     "choco": "iqiyi",
@@ -1359,6 +1379,16 @@
     "foss": false,
     "region": "domestic"
   },
+  "kwmusic": {
+    "category": "多媒体工具__音乐发烧友",
+    "choco": "",
+    "content": "酷我音乐",
+    "description": "酷我音乐是一款中国主流的数字音乐平台，提供海量正版音乐和音频内容。",
+    "link": "https://www.kuwo.cn/",
+    "winget": "",
+    "foss": false,
+    "region": "domestic"
+  },
   "lazygit": {
     "category": "开发工具",
     "choco": "lazygit",
@@ -1447,6 +1477,26 @@
     "description": "遨游浏览器（Maxthon）是一款多标签浏览器，支持云同步和扩展插件。",
     "link": "https://www.maxthon.com/",
     "winget": "Maxthon.Maxthon",
+    "region": "domestic"
+  },
+  "mcloud": {
+    "category": "工具类__网盘工具",
+    "choco": "",
+    "content": "中国移动云盘",
+    "description": "中国移动云盘是中国移动推出的云存储服务，提供文件备份、同步和分享功能。",
+    "link": "https://cloud.189.cn/",
+    "winget": "",
+    "foss": false,
+    "region": "domestic"
+  },
+  "mgtv": {
+    "category": "多媒体工具__看剧必备",
+    "choco": "",
+    "content": "芒果TV",
+    "description": "芒果TV是湖南广电旗下的视频平台，提供综艺、电视剧、电影等内容。",
+    "link": "https://www.mgtv.com/",
+    "winget": "",
+    "foss": false,
     "region": "domestic"
   },
   "microsoftoffice": {
@@ -1679,6 +1729,16 @@
     "winget": "",
     "region": "foreign"
   },
+  "notepad3": {
+    "category": "开发工具",
+    "choco": "notepad3",
+    "content": "NotePad3（替代记事本）",
+    "description": "NotePad3 是一款基于 Scintilla 的轻量级文本编辑器，替代 Windows 记事本，支持语法高亮。",
+    "link": "https://www.rizonesoft.com/downloads/notepad3/",
+    "winget": "Rizonesoft.Notepad3",
+    "foss": true,
+    "region": "foreign"
+  },
   "notepadplus": {
     "category": "多媒体工具",
     "choco": "notepadplusplus",
@@ -1849,6 +1909,16 @@
     "foss": false,
     "region": "domestic"
   },
+  "pan123": {
+    "category": "工具类__网盘工具",
+    "choco": "",
+    "content": "123云盘",
+    "description": "123云盘是一款国产云存储服务，支持大文件上传分享和高速下载。",
+    "link": "https://www.123pan.com/",
+    "winget": "",
+    "foss": false,
+    "region": "domestic"
+  },
   "parsec": {
     "category": "工具类",
     "choco": "parsec",
@@ -1926,6 +1996,16 @@
     "link": "https://ohmyposh.dev/",
     "winget": "JanDeDobbeleer.OhMyPosh",
     "foss": true,
+    "region": "foreign"
+  },
+  "potplayer": {
+    "category": "多媒体工具__视频软件",
+    "choco": "potplayer",
+    "content": "PotPlayer 媒体播放器",
+    "description": "PotPlayer 是一款万能的媒体播放器，支持几乎所有视频格式，界面简洁功能强大。",
+    "link": "https://potplayer.daum.net/",
+    "winget": "",
+    "foss": false,
     "region": "foreign"
   },
   "powershell": {
@@ -2158,6 +2238,16 @@
     "foss": true,
     "region": "foreign"
   },
+  "quark": {
+    "category": "工具类__网盘工具",
+    "choco": "",
+    "content": "夸克网盘（夸克浏览器）",
+    "description": "夸克是阿里旗下的智能搜索浏览器，内置夸克网盘，支持文件存储和高速下载。",
+    "link": "https://pan.quark.cn/",
+    "winget": "Alibaba.Quark",
+    "foss": false,
+    "region": "domestic"
+  },
   "quicker": {
     "category": "开发工具",
     "choco": "quicker",
@@ -2165,6 +2255,16 @@
     "description": "Quicker 是一款 Windows 效率工具，提供鼠标手势和快捷键。",
     "link": "https://getquicker.net/",
     "winget": "Quicker.Quicker",
+    "foss": false,
+    "region": "domestic"
+  },
+  "raylink": {
+    "category": "工具类__系统工具",
+    "choco": "",
+    "content": "RayLink 远程控制",
+    "description": "RayLink 是一款国产远程控制软件，支持远程桌面、文件传输和远程办公。",
+    "link": "https://www.raylink.live/",
+    "winget": "",
     "foss": false,
     "region": "domestic"
   },
@@ -2548,6 +2648,16 @@
     "foss": true,
     "region": "foreign"
   },
+  "tortoisegit": {
+    "category": "开发工具",
+    "choco": "tortoisegit",
+    "content": "TortoiseGit 简体中文版",
+    "description": "TortoiseGit 是 Git 版本控制系统的 Windows Shell 扩展，以右键菜单方式操作 Git。",
+    "link": "https://tortoisegit.org/",
+    "winget": "TortoiseGit.TortoiseGit",
+    "foss": true,
+    "region": "foreign"
+  },
   "totalcommander": {
     "category": "工具类",
     "choco": "TotalCommander",
@@ -2746,6 +2856,16 @@
     "link": "https://www.videolan.org/vlc/",
     "winget": "VideoLAN.VLC",
     "foss": true,
+    "region": "foreign"
+  },
+  "vmwareworkstation": {
+    "category": "开发工具",
+    "choco": "vmware-workstation",
+    "content": "VMware Workstation Pro",
+    "description": "VMware Workstation Pro 是一款强大的桌面虚拟化软件，支持运行多个操作系统。",
+    "link": "https://www.vmware.com/products/workstation-pro/",
+    "winget": "",
+    "foss": false,
     "region": "foreign"
   },
   "vrdesktopstreamer": {
@@ -2968,6 +3088,16 @@
     "foss": false,
     "region": "foreign"
   },
+  "xftp": {
+    "category": "开发工具",
+    "choco": "xftp",
+    "content": "Xftp 个人免费版",
+    "description": "Xftp 是一款 FTP/SFTP 客户端，与 Xshell 无缝集成，支持文件传输和管理。",
+    "link": "https://www.netsarang.com/zh/xftp/",
+    "winget": "",
+    "foss": false,
+    "region": "foreign"
+  },
   "ximalaya": {
     "category": "多媒体工具__音乐发烧友",
     "choco": "",
@@ -2986,6 +3116,16 @@
     "description": "XnView是一款高效的图片查看和管理工具，支持500多种图像格式。",
     "link": "https://www.xnview.com/",
     "winget": "XnSoft.XnView",
+    "region": "foreign"
+  },
+  "xshell": {
+    "category": "开发工具",
+    "choco": "xshell",
+    "content": "Xshell 个人免费版",
+    "description": "Xshell 是一款强大的 SSH 客户端，支持多标签会话、密钥管理和隧道功能。",
+    "link": "https://www.netsarang.com/zh/xshell/",
+    "winget": "",
+    "foss": false,
     "region": "foreign"
   },
   "xunfeiinput": {
