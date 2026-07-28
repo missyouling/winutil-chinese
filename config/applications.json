@@ -209,16 +209,6 @@
     "winget": "",
     "region": "foreign"
   },
-  "baidumusic": {
-    "category": "多媒体工具__音乐发烧友",
-    "choco": "",
-    "content": "千千音乐",
-    "description": "千千音乐（原百度音乐）是百度推出的音乐平台，提供在线听歌和音乐下载服务。",
-    "link": "https://music.baidu.com/",
-    "winget": "",
-    "foss": false,
-    "region": "domestic"
-  },
   "baidunetdisk": {
     "category": "工具类__网盘工具",
     "choco": "",
@@ -1379,16 +1369,6 @@
     "foss": false,
     "region": "domestic"
   },
-  "kwmusic": {
-    "category": "多媒体工具__音乐发烧友",
-    "choco": "",
-    "content": "酷我音乐",
-    "description": "酷我音乐是一款中国主流的数字音乐平台，提供海量正版音乐和音频内容。",
-    "link": "https://www.kuwo.cn/",
-    "winget": "",
-    "foss": false,
-    "region": "domestic"
-  },
   "lazygit": {
     "category": "开发工具",
     "choco": "lazygit",
@@ -1477,26 +1457,6 @@
     "description": "遨游浏览器（Maxthon）是一款多标签浏览器，支持云同步和扩展插件。",
     "link": "https://www.maxthon.com/",
     "winget": "Maxthon.Maxthon",
-    "region": "domestic"
-  },
-  "mcloud": {
-    "category": "工具类__网盘工具",
-    "choco": "",
-    "content": "中国移动云盘",
-    "description": "中国移动云盘是中国移动推出的云存储服务，提供文件备份、同步和分享功能。",
-    "link": "https://cloud.189.cn/",
-    "winget": "",
-    "foss": false,
-    "region": "domestic"
-  },
-  "mgtv": {
-    "category": "多媒体工具__看剧必备",
-    "choco": "",
-    "content": "芒果TV",
-    "description": "芒果TV是湖南广电旗下的视频平台，提供综艺、电视剧、电影等内容。",
-    "link": "https://www.mgtv.com/",
-    "winget": "",
-    "foss": false,
     "region": "domestic"
   },
   "microsoftoffice": {
@@ -1909,16 +1869,6 @@
     "foss": false,
     "region": "domestic"
   },
-  "pan123": {
-    "category": "工具类__网盘工具",
-    "choco": "",
-    "content": "123云盘",
-    "description": "123云盘是一款国产云存储服务，支持大文件上传分享和高速下载。",
-    "link": "https://www.123pan.com/",
-    "winget": "",
-    "foss": false,
-    "region": "domestic"
-  },
   "parsec": {
     "category": "工具类",
     "choco": "parsec",
@@ -2255,16 +2205,6 @@
     "description": "Quicker 是一款 Windows 效率工具，提供鼠标手势和快捷键。",
     "link": "https://getquicker.net/",
     "winget": "Quicker.Quicker",
-    "foss": false,
-    "region": "domestic"
-  },
-  "raylink": {
-    "category": "工具类__系统工具",
-    "choco": "",
-    "content": "RayLink 远程控制",
-    "description": "RayLink 是一款国产远程控制软件，支持远程桌面、文件传输和远程办公。",
-    "link": "https://www.raylink.live/",
-    "winget": "",
     "foss": false,
     "region": "domestic"
   },
@@ -2907,6 +2847,15 @@
     "winget": "Waterfox.Waterfox",
     "foss": true,
     "region": "foreign"
+  },
+  "webview2": {
+    "category": "微软工具",
+    "choco": "microsoft-edge-webview2-runtime",
+    "content": "Microsoft Edge WebView2 Runtime",
+    "description": "WebView2 Runtime 是微软 Edge 浏览器内核的运行时组件，许多现代应用依赖它运行。",
+    "foss": false,
+    "region": "foreign",
+    "winget": "Microsoft.EdgeWebView2Runtime"
   },
   "wechat": {
     "category": "通讯工具",
