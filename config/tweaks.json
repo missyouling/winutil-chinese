@@ -34,7 +34,7 @@
     "Content": "自动隐藏任务栏",
     "Description": "切换任务栏自动隐藏功能的启用/禁用状态。",
     "category": "自定义偏好",
-    "panel": 2,
+    "panel": "2",
     "Type": "Toggle",
     "registry": [
       {
@@ -377,7 +377,7 @@
     "Content": "远程桌面",
     "Description": "切换远程桌面功能的启用/禁用状态。",
     "category": "自定义偏好",
-    "panel": 2,
+    "panel": "2",
     "Type": "Toggle",
     "registry": [
       {
@@ -670,7 +670,7 @@
     "Content": "Windows 大版本更新 - 禁止",
     "Description": "禁止 Windows 自动升级大版本（如 23H2→24H2），只保留安全更新。",
     "category": "高级优化 - 谨慎操作",
-    "panel": 1,
+    "panel": "1",
     "registry": [
       {
         "Path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\WindowsUpdate",
@@ -786,7 +786,7 @@
     "Content": "清除系统日志",
     "Description": "清除 Windows 事件查看器中的所有系统日志。",
     "category": "基本优化",
-    "panel": 1,
+    "panel": "1",
     "InvokeScript": [
       "wevtutil el | ForEach-Object { wevtutil cl $_ 2>$null }"
     ],
@@ -839,7 +839,7 @@
     "Content": "广告 ID - 禁用",
     "Description": "禁止应用使用广告 ID 展示个性化广告。",
     "category": "基本优化",
-    "panel": 1,
+    "panel": "1",
     "registry": [
       {
         "Path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\AdvertisingInfo",
@@ -884,7 +884,7 @@
     "Content": "Edge/WebView2 自动更新 - 禁止",
     "Description": "禁止 Microsoft Edge 和 WebView2 Runtime 自动更新。",
     "category": "高级优化 - 谨慎操作",
-    "panel": 1,
+    "panel": "1",
     "registry": [
       {
         "Path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\EdgeUpdate",
@@ -906,7 +906,7 @@
     "Content": "Microsoft Edge 启动增强 - 禁用",
     "Description": "禁止 Edge 在开机时预启动和后台驻留，释放系统资源。",
     "category": "基本优化",
-    "panel": 1,
+    "panel": "1",
     "registry": [
       {
         "Path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\MicrosoftEdge\\Main",
@@ -1020,7 +1020,7 @@
     "Content": "本地搜索历史记录 - 禁用",
     "Description": "禁止 Windows 在本地存储搜索历史记录，保护隐私。",
     "category": "基本优化",
-    "panel": 1,
+    "panel": "1",
     "registry": [
       {
         "Path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Search",
@@ -1325,7 +1325,7 @@
     "Content": "资源管理器默认打开\"此电脑\"",
     "Description": "将文件资源管理器的默认打开页面从快速访问改为\"此电脑\"。",
     "category": "基本优化",
-    "panel": 1,
+    "panel": "1",
     "registry": [
       {
         "Path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
@@ -1341,7 +1341,7 @@
     "Content": "刷新 DNS 解析缓存",
     "Description": "清除 DNS 解析缓存，解决域名解析问题。",
     "category": "基本优化",
-    "panel": 1,
+    "panel": "1",
     "InvokeScript": [
       "ipconfig /flushdns"
     ],
@@ -1433,7 +1433,7 @@
     "Content": "快捷方式小箭头 - 移除",
     "Description": "移除桌面快捷方式图标左下角的小箭头，使界面更干净。",
     "category": "高级优化 - 谨慎操作",
-    "panel": 1,
+    "panel": "1",
     "InvokeScript": [
       "# 去除快捷方式小箭头\n$shell32 = \"$env:SystemRoot\\System32\\shell32.dll,-50\"\nif (-not (Test-Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Shell Icons')) { New-Item -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Shell Icons' -Force }'\nSet-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Shell Icons' -Name '29' -Value $shell32 -Type String"
     ],
@@ -1462,7 +1462,7 @@
     "Content": "快速启动 - 禁用",
     "Description": "禁用 Windows 快速启动（混合关机），解决关机/休眠异常问题并释放磁盘空间。",
     "category": "高级优化 - 谨慎操作",
-    "panel": 1,
+    "panel": "1",
     "InvokeScript": [
       "powercfg.exe /hibernate off"
     ],
@@ -1659,7 +1659,7 @@
     "Content": "系统托盘时间显示秒",
     "Description": "在系统托盘时钟中显示秒数。",
     "category": "基本优化",
-    "panel": 1,
+    "panel": "1",
     "registry": [
       {
         "Path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
@@ -1691,7 +1691,7 @@
     "Content": "SysMain (Superfetch) - 禁用",
     "Description": "禁用 SysMain 服务（Superfetch），减少内存占用和磁盘活动。建议 SSD 用户关闭。",
     "category": "高级优化 - 谨慎操作",
-    "panel": 1,
+    "panel": "1",
     "service": [
       {
         "Name": "SysMain",
