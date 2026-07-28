@@ -1,4 +1,29 @@
 {
+  "WingetRadioButton": {
+    "Content": "WinGet 包管理器",
+    "Category": "包管理器",
+    "Type": "RadioButton",
+    "GroupName": "PackageManagerGroup",
+    "Checked": true,
+    "Order": "1",
+    "Description": "使用 WinGet 进行包管理"
+  },
+  "ChocoRadioButton": {
+    "Content": "Chocolatey 包管理器",
+    "Category": "包管理器",
+    "Type": "RadioButton",
+    "GroupName": "PackageManagerGroup",
+    "Checked": false,
+    "Order": "2",
+    "Description": "使用 Chocolatey 进行包管理"
+  },
+  "ScoopRadioButton": {
+    "Type": "RadioButton",
+    "Content": "Scoop 包管理器",
+    "GroupName": "PackageManagerGroup",
+    "Category": "",
+    "panel": ""
+  },
   "WPFInstall": {
     "Content": "安装/升级应用",
     "Category": "操作",
@@ -19,24 +44,6 @@
     "Type": "Button",
     "Order": "3",
     "Description": "将所有应用升级到最新版本"
-  },
-  "WingetRadioButton": {
-    "Content": "WinGet 包管理器",
-    "Category": "包管理器",
-    "Type": "RadioButton",
-    "GroupName": "PackageManagerGroup",
-    "Checked": true,
-    "Order": "1",
-    "Description": "使用 WinGet 进行包管理"
-  },
-  "ChocoRadioButton": {
-    "Content": "Chocolatey 包管理器",
-    "Category": "包管理器",
-    "Type": "RadioButton",
-    "GroupName": "PackageManagerGroup",
-    "Checked": false,
-    "Order": "2",
-    "Description": "使用 Chocolatey 进行包管理"
   },
   "WPFCollapseAllCategories": {
     "Content": "折叠所有分类",

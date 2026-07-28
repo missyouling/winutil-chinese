@@ -62,6 +62,17 @@ function Get-WinUtilSelectedPackages {
                     Add-PackageId -Target $packagesChoco -PackageId $package.choco
                 }
             }
+            "Scoop" {
+                if ([string]::IsNullOrWhiteSpace([string]$package.scoop) -or $package.scoop -eq "na") {
+                    if ([string]::IsNullOrWhiteSpace([string]$package.winget) -or $package.winget -eq "na") {
+                        Add-PackageId -Target $packagesChoco -PackageId $package.choco
+                    } else {
+                        Add-PackageId -Target $packagesWinget -PackageId $package.winget
+                    }
+                } else {
+                    Add-PackageId -Target $packagesScoop -PackageId $package.scoop
+                }
+            }
         }
     }
 
