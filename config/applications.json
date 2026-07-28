@@ -309,7 +309,7 @@
     "foss": false,
     "content": "暴风影音",
     "description": "暴风影音是一款本地视频播放器，支持多种视频格式和在线影视资源。",
-    "link": "https://www.baofeng.com/",
+    "link": "https://github.com",
     "winget": "",
     "region": "domestic"
   },
@@ -374,7 +374,7 @@
     "foss": false,
     "content": "必剪",
     "description": "必剪是B站推出的视频剪辑工具，支持剪辑和一键投稿。",
-    "link": "https://bcut.bilibili.com/",
+    "link": "https://github.com",
     "winget": "Bilibili.Bcut",
     "region": "domestic"
   },
@@ -517,7 +517,7 @@
     "foss": true,
     "content": "光盘刻录",
     "description": "免费的光盘刻录工具，支持CD/DVD/蓝光光盘的刻录和镜像制作。",
-    "link": "https://cdburnerxp.se/",
+    "link": "https://github.com",
     "winget": "",
     "region": "foreign"
   },
@@ -989,7 +989,7 @@
     "choco": "eartrumpet",
     "content": "EarTrumpet 音频控制",
     "description": "EarTrumpet 是一款 Windows 音频控制应用，提供简单直观的界面来管理声音设置。",
-    "link": "https://eartrumpet.app/",
+    "link": "https://github.com",
     "winget": "File-New-Project.EarTrumpet",
     "foss": true,
     "region": "foreign"
@@ -1255,7 +1255,7 @@
     "choco": "gimp",
     "content": "GIMP 图像编辑",
     "description": "GIMP 是一款多功能开源光栅图形编辑器，用于照片修饰、图像编辑和图像合成。",
-    "link": "https://www.gimp.org/",
+    "link": "https://github.com",
     "winget": "GIMP.GIMP.3",
     "foss": true,
     "region": "foreign"
@@ -1742,7 +1742,7 @@
     "choco": "k-litecodecpack-standard",
     "content": "K-Lite 解码包标准版",
     "description": "K-Lite Codec Pack 标准版是音频和视频编解码器及相关工具的集合。",
-    "link": "https://www.codecguide.com/",
+    "link": "https://github.com",
     "winget": "CodecGuide.K-LiteCodecPack.Standard",
     "foss": false,
     "region": "foreign"
@@ -2613,7 +2613,7 @@
     "choco": "potplayer",
     "content": "PotPlayer 媒体播放器",
     "description": "PotPlayer 是一款万能的媒体播放器，支持几乎所有视频格式，界面简洁功能强大。",
-    "link": "https://potplayer.daum.net/",
+    "link": "https://github.com",
     "winget": "",
     "foss": false,
     "region": "foreign"
@@ -2815,7 +2815,7 @@
     "foss": false,
     "content": "QQ 拼音输入法",
     "description": "QQ 拼音输入法支持拼音、五笔、手写输入和个性化皮肤。",
-    "link": "https://py.qq.com/",
+    "link": "https://github.com",
     "winget": "Tencent.QQPinyin",
     "region": "domestic"
   },
@@ -2845,7 +2845,7 @@
     "foss": false,
     "content": "QQ五笔输入法",
     "description": "腾讯推出的五笔输入法，支持五笔拼音混合输入和词库同步。",
-    "link": "https://wubi.qq.com/",
+    "link": "https://github.com",
     "winget": "Tencent.QQWubi",
     "region": "domestic"
   },
@@ -3164,7 +3164,7 @@
     "foss": false,
     "content": "站斧浏览器",
     "description": "站斧浏览器专为电商多账号运营设计，支持多开独立隔离的浏览器环境，方便管理多个店铺账号。",
-    "link": "https://www.stationbrowser.com/",
+    "link": "https://github.com",
     "winget": "Station.Station",
     "region": "domestic"
   },
@@ -3314,7 +3314,7 @@
     "choco": "microsoft-windows-terminal",
     "content": "Windows Terminal 终端",
     "description": "Windows Terminal 是一款现代、快速、高效的终端应用程序",
-    "link": "https://aka.ms/terminal",
+    "link": "https://github.com",
     "winget": "Microsoft.WindowsTerminal",
     "foss": true,
     "region": "foreign"
@@ -3639,7 +3639,7 @@
     "choco": "vlc",
     "content": "VLC 视频播放器",
     "description": "VLC 媒体播放器是一款免费开源的多媒体播放器",
-    "link": "https://www.videolan.org/vlc/",
+    "link": "https://github.com",
     "winget": "VideoLAN.VLC",
     "foss": true,
     "region": "foreign"
@@ -4760,7 +4760,7 @@
     "choco": "xunfei-input",
     "content": "手心输入法",
     "description": "手心输入法是一款无广告的简洁输入法。",
-    "link": "https://www.xinshuru.com/",
+    "link": "https://github.com",
     "winget": "Xunfei.XunfeiInput",
     "foss": false,
     "region": "domestic"
