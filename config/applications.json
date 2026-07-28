@@ -838,7 +838,8 @@
     "description": "Dism++ 是初雨团队开发的一款强大的 Windows 系统管理优化工具，支持系统清理、驱动管理、系统更新等功能。",
     "foss": true,
     "region": "domestic",
-    "winget": ""
+    "winget": "",
+    "link": "https://github.com/Chuyu-Team/Dism-Multi-language"
   },
   "dismtools": {
     "category": "微软工具",
