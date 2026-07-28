@@ -138,6 +138,8 @@ function Invoke-WPFUIElements {
             "高级优化 - 谨慎操作" = 1
             "自定义偏好" = 2
             "性能计划 - 不适用于笔记本电脑" = 3
+            "选择" = 10
+            "操作" = 11
         }
         foreach ($category in ($organizedData[$panelKey].Keys | Sort-Object { if ($categorySortOrder.ContainsKey($_)) { $categorySortOrder[$_] } else { 99 } })) {
             $count++

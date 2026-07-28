@@ -1,90 +1,77 @@
 {
   "WingetRadioButton": {
-    "Content": "WinGet 包管理器",
-    "Category": "包管理器",
     "Type": "RadioButton",
+    "Content": "WinGet 包管理器",
     "GroupName": "PackageManagerGroup",
-    "Checked": true,
-    "Order": "1",
-    "Description": "使用 WinGet 进行包管理"
+    "Category": "选择",
+    "Region": "domestic"
   },
   "ChocoRadioButton": {
-    "Content": "Chocolatey 包管理器",
-    "Category": "包管理器",
     "Type": "RadioButton",
+    "Content": "Chocolatey 包管理器",
     "GroupName": "PackageManagerGroup",
-    "Checked": false,
-    "Order": "2",
-    "Description": "使用 Chocolatey 进行包管理"
+    "Category": "选择",
+    "Region": "foreign"
   },
   "ScoopRadioButton": {
     "Type": "RadioButton",
     "Content": "Scoop 包管理器",
     "GroupName": "PackageManagerGroup",
-    "Category": "",
-    "panel": ""
-  },
-  "WPFInstall": {
-    "Content": "安装/升级应用",
-    "Category": "操作",
-    "Type": "Button",
-    "Order": "1",
-    "Description": "安装或升级所选应用"
-  },
-  "WPFUninstall": {
-    "Content": "卸载应用",
-    "Category": "操作",
-    "Type": "Button",
-    "Order": "2",
-    "Description": "卸载所选应用"
-  },
-  "WPFInstallUpgrade": {
-    "Content": "升级所有应用",
-    "Category": "操作",
-    "Type": "Button",
-    "Order": "3",
-    "Description": "将所有应用升级到最新版本"
-  },
-  "WPFCollapseAllCategories": {
-    "Content": "折叠所有分类",
     "Category": "选择",
-    "Type": "Button",
-    "Order": "1",
-    "Description": "折叠所有应用分类"
-  },
-  "WPFExpandAllCategories": {
-    "Content": "展开所有分类",
-    "Category": "选择",
-    "Type": "Button",
-    "Order": "2",
-    "Description": "展开所有应用分类"
-  },
-  "WPFClearInstallSelection": {
-    "Content": "清除选择",
-    "Category": "选择",
-    "Type": "Button",
-    "Order": "3",
-    "Description": "清除应用选择"
-  },
-  "WPFGetInstalled": {
-    "Content": "显示已安装应用",
-    "Category": "选择",
-    "Type": "Button",
-    "Order": "4",
-    "Description": "显示已安装的应用"
-  },
-  "WPFselectedAppsButton": {
-    "Content": "已选应用：0",
-    "Category": "选择",
-    "Type": "Button",
-    "Order": "5",
-    "Description": "显示已选的应用"
+    "Region": "foreign"
   },
   "WPFInstallFOSSInfo": {
+    "Type": "Note",
     "Content": "免费开源软件",
     "Category": "选择",
-    "Type": "Note",
-    "Order": "0",
-    "Description": "关于应用条目上 #FOSS 标签的信息"
+    "Region": "foreign"
+  },
+  "WPFInstall": {
+    "Type": "Button",
+    "Content": "安装/升级应用",
+    "Category": "操作",
+    "Region": "domestic"
+  },
+  "WPFInstallUpgrade": {
+    "Type": "Button",
+    "Content": "升级所有应用",
+    "Category": "操作",
+    "Region": "domestic"
+  },
+  "WPFUninstall": {
+    "Type": "Button",
+    "Content": "卸载应用",
+    "Category": "操作",
+    "Region": "domestic"
+  },
+  "WPFClearInstallSelection": {
+    "Type": "Button",
+    "Content": "清除选择",
+    "Category": "操作",
+    "Region": "foreign"
+  },
+  "WPFGetInstalled": {
+    "Type": "Button",
+    "Content": "显示已安装应用",
+    "Category": "操作",
+    "Region": "foreign"
+  },
+  "WPFselectedAppsButton": {
+    "Type": "Button",
+    "Content": "已选应用：0",
+    "Category": "操作",
+    "Region": "foreign"
+  },
+  "WPFExpandAllCategories": {
+    "Type": "Button",
+    "Content": "展开所有分类",
+    "Category": "操作",
+    "Region": "foreign"
+  },
+  "WPFCollapseAllCategories": {
+    "Type": "Button",
+    "Content": "折叠所有分类",
+    "Category": "操作",
+    "Region": "foreign"
   }
 }
