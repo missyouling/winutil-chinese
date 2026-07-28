@@ -101,6 +101,10 @@ function Invoke-WPFInstall {
                         }
                         "scoop" {
                             Install-WinUtilScoop
+                            if (-not (Get-Command scoop -ErrorAction SilentlyContinue)) {
+                                $lastError = "scoop:未安装"
+                                continue
+                            }
                             $process = Start-Process -FilePath scoop -ArgumentList @("install", $packageId) -NoNewWindow -PassThru
                             $exited = $process.WaitForExit(300000)
                             if (-not $exited) {
