@@ -90,7 +90,7 @@
     "region": "foreign"
   },
   "alibabaqianwen": {
-    "category": "工具类",
+    "category": "工具类__智能生成",
     "choco": "",
     "foss": false,
     "content": "通义千问",
@@ -100,7 +100,7 @@
     "region": "domestic"
   },
   "aliim": {
-    "category": "工具类",
+    "category": "通讯工具",
     "choco": "",
     "foss": false,
     "content": "阿里旺旺",
@@ -210,7 +210,7 @@
     "region": "foreign"
   },
   "baidunetdisk": {
-    "category": "工具类",
+    "category": "工具类__网盘工具",
     "choco": "",
     "foss": false,
     "content": "百度网盘",
@@ -220,7 +220,7 @@
     "region": "domestic"
   },
   "baidupinyin": {
-    "category": "工具类",
+    "category": "工具类__输入法",
     "choco": "",
     "foss": false,
     "content": "百度输入法",
@@ -660,7 +660,7 @@
     "region": "foreign"
   },
   "doubao": {
-    "category": "工具类",
+    "category": "工具类__智能生成",
     "choco": "",
     "foss": false,
     "content": "豆包",
@@ -690,7 +690,7 @@
     "region": "domestic"
   },
   "dropbox": {
-    "category": "工具类",
+    "category": "工具类__网盘工具",
     "choco": "dropbox",
     "content": "Dropbox 云存储",
     "description": "Dropbox 是一款云存储客户端，用于同步文件、共享内容并在多设备间保持文档可用。",
@@ -970,7 +970,7 @@
     "region": "foreign"
   },
   "googledrive": {
-    "category": "工具类",
+    "category": "工具类__网盘工具",
     "choco": "googledrive",
     "content": "Google Drive 云盘",
     "description": "跨设备文件同步，全部关联到您的 Google 帐户。",
@@ -1140,7 +1140,7 @@
     "region": "foreign"
   },
   "internetdownloadmanager": {
-    "category": "工具类",
+    "category": "工具类__下载工具",
     "choco": "internet-download-manager",
     "content": "IDM 下载管理器",
     "description": "Internet Download Manager 是一款用于加速、续传和计划文件下载的下载管理器。",
@@ -1420,7 +1420,7 @@
     "region": "domestic"
   },
   "mailmaster": {
-    "category": "工具类",
+    "category": "通讯工具",
     "choco": "",
     "foss": false,
     "content": "网易邮箱大师",
@@ -2009,7 +2009,7 @@
     "region": "foreign"
   },
   "protondrive": {
-    "category": "工具类",
+    "category": "工具类__网盘工具",
     "choco": "protondrive",
     "content": "Proton Drive 加密云盘",
     "description": "Proton Drive 是端到端加密的瑞士文件保险库。",
@@ -2069,7 +2069,7 @@
     "region": "foreign"
   },
   "qbittorrent": {
-    "category": "工具类",
+    "category": "工具类__下载工具",
     "choco": "qbittorrent",
     "content": "qBittorrent 下载工具",
     "description": "qBittorrent 是一款免费开源的 BitTorrent 客户端",
@@ -2109,7 +2109,7 @@
     "region": "domestic"
   },
   "qqpinyin": {
-    "category": "工具类",
+    "category": "工具类__输入法",
     "choco": "",
     "foss": false,
     "content": "QQ 拼音输入法",
@@ -2319,7 +2319,7 @@
     "region": "foreign"
   },
   "sogouinput": {
-    "category": "工具类",
+    "category": "工具类__输入法",
     "choco": "",
     "foss": false,
     "content": "搜狗输入法",
@@ -2329,7 +2329,7 @@
     "region": "domestic"
   },
   "sogouwubi": {
-    "category": "工具类",
+    "category": "工具类__输入法",
     "choco": "",
     "foss": false,
     "content": "搜狗五笔输入法",
@@ -2829,7 +2829,7 @@
     "region": "domestic"
   },
   "wetype": {
-    "category": "工具类",
+    "category": "工具类__输入法",
     "choco": "",
     "foss": false,
     "content": "微信输入法",
@@ -3029,7 +3029,7 @@
     "region": "domestic"
   },
   "youdaonote": {
-    "category": "工具类",
+    "category": "办公工具",
     "choco": "",
     "foss": false,
     "content": "有道笔记",
