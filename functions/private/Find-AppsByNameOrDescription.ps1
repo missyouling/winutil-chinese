@@ -116,7 +116,8 @@ function Find-AppsByNameOrDescription {
                             # Category filter: exact match OR sub-category prefix match
                             # "浏览器" matches both "浏览器" and  "浏览器__极简优先推荐"
                             $shouldShow = ($appCategory -eq $Category) -or
-                                          ($appCategory -like ($Category + "__*"))
+                                          ($appCategory -like ($Category + "__*")) -or
+                                          ($appCategory -like ("*__" + $Category))
                         }
 
                         if (-not $hasCategoryFilter) {
