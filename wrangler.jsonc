@@ -1,0 +1,14 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "winutil-chinese",
+  "compatibility_date": "2026-07-28",
+  "observability": {
+    "enabled": true
+  },
+  "assets": {
+    "directory": "cloudflare-pages"
+  },
+  "compatibility_flags": [
+    "nodejs_compat"
+  ]
+}

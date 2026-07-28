@@ -24,3 +24,10 @@ __pycache__/
 .git-credentials
 
 # 编译产物（保留 winutil.ps1 作为发布文件，不忽略）
+
+# wrangler files
+.wrangler
+.dev.vars*
+!.dev.vars.example
+.env*
+!.env.example
