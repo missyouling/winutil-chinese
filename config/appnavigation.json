@@ -13,13 +13,6 @@
     "Category": "选择",
     "Region": "foreign"
   },
-  "ScoopRadioButton": {
-    "Type": "RadioButton",
-    "Content": "Scoop 包管理器",
-    "GroupName": "PackageManagerGroup",
-    "Category": "选择",
-    "Region": "foreign"
-  },
   "WPFInstallFOSSInfo": {
     "Type": "Note",
     "Content": "免费开源软件",

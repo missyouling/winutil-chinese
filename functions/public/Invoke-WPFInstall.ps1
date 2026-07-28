@@ -36,10 +36,9 @@ function Invoke-WPFInstall {
         # Build per-package manager order from preference
         # E.g. Winget preference → try winget first, fallback choco, then scoop
         $managerPriority = switch ($ManagerPreference) {
-            "Winget" { @("winget", "choco", "scoop") }
-            "Choco"  { @("choco", "winget", "scoop") }
-            "Scoop"  { @("scoop", "winget", "choco") }
-            default  { @("winget", "choco", "scoop") }
+            "Winget" { @("winget", "choco") }
+            "Choco"  { @("choco", "winget") }
+            default  { @("winget", "choco") }
         }
 
         try {
@@ -62,6 +61,9 @@ function Invoke-WPFInstall {
                 $lastError = ""
 
                 foreach ($manager in $managerPriority) {
+                    # Skip scoop entirely (removed package manager)
+                    if ($manager -eq "scoop") { continue }
+
                     $packageId = $package.$manager
                     if ([string]::IsNullOrWhiteSpace($packageId) -or $packageId -eq "na") {
                         continue
@@ -98,23 +100,6 @@ function Invoke-WPFInstall {
                                 else { $lastError = "choco($($process.ExitCode))" }
                             }
                             Write-WinUtilLog -Component "Package" -Message "Install choco package: $packageId → exit=$($process.ExitCode) installed=$installed"
-                        }
-                        "scoop" {
-                            Install-WinUtilScoop
-                            if (-not (Get-Command scoop -ErrorAction SilentlyContinue)) {
-                                $lastError = "scoop:未安装"
-                                continue
-                            }
-                            $process = Start-Process -FilePath scoop -ArgumentList @("install", $packageId) -NoNewWindow -PassThru
-                            $exited = $process.WaitForExit(300000)
-                            if (-not $exited) {
-                                $process.Kill()
-                                $lastError = "scoop:超时"
-                            } else {
-                                if ($process.ExitCode -eq 0) { $installed = $true; $currentStatus = "ok" }
-                                else { $lastError = "scoop($($process.ExitCode))" }
-                            }
-                            Write-WinUtilLog -Component "Package" -Message "Install scoop package: $packageId → exit=$($process.ExitCode) installed=$installed"
                         }
                     }
 

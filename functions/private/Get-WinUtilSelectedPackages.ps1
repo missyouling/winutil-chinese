@@ -16,11 +16,9 @@ function Get-WinUtilSelectedPackages {
 
     $packagesWinget = [System.Collections.ArrayList]::new()
     $packagesChoco = [System.Collections.ArrayList]::new()
-    $packagesScoop = [System.Collections.ArrayList]::new()
     $packages = @{
         Winget = $packagesWinget
         Choco = $packagesChoco
-        Scoop = $packagesScoop
     }
 
     function Add-PackageId {
@@ -42,35 +40,16 @@ function Get-WinUtilSelectedPackages {
         switch ($Preference) {
             "Winget" {
                 if ([string]::IsNullOrWhiteSpace([string]$package.winget) -or $package.winget -eq "na") {
-                    if ([string]::IsNullOrWhiteSpace([string]$package.choco) -or $package.choco -eq "na") {
-                        Add-PackageId -Target $packagesScoop -PackageId $package.scoop
-                    } else {
-                        Add-PackageId -Target $packagesChoco -PackageId $package.choco
-                    }
+                    Add-PackageId -Target $packagesChoco -PackageId $package.choco
                 } else {
                     Add-PackageId -Target $packagesWinget -PackageId $package.winget
                 }
             }
             "Choco" {
                 if ([string]::IsNullOrWhiteSpace([string]$package.choco) -or $package.choco -eq "na") {
-                    if ([string]::IsNullOrWhiteSpace([string]$package.winget) -or $package.winget -eq "na") {
-                        Add-PackageId -Target $packagesScoop -PackageId $package.scoop
-                    } else {
-                        Add-PackageId -Target $packagesWinget -PackageId $package.winget
-                    }
+                    Add-PackageId -Target $packagesWinget -PackageId $package.winget
                 } else {
                     Add-PackageId -Target $packagesChoco -PackageId $package.choco
-                }
-            }
-            "Scoop" {
-                if ([string]::IsNullOrWhiteSpace([string]$package.scoop) -or $package.scoop -eq "na") {
-                    if ([string]::IsNullOrWhiteSpace([string]$package.winget) -or $package.winget -eq "na") {
-                        Add-PackageId -Target $packagesChoco -PackageId $package.choco
-                    } else {
-                        Add-PackageId -Target $packagesWinget -PackageId $package.winget
-                    }
-                } else {
-                    Add-PackageId -Target $packagesScoop -PackageId $package.scoop
                 }
             }
         }

@@ -140,14 +140,10 @@ $sync.ChocoRadioButton.Add_Checked({
 $sync.WingetRadioButton.Add_Checked({
     $sync.preferences.packagemanager = "Winget"
 })
-$sync.ScoopRadioButton.Add_Checked({
-    $sync.preferences.packagemanager = "Scoop"
-})
 
 switch ($sync.preferences.packagemanager) {
     "Choco" {$sync.ChocoRadioButton.IsChecked = $true; break}
     "Winget" {$sync.WingetRadioButton.IsChecked = $true; break}
-    "Scoop" {$sync.ScoopRadioButton.IsChecked = $true; break}
 }
 
 $sync.keys | ForEach-Object {

@@ -49,17 +49,6 @@
     "foss": true,
     "region": "foreign"
   },
-  "adblock-helper": {
-    "category": "工具类__浏览器",
-    "content": "广告拦截助手",
-    "description": "广告拦截助手帮助过滤网页广告和弹窗，提升网页浏览体验。",
-    "winget": "",
-    "choco": "",
-    "scoop": "adblockhelper",
-    "foss": false,
-    "region": "domestic",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
   "adobe": {
     "category": "多媒体工具",
     "choco": "adobereader",
@@ -150,17 +139,6 @@
     "foss": true,
     "region": "foreign"
   },
-  "antdownload": {
-    "category": "工具类__网盘工具",
-    "content": "蚂蚁下载器",
-    "description": "蚂蚁下载器是一款轻量级下载工具，支持HTTP和BT协议的多线程下载。",
-    "winget": "",
-    "choco": "",
-    "scoop": "antdownload",
-    "foss": false,
-    "region": "domestic",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
   "anyburn": {
     "category": "工具类__压缩刻录",
     "choco": "anyburn",
@@ -190,17 +168,6 @@
     "link": "https://www.disktool.cn/",
     "winget": "",
     "region": "domestic"
-  },
-  "apifox": {
-    "category": "开发工具__程序员",
-    "content": "Apifox",
-    "description": "Apifox是API文档、调试、Mock、测试一体化协作平台，集成了Postman和Swagger的功能。",
-    "winget": "",
-    "choco": "",
-    "scoop": "apifox",
-    "foss": false,
-    "region": "domestic",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
   },
   "audacity": {
     "category": "多媒体工具",
@@ -252,17 +219,6 @@
     "winget": "Baidu.BaiduNetdisk",
     "region": "domestic"
   },
-  "baidupan-helper": {
-    "category": "工具类__网盘工具",
-    "content": "度盘小助手",
-    "description": "度盘小助手是百度网盘的辅助工具，提供批量下载、转存和文件管理增强功能。",
-    "winget": "",
-    "choco": "",
-    "scoop": "baidupanhelper",
-    "foss": false,
-    "region": "domestic",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
   "baidupinyin": {
     "category": "工具类__输入法",
     "choco": "",
@@ -312,61 +268,6 @@
     "link": "https://github.com",
     "winget": "",
     "region": "domestic"
-  },
-  "batch-file-rename": {
-    "category": "工具类__实用工具",
-    "content": "批量文件重命名工具",
-    "description": "批量文件重命名工具支持按规则批量重命名文件和文件夹，支持正则表达式。",
-    "winget": "",
-    "choco": "",
-    "scoop": "batchrename",
-    "foss": false,
-    "region": "domestic",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
-  "batch-img-converter": {
-    "category": "设计工具__图片处理",
-    "content": "图片格式批量转换器",
-    "description": "图片格式批量转换器支持在多种图片格式之间批量转换，如JPG、PNG、WebP和BMP。",
-    "winget": "",
-    "choco": "",
-    "scoop": "batchimgconverter",
-    "foss": false,
-    "region": "domestic",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
-  "batch-img-rename": {
-    "category": "设计工具__图片处理",
-    "content": "批量图片重命名工具",
-    "description": "批量图片重命名工具支持对大量图片按规则进行批量重命名，支持自定义命名格式。",
-    "winget": "",
-    "choco": "",
-    "scoop": "batchimgrename",
-    "foss": false,
-    "region": "domestic",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
-  "batch-watermark": {
-    "category": "设计工具__图片处理",
-    "content": "图片批量加水印工具",
-    "description": "图片批量加水印工具支持为大量图片添加文字或图片水印，可自定义位置和透明度。",
-    "winget": "",
-    "choco": "",
-    "scoop": "batchwatermark",
-    "foss": false,
-    "region": "domestic",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
-  "battery-manager": {
-    "category": "工具类__实用工具",
-    "content": "电池电源管理工具",
-    "description": "电池电源管理工具监控电池健康状况，优化电源使用模式延长续航。",
-    "winget": "",
-    "choco": "",
-    "scoop": "batterymgr",
-    "foss": false,
-    "region": "domestic",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
   },
   "bcut": {
     "category": "多媒体工具",
@@ -438,17 +339,6 @@
     "foss": true,
     "region": "foreign"
   },
-  "bookmark-manager": {
-    "category": "工具类__浏览器",
-    "content": "书签管理工具",
-    "description": "书签管理工具帮助管理和整理浏览器书签，支持去重、分类和批量操作。",
-    "winget": "",
-    "choco": "",
-    "scoop": "bookmarkmgr",
-    "foss": false,
-    "region": "domestic",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
   "brave": {
     "category": "工具类__浏览器",
     "choco": "brave",
@@ -458,28 +348,6 @@
     "winget": "Brave.Brave",
     "foss": true,
     "region": "foreign"
-  },
-  "browser-cache-cleaner": {
-    "category": "工具类__浏览器",
-    "content": "浏览器缓存清理工具",
-    "description": "浏览器缓存清理工具一键清理各种浏览器的缓存、Cookie和历史记录。",
-    "winget": "",
-    "choco": "",
-    "scoop": "browsercachecleaner",
-    "foss": false,
-    "region": "domestic",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
-  "browser-plugin-mgr": {
-    "category": "工具类__浏览器",
-    "content": "浏览器插件管理助手",
-    "description": "浏览器插件管理助手帮助用户管理浏览器扩展程序，支持批量启用和禁用。",
-    "winget": "",
-    "choco": "",
-    "scoop": "browserpluginmgr",
-    "foss": false,
-    "region": "domestic",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
   },
   "bulkcrapuninstaller": {
     "category": "工具类",
@@ -581,28 +449,6 @@
     "foss": true,
     "region": "foreign"
   },
-  "chuangkit": {
-    "category": "设计工具__图片处理",
-    "content": "创客贴电脑版",
-    "description": "创客贴是一款在线平面设计工具，提供海量设计模板和素材，支持拖拽式编辑。",
-    "winget": "",
-    "choco": "",
-    "scoop": "chuangkit",
-    "foss": false,
-    "region": "domestic",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
-  "cili-analyzer": {
-    "category": "工具类__网盘工具",
-    "content": "磁力链接解析工具",
-    "description": "磁力链接解析工具支持将磁力链接解析为可下载的文件列表和种子信息。",
-    "winget": "",
-    "choco": "",
-    "scoop": "cilianalyzer",
-    "foss": false,
-    "region": "domestic",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
   "cinebenchr23": {
     "category": "专业工具",
     "choco": "na",
@@ -612,17 +458,6 @@
     "winget": "Maxon.CinebenchR23",
     "foss": false,
     "region": "foreign"
-  },
-  "classical-translator": {
-    "category": "教育学习__翻译学习",
-    "content": "古文翻译助手",
-    "description": "古文翻译助手帮助将文言文翻译为现代汉语，支持常见古文名篇检索和对照阅读。",
-    "winget": "",
-    "choco": "",
-    "scoop": "classicaltrans",
-    "foss": false,
-    "region": "domestic",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
   },
   "claude": {
     "category": "开发工具",
@@ -643,17 +478,6 @@
     "winget": "Anthropic.ClaudeCode",
     "foss": false,
     "region": "foreign"
-  },
-  "clipboard-history": {
-    "category": "工具类__实用工具",
-    "content": "剪贴板历史记录工具",
-    "description": "剪贴板历史记录工具记录复制历史，支持搜索和快速粘贴之前复制的内容。",
-    "winget": "",
-    "choco": "",
-    "scoop": "clipboardhist",
-    "foss": false,
-    "region": "domestic",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
   },
   "cloudmusic": {
     "category": "多媒体工具",
@@ -766,39 +590,6 @@
     "foss": true,
     "region": "foreign"
   },
-  "deskshow": {
-    "category": "工具类__实用工具",
-    "content": "桌面日历",
-    "description": "桌面日历是一款在桌面上显示日历和日程的工具，支持农历和节假日显示。",
-    "winget": "",
-    "choco": "",
-    "scoop": "deskshow",
-    "foss": false,
-    "region": "domestic",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
-  "desktop-icon-organizer": {
-    "category": "工具类__实用工具",
-    "content": "桌面图标整理工具",
-    "description": "桌面图标整理工具自动排列和分类桌面图标，保持桌面整洁有序。",
-    "winget": "",
-    "choco": "",
-    "scoop": "desktopicons",
-    "foss": false,
-    "region": "domestic",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
-  "desktop-sticky": {
-    "category": "工具类__实用工具",
-    "content": "桌面待办贴纸",
-    "description": "桌面待办贴纸将待办事项以贴纸形式显示在桌面上，方便快捷查看和编辑。",
-    "winget": "",
-    "choco": "",
-    "scoop": "desktopsticky",
-    "foss": false,
-    "region": "domestic",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
   "dingtalk": {
     "category": "通讯工具",
     "choco": "",
@@ -819,28 +610,6 @@
     "foss": false,
     "region": "foreign"
   },
-  "diskgenius": {
-    "category": "系统工具__系统优化",
-    "content": "DiskGenius磁盘精灵",
-    "description": "DiskGenius是一款专业磁盘分区和数据恢复工具，支持分区管理、数据恢复和磁盘检测。",
-    "winget": "",
-    "choco": "",
-    "scoop": "diskgenius",
-    "foss": false,
-    "region": "domestic",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
-  "dismplusplus": {
-    "category": "工具类__系统工具",
-    "choco": "",
-    "scoop": "dismplusplus",
-    "content": "Dism++ (系统优化工具)",
-    "description": "Dism++ 是初雨团队开发的一款强大的 Windows 系统管理优化工具，支持系统清理、驱动管理、系统更新等功能。",
-    "foss": true,
-    "region": "domestic",
-    "winget": "",
-    "link": "https://github.com/Chuyu-Team/Dism-Multi-language"
-  },
   "dismtools": {
     "category": "微软工具",
     "choco": "dismtools",
@@ -850,17 +619,6 @@
     "winget": "CodingWondersSoftware.DISMTools.Stable",
     "foss": true,
     "region": "foreign"
-  },
-  "doc-full-translator": {
-    "category": "教育学习__翻译学习",
-    "content": "文档全文翻译器",
-    "description": "文档全文翻译器支持Word、PDF和TXT文档的整篇翻译，保持原格式不变。",
-    "winget": "",
-    "choco": "",
-    "scoop": "docfulltrans",
-    "foss": false,
-    "region": "domestic",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
   },
   "dorion": {
     "category": "通讯工具",
@@ -963,17 +721,6 @@
     "foss": false,
     "region": "foreign"
   },
-  "duplicate-finder": {
-    "category": "工具类__实用工具",
-    "content": "重复文件查找工具",
-    "description": "重复文件查找工具扫描磁盘中重复文件，支持按名称、大小和哈希值比对。",
-    "winget": "",
-    "choco": "",
-    "scoop": "duplicatefinder",
-    "foss": false,
-    "region": "domestic",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
   "eaapp": {
     "category": "游戏",
     "choco": "ea-app",
@@ -994,17 +741,6 @@
     "foss": true,
     "region": "foreign"
   },
-  "ecloud": {
-    "category": "工具类__网盘工具",
-    "content": "天翼云盘",
-    "description": "天翼云盘是中国电信推出的云存储服务，支持文件备份、同步和在线预览。",
-    "winget": "",
-    "choco": "",
-    "scoop": "ecloud",
-    "foss": false,
-    "region": "domestic",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
   "edge": {
     "category": "工具类__浏览器",
     "choco": "microsoft-edge",
@@ -1014,28 +750,6 @@
     "winget": "Microsoft.Edge",
     "foss": false,
     "region": "foreign"
-  },
-  "edraw-design": {
-    "category": "设计工具__图片处理",
-    "content": "亿图设计",
-    "description": "亿图设计是一款平面设计工具，提供海报、名片、宣传册等设计模板。",
-    "winget": "",
-    "choco": "",
-    "scoop": "edrawdesign",
-    "foss": false,
-    "region": "domestic",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
-  "edrawmax": {
-    "category": "即时通讯__办公协作",
-    "content": "亿图图示",
-    "description": "亿图图示是一款专业绘图软件，支持流程图、组织结构图、网络图等260多种图表类型。",
-    "winget": "",
-    "choco": "",
-    "scoop": "edrawmax",
-    "foss": false,
-    "region": "domestic",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
   },
   "emule": {
     "category": "工具类__下载工具",
@@ -1118,17 +832,6 @@
     "region": "domestic",
     "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
   },
-  "fenliu-downloader": {
-    "category": "工具类__网盘工具",
-    "content": "分流下载器",
-    "description": "分流下载器支持多源分流下载，提高大文件的下载速度和稳定性。",
-    "winget": "",
-    "choco": "",
-    "scoop": "fenliudownloader",
-    "foss": false,
-    "region": "domestic",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
   "files": {
     "category": "工具类",
     "choco": "files",
@@ -1178,17 +881,6 @@
     "winget": "flux.flux",
     "foss": false,
     "region": "foreign"
-  },
-  "folder-color-tool": {
-    "category": "工具类__实用工具",
-    "content": "文件夹彩色标记工具",
-    "description": "文件夹彩色标记工具支持为文件夹设置不同颜色，便于分类和快速定位。",
-    "winget": "",
-    "choco": "",
-    "scoop": "foldercolor",
-    "foss": false,
-    "region": "domestic",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
   },
   "foxitpdf": {
     "category": "办公工具",
@@ -1290,28 +982,6 @@
     "foss": true,
     "region": "foreign"
   },
-  "global-hotkey-custom": {
-    "category": "工具类__实用工具",
-    "content": "全局快捷键自定义工具",
-    "description": "全局快捷键自定义工具支持为任意操作设置全局热键，快速启动程序和执行动作。",
-    "winget": "",
-    "choco": "",
-    "scoop": "globalhotkey",
-    "foss": false,
-    "region": "domestic",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
-  "glossary-manager": {
-    "category": "教育学习__翻译学习",
-    "content": "术语库管理工具",
-    "description": "术语库管理工具帮助建立和管理专业术语库，支持导入导出和批量编辑。",
-    "winget": "",
-    "choco": "",
-    "scoop": "glossarymgr",
-    "foss": false,
-    "region": "domestic",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
   "gog": {
     "category": "游戏",
     "choco": "goggalaxy",
@@ -1372,17 +1042,6 @@
     "foss": true,
     "region": "foreign"
   },
-  "guangying-moshou": {
-    "category": "设计工具__图片处理",
-    "content": "光影魔术手",
-    "description": "光影魔术手是一款老牌国产图片处理软件，提供一键美化、调色和特效功能。",
-    "winget": "",
-    "choco": "",
-    "scoop": "guangying",
-    "foss": false,
-    "region": "domestic",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
   "handbrake": {
     "category": "多媒体工具",
     "choco": "handbrake",
@@ -1392,17 +1051,6 @@
     "winget": "HandBrake.HandBrake",
     "foss": true,
     "region": "foreign"
-  },
-  "haoya": {
-    "category": "系统工具__系统优化",
-    "content": "好压",
-    "description": "好压是一款国产免费压缩工具，支持多种主流压缩格式和解压方式。",
-    "winget": "",
-    "choco": "",
-    "scoop": "haoya",
-    "foss": false,
-    "region": "domestic",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
   },
   "hbuilderx": {
     "category": "开发工具",
@@ -1503,28 +1151,6 @@
     "winget": "CPUID.HWMonitor",
     "foss": false,
     "region": "foreign"
-  },
-  "icon-extractor": {
-    "category": "设计工具__图片处理",
-    "content": "图标提取工具",
-    "description": "图标提取工具帮助从EXE、DLL等文件中提取应用程序图标资源。",
-    "winget": "",
-    "choco": "",
-    "scoop": "iconextractor",
-    "foss": false,
-    "region": "domestic",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
-  "idphoto-changer": {
-    "category": "设计工具__图片处理",
-    "content": "证件照换底色工具",
-    "description": "证件照换底色工具支持一键更换证件照背景颜色，自动识别人像边缘。",
-    "winget": "",
-    "choco": "",
-    "scoop": "idphotochanger",
-    "foss": false,
-    "region": "domestic",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
   },
   "imacopilot": {
     "category": "开发工具",
@@ -1716,17 +1342,6 @@
     "foss": true,
     "region": "foreign"
   },
-  "keyboard-visualizer": {
-    "category": "工具类__实用工具",
-    "content": "键盘按键可视化工具",
-    "description": "键盘按键可视化工具在屏幕上显示键盘按键操作，适合录屏演示和教学。",
-    "winget": "",
-    "choco": "",
-    "scoop": "keyboardviz",
-    "foss": false,
-    "region": "domestic",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
   "kingsoftpdf": {
     "category": "办公工具",
     "choco": "",
@@ -1787,39 +1402,6 @@
     "foss": false,
     "region": "domestic"
   },
-  "lanhu": {
-    "category": "即时通讯__办公协作",
-    "content": "蓝湖",
-    "description": "蓝湖是一款产品设计协作平台，支持设计稿标注、原型图制作和团队协作沟通。",
-    "winget": "",
-    "choco": "",
-    "scoop": "lanhu",
-    "foss": false,
-    "region": "domestic",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
-  "lanhu-design": {
-    "category": "开发工具__程序员",
-    "content": "蓝湖设计协作",
-    "description": "蓝湖设计协作是面向设计师和开发者的协作平台，支持设计交付和版本管理。",
-    "winget": "",
-    "choco": "",
-    "scoop": "lanhu",
-    "foss": false,
-    "region": "domestic",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
-  "large-file-scanner": {
-    "category": "工具类__实用工具",
-    "content": "大文件扫描工具",
-    "description": "大文件扫描工具帮助查找磁盘中的大文件和占空间文件夹，便于磁盘清理。",
-    "winget": "",
-    "choco": "",
-    "scoop": "largefilescanner",
-    "foss": false,
-    "region": "domestic",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
   "lazygit": {
     "category": "开发工具",
     "choco": "lazygit",
@@ -1850,17 +1432,6 @@
     "foss": true,
     "region": "foreign"
   },
-  "local-dict-tool": {
-    "category": "教育学习__翻译学习",
-    "content": "词典本地词库工具",
-    "description": "词典本地词库工具支持离线词库管理和多语种翻译，无需网络即可查词。",
-    "winget": "",
-    "choco": "",
-    "scoop": "localdict",
-    "foss": false,
-    "region": "domestic",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
   "localsend": {
     "category": "自托管工具",
     "choco": "localsend.install",
@@ -1870,28 +1441,6 @@
     "winget": "LocalSend.LocalSend",
     "foss": true,
     "region": "foreign"
-  },
-  "long-image-stitcher": {
-    "category": "设计工具__图片处理",
-    "content": "长图拼接工具",
-    "description": "长图拼接工具支持将多张图片垂直或水平拼接为一张长图。",
-    "winget": "",
-    "choco": "",
-    "scoop": "longimagestitcher",
-    "foss": false,
-    "region": "domestic",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
-  "lossless-music-tagger": {
-    "category": "影音娱乐__音视频",
-    "content": "无损音乐标签编辑器",
-    "description": "无损音乐标签编辑器支持编辑FLAC、APE等无损音乐文件的元数据和封面信息。",
-    "winget": "",
-    "choco": "",
-    "scoop": "losslesstagger",
-    "foss": false,
-    "region": "domestic",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
   },
   "Lua": {
     "category": "开发工具",
@@ -1913,17 +1462,6 @@
     "foss": false,
     "region": "domestic"
   },
-  "m3u8-downloader": {
-    "category": "工具类__网盘工具",
-    "content": "M3U8-Downloader",
-    "description": "M3U8-Downloader是一款视频下载工具，支持解析和下载M3U8格式的在线视频流。",
-    "winget": "",
-    "choco": "",
-    "scoop": "m3u8-downloader",
-    "foss": false,
-    "region": "domestic",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
   "mailmaster": {
     "category": "通讯工具",
     "choco": "",
@@ -1933,17 +1471,6 @@
     "link": "https://mail.163.com/",
     "winget": "NetEase.MailMaster",
     "region": "domestic"
-  },
-  "maple-browser": {
-    "category": "工具类__浏览器",
-    "content": "枫树浏览器",
-    "description": "枫树浏览器是一款基于Chromium内核的国产浏览器，界面简洁运行流畅。",
-    "winget": "",
-    "choco": "",
-    "scoop": "maple-browser",
-    "foss": false,
-    "region": "domestic",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
   },
   "matrix": {
     "category": "通讯工具",
@@ -1985,28 +1512,6 @@
     "foss": false,
     "region": "foreign"
   },
-  "mobaxterm": {
-    "category": "开发工具__程序员",
-    "content": "MobaXterm",
-    "description": "MobaXterm是一款增强型Windows终端，集成X服务器和SSH客户端，支持远程管理。",
-    "winget": "",
-    "choco": "",
-    "scoop": "mobaxterm",
-    "foss": false,
-    "region": "foreign",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
-  "mobile-simulator": {
-    "category": "工具类__浏览器",
-    "content": "移动端网页模拟器",
-    "description": "移动端网页模拟器帮助开发者在电脑上模拟手机浏览器环境，方便调试移动端网页。",
-    "winget": "",
-    "choco": "",
-    "scoop": "mobilesimulator",
-    "foss": false,
-    "region": "domestic",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
   "modrinth": {
     "category": "游戏",
     "choco": "modrinth-app",
@@ -2036,17 +1541,6 @@
     "link": "https://motrix.app/",
     "winget": "motrix.motrix",
     "region": "domestic"
-  },
-  "mouse-pointer-plus": {
-    "category": "工具类__实用工具",
-    "content": "鼠标指针增强工具",
-    "description": "鼠标指针增强工具提供更大的鼠标指针和点击特效，提高操作可见性。",
-    "winget": "",
-    "choco": "",
-    "scoop": "mousepointerplus",
-    "foss": false,
-    "region": "domestic",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
   },
   "mpc-qt": {
     "category": "多媒体工具",
@@ -2088,17 +1582,6 @@
     "foss": false,
     "region": "foreign"
   },
-  "mubu": {
-    "category": "即时通讯__办公协作",
-    "content": "幕布",
-    "description": "幕布是一款思维概要整理工具，将思维导图和文档大纲相结合，让知识管理更高效。",
-    "winget": "",
-    "choco": "",
-    "scoop": "mubu",
-    "foss": false,
-    "region": "domestic",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
   "mullvadbrowser": {
     "category": "工具类__浏览器",
     "choco": "na",
@@ -2118,17 +1601,6 @@
     "winget": "MullvadVPN.MullvadVPN",
     "foss": true,
     "region": "foreign"
-  },
-  "multilang-replacer": {
-    "category": "教育学习__翻译学习",
-    "content": "多语言批量替换工具",
-    "description": "多语言批量替换工具帮助批量替换文本中的多语种字符，支持正则表达式。",
-    "winget": "",
-    "choco": "",
-    "scoop": "multilangreplace",
-    "foss": false,
-    "region": "domestic",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
   },
   "nanazip": {
     "category": "工具类",
@@ -2461,72 +1933,6 @@
     "foss": true,
     "region": "foreign"
   },
-  "phone-pc-transfer": {
-    "category": "工具类__实用工具",
-    "content": "手机电脑互传工具",
-    "description": "手机电脑互传工具支持在同一网络下快速传输文件，无需数据线连接。",
-    "winget": "",
-    "choco": "",
-    "scoop": "phonepctransfer",
-    "foss": false,
-    "region": "domestic",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
-  "photo-restorer": {
-    "category": "设计工具__图片处理",
-    "content": "照片修复工具",
-    "description": "照片修复工具支持修复老照片的划痕、褪色和破损，还原清晰画质。",
-    "winget": "",
-    "choco": "",
-    "scoop": "photorestorer",
-    "foss": false,
-    "region": "domestic",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
-  "photo-stitcher": {
-    "category": "设计工具__图片处理",
-    "content": "拼图工具",
-    "description": "拼图工具支持将多张照片拼接为创意拼贴画，提供多种布局模板。",
-    "winget": "",
-    "choco": "",
-    "scoop": "photostitcher",
-    "foss": false,
-    "region": "domestic",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
-  "photoscape": {
-    "category": "设计工具__图片处理",
-    "content": "PhotoScape图片编辑",
-    "description": "PhotoScape是一款功能全面的照片编辑和图像处理工具，提供查看、编辑和批量处理功能。",
-    "winget": "",
-    "choco": "",
-    "scoop": "photoscape",
-    "foss": false,
-    "region": "foreign",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
-  "pinyin-annotator": {
-    "category": "教育学习__翻译学习",
-    "content": "拼音标注工具",
-    "description": "拼音标注工具自动为汉字添加拼音标注，支持多种拼音格式和声调显示。",
-    "winget": "",
-    "choco": "",
-    "scoop": "pinyinannotate",
-    "foss": false,
-    "region": "domestic",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
-  "player-filter-tool": {
-    "category": "影音娱乐__音视频",
-    "content": "播放器滤镜增强工具",
-    "description": "播放器滤镜增强工具为视频播放器添加画质增强、色彩校正和去噪滤镜。",
-    "winget": "",
-    "choco": "",
-    "scoop": "playerfilter",
-    "foss": false,
-    "region": "domestic",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
   "playnite": {
     "category": "游戏",
     "choco": "playnite",
@@ -2566,17 +1972,6 @@
     "foss": true,
     "region": "foreign"
   },
-  "polarr": {
-    "category": "设计工具__图片处理",
-    "content": "泼辣修图",
-    "description": "泼辣修图是一款专业级图片编辑软件，支持高级色彩调整、图层编辑和滤镜。",
-    "winget": "",
-    "choco": "",
-    "scoop": "polarr",
-    "foss": false,
-    "region": "domestic",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
   "policyplus": {
     "category": "工具类",
     "choco": "na",
@@ -2596,17 +1991,6 @@
     "winget": "JanDeDobbeleer.OhMyPosh",
     "foss": true,
     "region": "foreign"
-  },
-  "pot-translate-ds": {
-    "category": "教育学习__翻译学习",
-    "content": "划词翻译Pot桌面版",
-    "description": "Pot桌面版是一款划词翻译工具，支持鼠标取词、OCR识别和语音翻译。",
-    "winget": "",
-    "choco": "",
-    "scoop": "pot",
-    "foss": false,
-    "region": "domestic",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
   },
   "potplayer": {
     "category": "多媒体工具__视频软件",
@@ -2849,39 +2233,6 @@
     "winget": "Tencent.QQWubi",
     "region": "domestic"
   },
-  "qrcode-analyzer": {
-    "category": "工具类__浏览器",
-    "content": "二维码解析工具",
-    "description": "二维码解析工具支持扫描和生成二维码，解析二维码中的链接和文本信息。",
-    "winget": "",
-    "choco": "",
-    "scoop": "qrcodeanalyzer",
-    "foss": false,
-    "region": "domestic",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
-  "qrcode-generator": {
-    "category": "设计工具__图片处理",
-    "content": "二维码生成器",
-    "description": "二维码生成器支持生成自定义样式二维码，可嵌入Logo和自定义颜色。",
-    "winget": "",
-    "choco": "",
-    "scoop": "qrcodegen",
-    "foss": false,
-    "region": "domestic",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
-  "qrcode-screen-share": {
-    "category": "工具类__实用工具",
-    "content": "二维码扫码投屏",
-    "description": "二维码扫码投屏支持通过手机扫描电脑屏幕二维码进行文件传输和屏幕投射。",
-    "winget": "",
-    "choco": "",
-    "scoop": "qrcodescreenshare",
-    "foss": false,
-    "region": "domestic",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
   "qtox": {
     "category": "通讯工具",
     "choco": "qtox",
@@ -2982,28 +2333,6 @@
     "foss": true,
     "region": "foreign"
   },
-  "screen-color-picker": {
-    "category": "设计工具__图片处理",
-    "content": "屏幕取色器",
-    "description": "屏幕取色器帮助从屏幕任意位置拾取颜色值，支持RGB、HEX等格式。",
-    "winget": "",
-    "choco": "",
-    "scoop": "colorpicker",
-    "foss": false,
-    "region": "domestic",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
-  "screenshot-translator": {
-    "category": "教育学习__翻译学习",
-    "content": "截图翻译工具",
-    "description": "截图翻译工具通过截图快速识别并翻译图片中的文字内容。",
-    "winget": "",
-    "choco": "",
-    "scoop": "screenshottrans",
-    "foss": false,
-    "region": "domestic",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
   "sdio": {
     "category": "工具类",
     "choco": "sdio",
@@ -3013,17 +2342,6 @@
     "winget": "GlennDelahoy.SnappyDriverInstallerOrigin",
     "foss": true,
     "region": "foreign"
-  },
-  "sentence-polisher": {
-    "category": "教育学习__翻译学习",
-    "content": "句子润色工具",
-    "description": "句子润色工具帮助优化英文写作，提供语法检查、用词建议和句式改进。",
-    "winget": "",
-    "choco": "",
-    "scoop": "sentencepolish",
-    "foss": false,
-    "region": "domestic",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
   },
   "sharex": {
     "category": "多媒体工具",
@@ -3075,17 +2393,6 @@
     "foss": true,
     "region": "foreign"
   },
-  "siyuan-note": {
-    "category": "即时通讯__办公协作",
-    "content": "思源笔记",
-    "description": "思源笔记是一款本地优先的个人知识管理系统，支持块级编辑、双向链接和思维导图。",
-    "winget": "",
-    "choco": "",
-    "scoop": "siyuan-note",
-    "foss": true,
-    "region": "domestic",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
   "slack": {
     "category": "通讯工具",
     "choco": "slack",
@@ -3106,17 +2413,6 @@
     "winget": "",
     "region": "foreign"
   },
-  "sogou-browser": {
-    "category": "工具类__浏览器",
-    "content": "搜狗浏览器",
-    "description": "搜狗浏览器是搜狗推出的双核浏览器，支持高速渲染和智能地址栏搜索。",
-    "winget": "",
-    "choco": "",
-    "scoop": "sogou-browser",
-    "foss": false,
-    "region": "domestic",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
   "sogouinput": {
     "category": "工具类__输入法",
     "choco": "",
@@ -3136,17 +2432,6 @@
     "link": "https://wubi.sogou.com/",
     "winget": "Sogou.SogouWBInput",
     "region": "domestic"
-  },
-  "sqlpro": {
-    "category": "开发工具__程序员",
-    "content": "SQLPro数据库管理",
-    "description": "SQLPro是一款轻量级数据库管理客户端，支持SQLite、MySQL和PostgreSQL。",
-    "winget": "",
-    "choco": "",
-    "scoop": "sqlpro",
-    "foss": false,
-    "region": "foreign",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
   },
   "startallback": {
     "category": "工具类",
@@ -3187,17 +2472,6 @@
     "winget": "SublimeHQ.SublimeText.4",
     "foss": false,
     "region": "foreign"
-  },
-  "subtitle-translator": {
-    "category": "教育学习__翻译学习",
-    "content": "字幕翻译工具",
-    "description": "字幕翻译工具支持SRT、ASS等字幕格式的翻译，可批量处理多语言字幕。",
-    "winget": "",
-    "choco": "",
-    "scoop": "subtitletrans",
-    "foss": false,
-    "region": "domestic",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
   },
   "sunlogin": {
     "category": "工具类__系统工具",
@@ -3359,28 +2633,6 @@
     "winget": "Tencent.TIM",
     "region": "domestic"
   },
-  "timer-focus-tool": {
-    "category": "工具类__实用工具",
-    "content": "计时器专注工具",
-    "description": "计时器专注工具基于番茄工作法，帮助用户专注工作和科学休息。",
-    "winget": "",
-    "choco": "",
-    "scoop": "timerfocus",
-    "foss": false,
-    "region": "domestic",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
-  "timer-shutdown": {
-    "category": "工具类__实用工具",
-    "content": "定时关机助手",
-    "description": "定时关机助手支持定时关机、重启和休眠，提供倒计时和条件触发功能。",
-    "winget": "",
-    "choco": "",
-    "scoop": "timershutdown",
-    "foss": false,
-    "region": "domestic",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
   "tor": {
     "category": "工具类__浏览器",
     "choco": "tor-browser",
@@ -3441,17 +2693,6 @@
     "foss": false,
     "region": "domestic"
   },
-  "tuguai-designer": {
-    "category": "设计工具__图片处理",
-    "content": "图怪兽桌面版",
-    "description": "图怪兽是一款在线图片设计工具，提供海量设计模板和素材资源。",
-    "winget": "",
-    "choco": "",
-    "scoop": "tuguai",
-    "foss": false,
-    "region": "domestic",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
   "twinkstarbrowser": {
     "category": "工具类__浏览器",
     "choco": "",
@@ -3501,16 +2742,6 @@
     "winget": "Unity.UnityHub",
     "foss": false,
     "region": "foreign"
-  },
-  "utools-shortcut-plugin": {
-    "content": "快捷指令工具 uTools 插件",
-    "winget": "na",
-    "choco": "na",
-    "scoop": "utools-shortcut",
-    "category": "工具类__实用工具",
-    "region": "domestic",
-    "description": "uTools 快捷指令与工作流插件",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
   },
   "utorrent": {
     "category": "工具类__下载工具",
@@ -3582,28 +2813,6 @@
     "foss": false,
     "region": "foreign"
   },
-  "video-sniffer": {
-    "category": "工具类__浏览器",
-    "content": "网页视频嗅探器",
-    "description": "网页视频嗅探器自动检测网页中嵌入的视频资源，支持一键下载。",
-    "winget": "",
-    "choco": "",
-    "scoop": "videosniffer",
-    "foss": false,
-    "region": "domestic",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
-  "video-subtitle-tool": {
-    "category": "影音娱乐__音视频",
-    "content": "视频字幕压制工具",
-    "description": "视频字幕压制工具支持为视频添加硬字幕和软字幕，支持多种字幕格式。",
-    "winget": "",
-    "choco": "",
-    "scoop": "videosubtitler",
-    "foss": false,
-    "region": "domestic",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
   "visualstudio2022": {
     "category": "开发工具",
     "choco": "visualstudio2022community",
@@ -3654,28 +2863,6 @@
     "foss": false,
     "region": "foreign"
   },
-  "voice-to-text": {
-    "category": "教育学习__翻译学习",
-    "content": "语音转文字工具",
-    "description": "语音转文字工具支持麦克风录音和音频文件转文字，适用于会议记录和采访整理。",
-    "winget": "",
-    "choco": "",
-    "scoop": "voicetotext",
-    "foss": false,
-    "region": "domestic",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
-  "volume-booster": {
-    "category": "工具类__实用工具",
-    "content": "音量增强工具",
-    "description": "音量增强工具可提升系统最大音量，提供均衡器调节和音效增强功能。",
-    "winget": "",
-    "choco": "",
-    "scoop": "volumeboost",
-    "foss": false,
-    "region": "domestic",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
   "vrdesktopstreamer": {
     "category": "游戏",
     "choco": "na",
@@ -3706,28 +2893,6 @@
     "foss": true,
     "region": "foreign"
   },
-  "wangpan-batchrename": {
-    "category": "工具类__网盘工具",
-    "content": "网盘批量重命名工具",
-    "description": "网盘批量重命名工具支持对网盘中的文件进行批量重命名操作。",
-    "winget": "",
-    "choco": "",
-    "scoop": "wangpanrename",
-    "foss": false,
-    "region": "domestic",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
-  "wangpan-directlink": {
-    "category": "工具类__网盘工具",
-    "content": "网盘直链解析助手",
-    "description": "网盘直链解析助手帮助获取网盘文件的直链地址，便于下载工具直接下载。",
-    "winget": "",
-    "choco": "",
-    "scoop": "wangpanhelper",
-    "foss": false,
-    "region": "domestic",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
   "waterfox": {
     "category": "工具类__浏览器",
     "choco": "waterfox",
@@ -3737,39 +2902,6 @@
     "winget": "Waterfox.Waterfox",
     "foss": true,
     "region": "foreign"
-  },
-  "watermark-remover": {
-    "category": "设计工具__图片处理",
-    "content": "水印移除工具",
-    "description": "水印移除工具帮助去除图片中的水印和不需要的元素，智能填充背景。",
-    "winget": "",
-    "choco": "",
-    "scoop": "watermarkremover",
-    "foss": false,
-    "region": "domestic",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
-  "web-full-translator": {
-    "category": "教育学习__翻译学习",
-    "content": "网页全文翻译插件",
-    "description": "网页全文翻译插件浏览器内一键翻译整个网页，支持多种目标语言。",
-    "winget": "",
-    "choco": "",
-    "scoop": "webtransplugin",
-    "foss": false,
-    "region": "domestic",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
-  "web-screenshot": {
-    "category": "工具类__浏览器",
-    "content": "网页长截图工具",
-    "description": "网页长截图工具支持对整个网页进行滚动截图，生成完整的长图片。",
-    "winget": "",
-    "choco": "",
-    "scoop": "webscreenshot",
-    "foss": false,
-    "region": "domestic",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
   },
   "webview2": {
     "category": "微软工具",
@@ -3851,28 +2983,6 @@
     "winget": "msstore:9NKSQGP7F2NH",
     "foss": false,
     "region": "foreign"
-  },
-  "window-on-top": {
-    "category": "工具类__实用工具",
-    "content": "窗口置顶工具",
-    "description": "窗口置顶工具支持将任意窗口置顶显示，方便多任务时的窗口管理。",
-    "winget": "",
-    "choco": "",
-    "scoop": "windowontop",
-    "foss": false,
-    "region": "domestic",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
-  "window-split-layout": {
-    "category": "工具类__实用工具",
-    "content": "窗口分屏布局工具",
-    "description": "窗口分屏布局工具提供预设的窗口排列布局，一键快速分屏提升工作效率。",
-    "winget": "",
-    "choco": "",
-    "scoop": "windowsplit",
-    "foss": false,
-    "region": "domestic",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
   },
   "wingetui": {
     "category": "工具类",
@@ -3974,36 +3084,6 @@
     "winget": "Tencent.WorkBuddy",
     "region": "domestic"
   },
-  "WPF2345加速浏览器": {
-    "content": "2345 加速浏览器",
-    "winget": "na",
-    "choco": "na",
-    "scoop": "2345-browser",
-    "category": "工具类__浏览器",
-    "region": "domestic",
-    "description": "2345 加速浏览器",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
-  "WPF360压缩": {
-    "content": "360 压缩",
-    "winget": "na",
-    "choco": "na",
-    "scoop": "360zip",
-    "category": "系统工具__系统优化",
-    "region": "domestic",
-    "description": "360 压缩免费文件压缩解压工具",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
-  "WPFaria2下载加速": {
-    "content": "aria2 下载加速",
-    "winget": "na",
-    "choco": "na",
-    "scoop": "aria2",
-    "category": "工具类__网盘工具",
-    "region": "domestic",
-    "description": "aria2 轻量级多协议命令行下载工具",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
   "WPFAudacity音频剪辑": {
     "content": "Audacity 音频剪辑",
     "winget": "na",
@@ -4022,26 +3102,6 @@
     "category": "系统工具__系统优化",
     "region": "domestic",
     "description": "Microsoft Sysinternals 开机自启动项管理器",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
-  "WPFBilibili桌面客户端": {
-    "content": "Bilibili 桌面客户端",
-    "winget": "na",
-    "choco": "na",
-    "scoop": "bilibili",
-    "category": "影音娱乐__音视频",
-    "region": "domestic",
-    "description": "Bilibili 哔哩哔哩桌面客户端",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
-  "WPFCAJViewer知网阅读器": {
-    "content": "CAJViewer 知网阅读器",
-    "winget": "na",
-    "choco": "na",
-    "scoop": "cajviewer",
-    "category": "办公工具__办公文档",
-    "region": "domestic",
-    "description": "中国知网 CAJ 格式专用阅读器",
     "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
   },
   "WPFCrystalDiskInfo硬盘检测": {
@@ -4064,16 +3124,6 @@
     "description": "DeepL AI 翻译桌面客户端",
     "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
   },
-  "WPFDism": {
-    "content": "Dism++",
-    "winget": "na",
-    "choco": "na",
-    "scoop": "dismplusplus",
-    "category": "系统工具__系统优化",
-    "region": "domestic",
-    "description": "Dism++ 系统优化与镜像管理工具",
-    "link": "https://github.com/microsoft/winget-pkgs"
-  },
   "WPFDrawio": {
     "content": "Draw.io",
     "winget": "JGraph.Draw",
@@ -4083,36 +3133,6 @@
     "region": "domestic",
     "description": "开源流程图绘制工具",
     "link": "https://github.com/microsoft/winget-pkgs"
-  },
-  "WPFDuF磁盘占用查看": {
-    "content": "DuF 磁盘占用查看",
-    "winget": "na",
-    "choco": "na",
-    "scoop": "duf",
-    "category": "系统工具__系统优化",
-    "region": "domestic",
-    "description": "DuF 跨平台磁盘空间占用查看命令行工具",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
-  "WPFfrp内网穿透": {
-    "content": "frp 内网穿透",
-    "winget": "na",
-    "choco": "na",
-    "scoop": "frp",
-    "category": "开发工具__程序员",
-    "region": "domestic",
-    "description": "frp 开源内网穿透反向代理工具",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
-  "WPFGit中文可视化工具": {
-    "content": "Git 中文可视化工具",
-    "winget": "na",
-    "choco": "na",
-    "scoop": "git-visual",
-    "category": "开发工具__程序员",
-    "region": "domestic",
-    "description": "Git 版本控制中文可视化客户端",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
   },
   "WPFHandBrake视频压缩": {
     "content": "HandBrake 视频压缩",
@@ -4132,46 +3152,6 @@
     "category": "工具类__网盘工具",
     "region": "domestic",
     "description": "Internet Download Manager 高速下载加速器",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
-  "WPFIObitUnlocker文件解锁": {
-    "content": "IObit Unlocker 文件解锁",
-    "winget": "na",
-    "choco": "na",
-    "scoop": "iobit-unlocker",
-    "category": "系统工具__系统优化",
-    "region": "domestic",
-    "description": "IObit Unlocker 文件占用解锁工具",
-    "link": "https://github.com/microsoft/winget-pkgs"
-  },
-  "WPFLXMusic洛雪音乐": {
-    "content": "LX Music 洛雪音乐",
-    "winget": "na",
-    "choco": "na",
-    "scoop": "lx-music-desktop",
-    "category": "影音娱乐__音视频",
-    "region": "domestic",
-    "description": "洛雪音乐助手免费音乐播放器",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
-  "WPFNavicat中文精简版": {
-    "content": "Navicat 中文精简版",
-    "winget": "na",
-    "choco": "na",
-    "scoop": "navicat",
-    "category": "开发工具__程序员",
-    "region": "domestic",
-    "description": "Navicat 数据库管理工具中文版",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
-  "WPFNginxWindows版": {
-    "content": "Nginx Windows 版",
-    "winget": "na",
-    "choco": "na",
-    "scoop": "nginx",
-    "category": "开发工具__程序员",
-    "region": "domestic",
-    "description": "Nginx 高性能 Web 服务器 Windows 版",
     "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
   },
   "WPFOBSStudio录屏推流": {
@@ -4204,16 +3184,6 @@
     "description": "PDF24 免费 PDF 工具集桌面版",
     "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
   },
-  "WPFPDF翻译工具": {
-    "content": "PDF 翻译工具",
-    "winget": "na",
-    "choco": "na",
-    "scoop": "pdf-translator",
-    "category": "教育学习__翻译学习",
-    "region": "domestic",
-    "description": "PDF 文档全文翻译与对照工具",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
   "WPFPostman中文版": {
     "content": "Postman 中文版",
     "winget": "Postman.Postman",
@@ -4222,16 +3192,6 @@
     "category": "开发工具__程序员",
     "region": "domestic",
     "description": "Postman API 接口测试工具中文版",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
-  "WPFPotdesktop划词翻译OCR": {
-    "content": "Pot-desktop 划词翻译 OCR",
-    "winget": "na",
-    "choco": "na",
-    "scoop": "pot",
-    "category": "办公工具__办公文档",
-    "region": "domestic",
-    "description": "Pot 跨平台划词翻译与 OCR 工具",
     "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
   },
   "WPFPotPlayer播放器": {
@@ -4254,16 +3214,6 @@
     "description": "Sysinternals 进程管理工具",
     "link": "https://github.com/microsoft/winget-pkgs"
   },
-  "WPFQuickLook空格预览": {
-    "content": "QuickLook 空格预览",
-    "winget": "na",
-    "choco": "na",
-    "scoop": "quicklook",
-    "category": "系统工具__系统优化",
-    "region": "domestic",
-    "description": "Windows 空格键文件快速预览工具",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
   "WPFShareX截图录屏": {
     "content": "ShareX 截图录屏",
     "winget": "na",
@@ -4272,16 +3222,6 @@
     "category": "系统工具__系统优化",
     "region": "domestic",
     "description": "ShareX 开源免费截图录屏与文件分享工具",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
-  "WPFSQL客户端SQLPro": {
-    "content": "SQL 客户端 SQLPro",
-    "winget": "na",
-    "choco": "na",
-    "scoop": "sqlpro",
-    "category": "开发工具__程序员",
-    "region": "domestic",
-    "description": "SQLPro 跨平台 SQL 数据库客户端",
     "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
   },
   "WPFSumatraPDF": {
@@ -4294,66 +3234,6 @@
     "description": "轻量级 PDF 电子书阅读器",
     "link": "https://github.com/microsoft/winget-pkgs"
   },
-  "WPFTinyPNG桌面版": {
-    "content": "TinyPNG 桌面版",
-    "winget": "na",
-    "choco": "na",
-    "scoop": "tinypng-cli",
-    "category": "设计工具__图片处理",
-    "region": "domestic",
-    "description": "TinyPNG 图片压缩桌面客户端",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
-  "WPFToDesk远程控制": {
-    "content": "ToDesk 远程控制",
-    "winget": "na",
-    "choco": "na",
-    "scoop": "todesk",
-    "category": "系统工具__系统优化",
-    "region": "domestic",
-    "description": "ToDesk 国产远程桌面控制工具",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
-  "WPFTrafficMonitor网速悬浮窗": {
-    "content": "TrafficMonitor 网速悬浮窗",
-    "winget": "na",
-    "choco": "na",
-    "scoop": "trafficmonitor",
-    "category": "系统工具__系统优化",
-    "region": "domestic",
-    "description": "TrafficMonitor 网速 CPU 内存悬浮窗显示",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
-  "WPFuTools效率启动器": {
-    "content": "uTools 效率启动器",
-    "winget": "na",
-    "choco": "na",
-    "scoop": "utools",
-    "category": "系统工具__系统优化",
-    "region": "domestic",
-    "description": "uTools 跨平台效率启动器与插件平台",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
-  "WPFWinToGo助手": {
-    "content": "WinToGo 助手",
-    "winget": "na",
-    "choco": "na",
-    "scoop": "wintogo",
-    "category": "系统工具__系统优化",
-    "region": "domestic",
-    "description": "Windows To Go 便携系统制作工具",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
-  "WPFWPSOffice国产版": {
-    "content": "WPS Office 国产版",
-    "winget": "na",
-    "choco": "na",
-    "scoop": "wps-office-cn",
-    "category": "办公工具__办公文档",
-    "region": "domestic",
-    "description": "金山 WPS Office 国产办公套件",
-    "link": "https://github.com/microsoft/winget-pkgs"
-  },
   "WPFXMindZEN": {
     "content": "XMind ZEN",
     "winget": "Xmind.Xmind",
@@ -4363,186 +3243,6 @@
     "region": "domestic",
     "description": "XMind ZEN 专业思维导图软件",
     "link": "https://github.com/microsoft/winget-pkgs"
-  },
-  "WPF万彩脑图": {
-    "content": "万彩脑图",
-    "winget": "na",
-    "choco": "na",
-    "scoop": "wancai-naotu",
-    "category": "办公工具__办公文档",
-    "region": "domestic",
-    "description": "万彩脑图思维导图制作工具",
-    "link": "https://github.com/microsoft/winget-pkgs"
-  },
-  "WPF亿图思维导图": {
-    "content": "亿图思维导图",
-    "winget": "na",
-    "choco": "na",
-    "scoop": "edraw-mindmaster",
-    "category": "办公工具__办公文档",
-    "region": "domestic",
-    "description": "亿图思维导图 MindMaster 脑图工具",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
-  "WPF代码小抄uTools插件": {
-    "content": "代码小抄 uTools 插件",
-    "winget": "na",
-    "choco": "na",
-    "scoop": "code-snippet",
-    "category": "开发工具__程序员",
-    "region": "domestic",
-    "description": "代码片段管理与快速检索 uTools 插件",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
-  "WPF傲游浏览器": {
-    "content": "傲游浏览器",
-    "winget": "na",
-    "choco": "na",
-    "scoop": "maxthon",
-    "category": "工具类__浏览器",
-    "region": "domestic",
-    "description": "傲游 Maxthon 云浏览器桌面版",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
-  "WPF划词翻译Pot": {
-    "content": "划词翻译 Pot",
-    "winget": "na",
-    "choco": "na",
-    "scoop": "pot-desktop",
-    "category": "教育学习__翻译学习",
-    "region": "domestic",
-    "description": "Pot 桌面划词翻译与 OCR 综合工具",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
-  "WPF向日葵远程桌面": {
-    "content": "向日葵远程桌面",
-    "winget": "na",
-    "choco": "na",
-    "scoop": "sunloginclient",
-    "category": "系统工具__系统优化",
-    "region": "domestic",
-    "description": "向日葵远程桌面控制软件",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
-  "WPF天若OCR": {
-    "content": "天若 OCR",
-    "winget": "na",
-    "choco": "na",
-    "scoop": "tianruo-ocr",
-    "category": "办公工具__办公文档",
-    "region": "domestic",
-    "description": "天若 OCR 文字识别与截图翻译工具",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
-  "WPF小恐龙PDF": {
-    "content": "小恐龙 PDF",
-    "winget": "na",
-    "choco": "na",
-    "scoop": "minipdf",
-    "category": "办公工具__办公文档",
-    "region": "domestic",
-    "description": "小恐龙 PDF 轻量阅读编辑工具",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
-  "WPF小熊猫Dev工具盒": {
-    "content": "小熊猫 Dev 工具盒",
-    "winget": "na",
-    "choco": "na",
-    "scoop": "dev-toolbox",
-    "category": "开发工具__程序员",
-    "region": "domestic",
-    "description": "开发者工具箱集成多种开发工具",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
-  "WPF小狼毫输入法": {
-    "content": "小狼毫输入法",
-    "winget": "na",
-    "choco": "na",
-    "scoop": "rime",
-    "category": "系统工具__系统优化",
-    "region": "domestic",
-    "description": "小狼毫输入法 RIME 引擎",
-    "link": "https://github.com/microsoft/winget-pkgs"
-  },
-  "WPF弹弹play弹幕播放器": {
-    "content": "弹弹 play 弹幕播放器",
-    "winget": "na",
-    "choco": "na",
-    "scoop": "dandanplay",
-    "category": "影音娱乐__音视频",
-    "region": "domestic",
-    "description": "弹弹 play 弹幕视频播放器",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
-  "WPF扫描王桌面版": {
-    "content": "扫描王桌面版",
-    "winget": "na",
-    "choco": "na",
-    "scoop": "camscanner",
-    "category": "办公工具__办公文档",
-    "region": "domestic",
-    "description": "扫描王桌面文档扫描工具",
-    "link": "https://github.com/microsoft/winget-pkgs"
-  },
-  "WPF有道云笔记": {
-    "content": "有道云笔记",
-    "winget": "na",
-    "choco": "na",
-    "scoop": "youdaonote",
-    "category": "即时通讯__办公协作",
-    "region": "domestic",
-    "description": "网易有道云笔记跨平台记笔记工具",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
-  "WPF格式工厂文档版": {
-    "content": "格式工厂文档版",
-    "winget": "na",
-    "choco": "na",
-    "scoop": "formatfactory",
-    "category": "办公工具__办公文档",
-    "region": "domestic",
-    "description": "格式工厂文档格式转换工具",
-    "link": "https://github.com/microsoft/winget-pkgs"
-  },
-  "WPF每日英语听力PC版": {
-    "content": "每日英语听力 PC 版",
-    "winget": "na",
-    "choco": "na",
-    "scoop": "daily-english",
-    "category": "教育学习__翻译学习",
-    "region": "domestic",
-    "description": "每日英语听力训练桌面客户端",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
-  "WPF火绒安全": {
-    "content": "火绒安全",
-    "winget": "na",
-    "choco": "na",
-    "scoop": "huorong",
-    "category": "系统工具__系统优化",
-    "region": "domestic",
-    "description": "火绒安全软件",
-    "link": "https://github.com/microsoft/winget-pkgs"
-  },
-  "WPF石墨表格": {
-    "content": "石墨表格",
-    "winget": "na",
-    "choco": "na",
-    "scoop": "shimo-sheet",
-    "category": "办公工具__办公文档",
-    "region": "domestic",
-    "description": "石墨文档在线表格桌面客户端",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
-  "WPF磁盘精灵DiskGenius": {
-    "content": "磁盘精灵 DiskGenius",
-    "winget": "na",
-    "choco": "na",
-    "scoop": "diskgenius",
-    "category": "系统工具__系统优化",
-    "region": "domestic",
-    "description": "DiskGenius 磁盘分区管理与数据恢复软件",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
   },
   "WPF福昕阅读器": {
     "content": "福昕阅读器",
@@ -4554,76 +3254,6 @@
     "description": "福昕 PDF 阅读器桌面版",
     "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
   },
-  "WPF稿定设计PC端": {
-    "content": "稿定设计 PC 端",
-    "winget": "na",
-    "choco": "na",
-    "scoop": "gaoding",
-    "category": "设计工具__图片处理",
-    "region": "domestic",
-    "description": "稿定设计平面设计桌面客户端",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
-  "WPF网页PDF保存工具": {
-    "content": "网页 PDF 保存工具",
-    "winget": "na",
-    "choco": "na",
-    "scoop": "web-pdf-saver",
-    "category": "工具类__浏览器",
-    "region": "domestic",
-    "description": "网页转 PDF 保存与打印工具",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
-  "WPF翻译插件Pot": {
-    "content": "翻译插件 Pot",
-    "winget": "na",
-    "choco": "na",
-    "scoop": "pot-plugin",
-    "category": "工具类__浏览器",
-    "region": "domestic",
-    "description": "Pot 浏览器翻译插件桌面辅助工具",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
-  "WPF背单词墨墨PC端": {
-    "content": "背单词墨墨 PC 端",
-    "winget": "na",
-    "choco": "na",
-    "scoop": "memrise-pc",
-    "category": "教育学习__翻译学习",
-    "region": "domestic",
-    "description": "墨墨背单词桌面学习客户端",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
-  "WPF腾讯云CLI": {
-    "content": "腾讯云 CLI",
-    "winget": "na",
-    "choco": "na",
-    "scoop": "tencent-cli",
-    "category": "开发工具__程序员",
-    "region": "domestic",
-    "description": "腾讯云 CLI 命令行管理工具",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
-  "WPF芒果TV电脑版": {
-    "content": "芒果 TV 电脑版",
-    "winget": "na",
-    "choco": "na",
-    "scoop": "mgtv",
-    "category": "影音娱乐__音视频",
-    "region": "domestic",
-    "description": "芒果 TV 电脑桌面客户端",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
-  "WPF语雀文档导出工具": {
-    "content": "语雀文档导出工具",
-    "winget": "na",
-    "choco": "na",
-    "scoop": "yuque-export",
-    "category": "办公工具__办公文档",
-    "region": "domestic",
-    "description": "语雀文档批量导出与备份工具",
-    "link": "https://github.com/microsoft/winget-pkgs"
-  },
   "WPF豆包PC端": {
     "content": "豆包 PC 端",
     "winget": "ByteDance.Doubao",
@@ -4633,36 +3263,6 @@
     "region": "domestic",
     "description": "字节跳动豆包 AI 助手桌面客户端",
     "link": "https://github.com/microsoft/winget-pkgs"
-  },
-  "WPF迅捷PDF转换器": {
-    "content": "迅捷 PDF 转换器",
-    "winget": "na",
-    "choco": "na",
-    "scoop": "xf-pdf-converter",
-    "category": "办公工具__办公文档",
-    "region": "domestic",
-    "description": "迅捷 PDF 格式转换与编辑工具",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
-  "WPF通义千问桌面版": {
-    "content": "通义千问桌面版",
-    "winget": "na",
-    "choco": "na",
-    "scoop": "tongyi-qianwen",
-    "category": "办公工具__办公文档",
-    "region": "domestic",
-    "description": "阿里通义千问 AI 大模型桌面端",
-    "link": "https://github.com/microsoft/winget-pkgs"
-  },
-  "WPF阿里云CLI": {
-    "content": "阿里云 CLI",
-    "winget": "na",
-    "choco": "na",
-    "scoop": "aliyun-cli",
-    "category": "开发工具__程序员",
-    "region": "domestic",
-    "description": "阿里云 CLI 命令行管理工具",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
   },
   "WPF飞书表格": {
     "content": "飞书表格",
@@ -4674,16 +3274,6 @@
     "description": "飞书多维表格桌面客户端",
     "link": "https://github.com/microsoft/winget-pkgs"
   },
-  "WPF鲁大师硬件检测": {
-    "content": "鲁大师硬件检测",
-    "winget": "na",
-    "choco": "na",
-    "scoop": "ludashi",
-    "category": "系统工具__系统优化",
-    "region": "domestic",
-    "description": "鲁大师电脑硬件检测工具",
-    "link": "https://github.com/microsoft/winget-pkgs"
-  },
   "wpsoffice": {
     "category": "办公工具",
     "choco": "",
@@ -4693,17 +3283,6 @@
     "link": "https://www.wps.com/",
     "winget": "Kingsoft.WPSOffice",
     "region": "domestic"
-  },
-  "wubi-reverse": {
-    "category": "教育学习__翻译学习",
-    "content": "五笔反查工具",
-    "description": "五笔反查工具支持通过拼音查询五笔编码，帮助学习和练习五笔输入法。",
-    "winget": "",
-    "choco": "",
-    "scoop": "wubireverse",
-    "foss": false,
-    "region": "domestic",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
   },
   "xeheditor": {
     "category": "工具类",
@@ -4785,17 +3364,6 @@
     "foss": true,
     "region": "foreign"
   },
-  "yidongyun": {
-    "category": "工具类__网盘工具",
-    "content": "移动云盘",
-    "description": "移动云盘是中国移动推出的云存储服务，提供大容量文件存储和备份功能。",
-    "winget": "",
-    "choco": "",
-    "scoop": "yidongyun",
-    "foss": false,
-    "region": "domestic",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
   "youdaodict": {
     "category": "工具类",
     "choco": "youdao-dict",
@@ -4846,50 +3414,6 @@
     "winget": "Tencent.Yuanbao",
     "region": "domestic"
   },
-  "yunpan-sync": {
-    "category": "工具类__网盘工具",
-    "content": "云盘同步盘",
-    "description": "云盘同步盘是一款多网盘同步工具，支持本地文件与多个云盘之间的自动同步。",
-    "winget": "",
-    "choco": "",
-    "scoop": "yunpansync",
-    "foss": false,
-    "region": "domestic",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
-  "yuque": {
-    "category": "即时通讯__办公协作",
-    "content": "语雀",
-    "description": "语雀是蚂蚁集团出品的云端知识库，支持结构化文档编写、团队协作和知识管理。",
-    "winget": "",
-    "choco": "",
-    "scoop": "yuque",
-    "foss": false,
-    "region": "domestic",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
-  "yuque-dev-kb": {
-    "category": "开发工具__程序员",
-    "content": "语雀开发者知识库",
-    "description": "语雀开发者知识库是面向开发者的技术文档管理工具，支持API文档和团队知识管理。",
-    "winget": "",
-    "choco": "",
-    "scoop": "yuque-dev",
-    "foss": false,
-    "region": "domestic",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
-  "yuque-kb": {
-    "category": "即时通讯__办公协作",
-    "content": "语雀知识库",
-    "description": "语雀知识库是语雀团队推出的结构化知识管理工具，支持多层级目录和团队知识沉淀。",
-    "winget": "",
-    "choco": "",
-    "scoop": "yuque-kb",
-    "foss": false,
-    "region": "domestic",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
-  },
   "Zed": {
     "category": "开发工具",
     "choco": "zed",
@@ -4909,17 +3433,6 @@
     "winget": "Zen-Team.Zen-Browser",
     "foss": true,
     "region": "foreign"
-  },
-  "zhitu-compress": {
-    "category": "设计工具__图片处理",
-    "content": "智图图片压缩",
-    "description": "智图图片压缩工具帮助压缩图片文件大小，保持画质的同时减小存储空间占用。",
-    "winget": "",
-    "choco": "",
-    "scoop": "zhitu",
-    "foss": false,
-    "region": "domestic",
-    "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
   },
   "zoom": {
     "category": "通讯工具",
