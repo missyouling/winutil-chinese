@@ -599,6 +599,16 @@
     "foss": false,
     "region": "foreign"
   },
+  "dismplusplus": {
+    "category": "工具类__系统工具",
+    "choco": "",
+    "scoop": "dismplusplus",
+    "content": "Dism++ (系统优化工具)",
+    "description": "Dism++ 是初雨团队开发的一款强大的 Windows 系统管理优化工具，支持系统清理、驱动管理、系统更新等功能。",
+    "foss": true,
+    "region": "domestic",
+    "winget": ""
+  },
   "dismtools": {
     "category": "微软工具",
     "choco": "dismtools",

@@ -31,10 +31,11 @@ function Invoke-WPFInstall {
 
         $packagesWinget = $packagesSorted['Winget']
         $packagesChoco = $packagesSorted['Choco']
-        $totalPackages = @($packagesWinget).Count + @($packagesChoco).Count
+        $packagesScoop = $packagesSorted['Scoop']
+        $totalPackages = @($packagesWinget).Count + @($packagesChoco).Count + @($packagesScoop).Count
         $completedPackages = 0
         $hasUI = $null -ne $sync.Form -and $null -ne $sync.Form.Dispatcher
-        Write-WinUtilLog -Component "Install" -Message "Install package manager split: winget=$(@($packagesWinget).Count), choco=$(@($packagesChoco).Count)"
+        Write-WinUtilLog -Component "Install" -Message "Install package manager split: winget=$(@($packagesWinget).Count), choco=$(@($packagesChoco).Count), scoop=$(@($packagesScoop).Count)"
 
         try {
             $sync.ProcessRunning = $true
@@ -78,6 +79,22 @@ function Invoke-WPFInstall {
                 $completedPercent = [int](($completedPackages / $totalPackages) * 100)
                 if ($hasUI) {
                     Set-WinUtilTweaksProgressIndicator -Visible $true -Label "Installed Chocolatey packages ($completedPackages/$totalPackages)" -Percent $completedPercent
+                    Invoke-WPFUIThread -ScriptBlock { Set-WinUtilTaskbaritem -value ($completedPercent / 100) }
+                }
+            }
+            if($packagesScoop.Count -gt 0) {
+                $position = $completedPackages + 1
+                $startPercent = [int](($completedPackages / $totalPackages) * 100)
+                if ($hasUI) {
+                    Set-WinUtilTweaksProgressIndicator -Visible $true -Label "Installing Scoop packages ($position/$totalPackages)" -Percent $startPercent
+                }
+
+                Install-WinUtilScoop
+                Install-WinUtilProgramScoop -Action Install -Programs $packagesScoop
+                $completedPackages += @($packagesScoop).Count
+                $completedPercent = [int](($completedPackages / $totalPackages) * 100)
+                if ($hasUI) {
+                    Set-WinUtilTweaksProgressIndicator -Visible $true -Label "Installed Scoop packages ($completedPackages/$totalPackages)" -Percent $completedPercent
                     Invoke-WPFUIThread -ScriptBlock { Set-WinUtilTaskbaritem -value ($completedPercent / 100) }
                 }
             }

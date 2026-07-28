@@ -1,4 +1,628 @@
 {
+  "WPFAddUltPerf": {
+    "Content": "卓越性能方案 - 启用",
+    "category": "性能计划 - 不适用于笔记本电脑",
+    "panel": "2",
+    "Type": "Button",
+    "ButtonWidth": "300",
+    "link": "https://winutil.christitus.com/dev/tweaks/performance-plans---not-for-laptops/addultperf"
+  },
+  "WPFchangedns": {
+    "Content": "DNS - 设置为：",
+    "category": "高级优化 - 谨慎操作",
+    "panel": "1",
+    "Type": "Combobox",
+    "ComboItems": "Default DHCP Google Cloudflare Cloudflare_Malware Cloudflare_Malware_Adult Open_DNS Quad9 AdGuard_Ads_Trackers AdGuard_Ads_Trackers_Malware_Adult",
+    "link": "https://winutil.christitus.com/dev/tweaks/z--advanced-tweaks---caution/changedns"
+  },
+  "WPFOOSUbutton": {
+    "Content": "O&O ShutUp10++ - 运行",
+    "category": "高级优化 - 谨慎操作",
+    "panel": "1",
+    "Type": "Button",
+    "link": "https://winutil.christitus.com/dev/tweaks/z--advanced-tweaks---caution/oosubutton"
+  },
+  "WPFRemoveUltPerf": {
+    "Content": "卓越性能方案 - 禁用",
+    "category": "性能计划 - 不适用于笔记本电脑",
+    "panel": "2",
+    "Type": "Button",
+    "ButtonWidth": "300",
+    "link": "https://winutil.christitus.com/dev/tweaks/performance-plans---not-for-laptops/removeultperf"
+  },
+  "WPFToggleAutoHideTaskbar": {
+    "Content": "自动隐藏任务栏",
+    "Description": "切换任务栏自动隐藏功能的启用/禁用状态。",
+    "category": "自定义偏好",
+    "panel": 2,
+    "Type": "Toggle",
+    "registry": [
+      {
+        "Path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\StuckRects3",
+        "Name": "Settings",
+        "Type": "Binary",
+        "Value": "28000000000000000300000000000000",
+        "OriginalValue": "28000000000000000300000000000000"
+      }
+    ],
+    "link": "https://github.com/missyouling/winutil-chinese"
+  },
+  "WPFToggleBatteryPercentage": {
+    "Content": "系统托盘电池百分比",
+    "Description": "在系统托盘中电池图标旁显示数字电池百分比。",
+    "category": "自定义偏好",
+    "panel": "2",
+    "Type": "Toggle",
+    "registry": [
+      {
+        "Path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+        "Name": "IsBatteryPercentageEnabled",
+        "Value": "1",
+        "Type": "DWord",
+        "OriginalValue": "<RemoveEntry>",
+        "DefaultState": "false"
+      }
+    ],
+    "link": "https://winutil.christitus.com/dev/tweaks/customize-preferences/batterypercentage"
+  },
+  "WPFToggleBingSearch": {
+    "Content": "开始菜单必应搜索",
+    "Description": "切换 Windows 搜索中的必应网页搜索结果。",
+    "category": "自定义偏好",
+    "panel": "2",
+    "Type": "Toggle",
+    "registry": [
+      {
+        "Path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Search",
+        "Name": "BingSearchEnabled",
+        "Value": "1",
+        "Type": "DWord",
+        "OriginalValue": "0",
+        "DefaultState": "true"
+      }
+    ],
+    "link": "https://winutil.christitus.com/dev/tweaks/customize-preferences/bingsearch"
+  },
+  "WPFToggleDarkMode": {
+    "Content": "Windows 深色主题",
+    "Description": "系统和应用的深色模式。",
+    "category": "自定义偏好",
+    "panel": "2",
+    "Type": "Toggle",
+    "registry": [
+      {
+        "Path": "HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
+        "Name": "AppsUseLightTheme",
+        "Value": "0",
+        "Type": "DWord",
+        "OriginalValue": "1",
+        "DefaultState": "false"
+      },
+      {
+        "Path": "HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
+        "Name": "SystemUsesLightTheme",
+        "Value": "0",
+        "Type": "DWord",
+        "OriginalValue": "1",
+        "DefaultState": "false"
+      }
+    ],
+    "InvokeScript": [
+      "      Invoke-WinUtilExplorerUpdate      if ($sync.ThemeButton.Content -eq [char]0xF08C) {        Invoke-WinutilThemeChange -theme \"Auto\"      }      "
+    ],
+    "UndoScript": [
+      "      Invoke-WinUtilExplorerUpdate      if ($sync.ThemeButton.Content -eq [char]0xF08C) {        Invoke-WinutilThemeChange -theme \"Auto\"      }      "
+    ],
+    "link": "https://winutil.christitus.com/dev/tweaks/customize-preferences/darkmode"
+  },
+  "WPFToggleDetailedBSoD": {
+    "Content": "蓝屏详细模式",
+    "Description": "蓝屏时提供更多信息。",
+    "category": "自定义偏好",
+    "panel": "2",
+    "Type": "Toggle",
+    "registry": [
+      {
+        "Path": "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\CrashControl",
+        "Name": "DisplayParameters",
+        "Value": "1",
+        "Type": "DWord",
+        "OriginalValue": "0",
+        "DefaultState": "false"
+      },
+      {
+        "Path": "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\CrashControl",
+        "Name": "DisableEmoticon",
+        "Value": "1",
+        "Type": "DWord",
+        "OriginalValue": "0",
+        "DefaultState": "false"
+      }
+    ],
+    "link": "https://winutil.christitus.com/dev/tweaks/customize-preferences/detailedbsod"
+  },
+  "WPFToggleGameMode": {
+    "Content": "游戏模式",
+    "Description": "切换 Windows 通过分配系统资源给游戏来优先考虑游戏性能。",
+    "category": "自定义偏好",
+    "panel": "2",
+    "Type": "Toggle",
+    "registry": [
+      {
+        "Path": "HKCU:\\Software\\Microsoft\\GameBar",
+        "Name": "AllowAutoGameMode",
+        "Value": "1",
+        "Type": "DWord",
+        "OriginalValue": "0",
+        "DefaultState": "true"
+      },
+      {
+        "Path": "HKCU:\\Software\\Microsoft\\GameBar",
+        "Name": "AutoGameModeEnabled",
+        "Value": "1",
+        "Type": "DWord",
+        "OriginalValue": "0",
+        "DefaultState": "true"
+      }
+    ],
+    "link": "https://winutil.christitus.com/dev/tweaks/customize-preferences/gamemode"
+  },
+  "WPFToggleHiddenFiles": {
+    "Content": "文件资源管理器隐藏文件",
+    "Description": "在资源管理器中显示隐藏文件。",
+    "category": "自定义偏好",
+    "panel": "2",
+    "Type": "Toggle",
+    "registry": [
+      {
+        "Path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+        "Name": "Hidden",
+        "Value": "1",
+        "Type": "DWord",
+        "OriginalValue": "0",
+        "DefaultState": "false"
+      }
+    ],
+    "InvokeScript": [
+      "      Invoke-WinUtilExplorerUpdate -action \"restart\"      "
+    ],
+    "UndoScript": [
+      "      Invoke-WinUtilExplorerUpdate -action \"restart\"      "
+    ],
+    "link": "https://winutil.christitus.com/dev/tweaks/customize-preferences/hiddenfiles"
+  },
+  "WPFToggleHideSettingsHome": {
+    "Content": "设置主页",
+    "Description": "切换 Windows 设置应用中的主页。",
+    "category": "自定义偏好",
+    "panel": "2",
+    "Type": "Toggle",
+    "registry": [
+      {
+        "Path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer",
+        "Name": "SettingsPageVisibility",
+        "Value": "show:home",
+        "Type": "String",
+        "OriginalValue": "hide:home",
+        "DefaultState": "true"
+      }
+    ],
+    "link": "https://winutil.christitus.com/dev/tweaks/customize-preferences/hidesettingshome"
+  },
+  "WPFToggleLoginBlur": {
+    "Content": "登录屏幕亚克力模糊",
+    "Description": "切换登录屏幕背景上的亚克力模糊效果。",
+    "category": "自定义偏好",
+    "panel": "2",
+    "Type": "Toggle",
+    "registry": [
+      {
+        "Path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\System",
+        "Name": "DisableAcrylicBackgroundOnLogon",
+        "Value": "0",
+        "Type": "DWord",
+        "OriginalValue": "1",
+        "DefaultState": "true"
+      }
+    ],
+    "link": "https://winutil.christitus.com/dev/tweaks/customize-preferences/loginblur"
+  },
+  "WPFToggleLongPaths": {
+    "Content": "启用长路径",
+    "Description": "切换资源管理器中超过 260 个字符的文件路径支持。",
+    "category": "自定义偏好",
+    "panel": "2",
+    "Type": "Toggle",
+    "registry": [
+      {
+        "Path": "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\FileSystem",
+        "Name": "LongPathsEnabled",
+        "Value": "1",
+        "Type": "DWord",
+        "OriginalValue": "0",
+        "DefaultState": "false"
+      }
+    ],
+    "link": "https://winutil.christitus.com/dev/tweaks/customize-preferences/longpaths"
+  },
+  "WPFToggleMouseAcceleration": {
+    "Content": "鼠标加速",
+    "Description": "使光标移动受物理鼠标移动速度的影响。",
+    "category": "自定义偏好",
+    "panel": "2",
+    "Type": "Toggle",
+    "registry": [
+      {
+        "Path": "HKCU:\\Control Panel\\Mouse",
+        "Name": "MouseSpeed",
+        "Value": "1",
+        "Type": "DWord",
+        "OriginalValue": "0",
+        "DefaultState": "true"
+      },
+      {
+        "Path": "HKCU:\\Control Panel\\Mouse",
+        "Name": "MouseThreshold1",
+        "Value": "6",
+        "Type": "DWord",
+        "OriginalValue": "0",
+        "DefaultState": "true"
+      },
+      {
+        "Path": "HKCU:\\Control Panel\\Mouse",
+        "Name": "MouseThreshold2",
+        "Value": "10",
+        "Type": "DWord",
+        "OriginalValue": "0",
+        "DefaultState": "true"
+      }
+    ],
+    "link": "https://winutil.christitus.com/dev/tweaks/customize-preferences/mouseacceleration"
+  },
+  "WPFToggleMultiplaneOverlay": {
+    "Content": "多平面覆盖",
+    "Description": "多平面覆盖合成多个图像层，有时可能导致显卡问题。",
+    "category": "自定义偏好",
+    "panel": "2",
+    "Type": "Toggle",
+    "registry": [
+      {
+        "Path": "HKLM:\\SOFTWARE\\Microsoft\\Windows\\Dwm",
+        "Name": "OverlayTestMode",
+        "Value": "0",
+        "Type": "DWord",
+        "OriginalValue": "5",
+        "DefaultState": "true"
+      },
+      {
+        "Path": "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers",
+        "Name": "DisableOverlays",
+        "Value": "0",
+        "Type": "DWord",
+        "OriginalValue": "1",
+        "DefaultState": "true"
+      }
+    ],
+    "link": "https://winutil.christitus.com/dev/tweaks/customize-preferences/multiplaneoverlay"
+  },
+  "WPFToggleNewOutlook": {
+    "Content": "Microsoft Outlook 新版",
+    "Description": "这将确保使用经典 Outlook 应用程序。",
+    "category": "自定义偏好",
+    "panel": "2",
+    "Type": "Toggle",
+    "registry": [
+      {
+        "Path": "HKCU:\\SOFTWARE\\Microsoft\\Office\\16.0\\Outlook\\Preferences",
+        "Name": "UseNewOutlook",
+        "Value": "1",
+        "Type": "DWord",
+        "OriginalValue": "0",
+        "DefaultState": "true"
+      },
+      {
+        "Path": "HKCU:\\Software\\Microsoft\\Office\\16.0\\Outlook\\Options\\General",
+        "Name": "HideNewOutlookToggle",
+        "Value": "0",
+        "Type": "DWord",
+        "OriginalValue": "1",
+        "DefaultState": "true"
+      },
+      {
+        "Path": "HKCU:\\Software\\Policies\\Microsoft\\Office\\16.0\\Outlook\\Options\\General",
+        "Name": "DoNewOutlookAutoMigration",
+        "Value": "0",
+        "Type": "DWord",
+        "OriginalValue": "0",
+        "DefaultState": "false"
+      },
+      {
+        "Path": "HKCU:\\Software\\Policies\\Microsoft\\Office\\16.0\\Outlook\\Preferences",
+        "Name": "NewOutlookMigrationUserSetting",
+        "Value": "0",
+        "Type": "DWord",
+        "OriginalValue": "<RemoveEntry>",
+        "DefaultState": "true"
+      }
+    ],
+    "link": "https://winutil.christitus.com/dev/tweaks/customize-preferences/newoutlook"
+  },
+  "WPFToggleNumLock": {
+    "Content": "开机 Num Lock 键状态",
+    "Description": "在计算机启动时切换 Num Lock 键状态。",
+    "category": "自定义偏好",
+    "panel": "2",
+    "Type": "Toggle",
+    "registry": [
+      {
+        "Path": "HKU:\\.Default\\Control Panel\\Keyboard",
+        "Name": "InitialKeyboardIndicators",
+        "Value": "2",
+        "Type": "String",
+        "OriginalValue": "0",
+        "DefaultState": "false"
+      },
+      {
+        "Path": "HKCU:\\Control Panel\\Keyboard",
+        "Name": "InitialKeyboardIndicators",
+        "Value": "2",
+        "Type": "String",
+        "OriginalValue": "0",
+        "DefaultState": "false"
+      }
+    ],
+    "link": "https://winutil.christitus.com/dev/tweaks/customize-preferences/numlock"
+  },
+  "WPFToggleRemoteDesktop": {
+    "Content": "远程桌面",
+    "Description": "切换远程桌面功能的启用/禁用状态。",
+    "category": "自定义偏好",
+    "panel": 2,
+    "Type": "Toggle",
+    "registry": [
+      {
+        "Path": "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Terminal Server",
+        "Name": "fDenyTSConnections",
+        "Type": "DWord",
+        "Value": "0",
+        "OriginalValue": "1"
+      }
+    ],
+    "link": "https://github.com/missyouling/winutil-chinese"
+  },
+  "WPFToggleS3Sleep": {
+    "Content": "S3 休眠",
+    "Description": "在现代待机和 S3 休眠之间切换。",
+    "category": "自定义偏好",
+    "panel": "2",
+    "Type": "Toggle",
+    "registry": [
+      {
+        "Path": "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Power",
+        "Name": "PlatformAoAcOverride",
+        "Value": "0",
+        "Type": "DWord",
+        "OriginalValue": "<RemoveEntry>",
+        "DefaultState": "false"
+      }
+    ],
+    "link": "https://winutil.christitus.com/dev/tweaks/customize-preferences/s3sleep"
+  },
+  "WPFToggleScrollbars": {
+    "Content": "滚动条始终可见",
+    "Description": "如果启用，滚动条将始终可见。如果禁用，Windows 将自动隐藏不使用的滚动条。",
+    "category": "自定义偏好",
+    "panel": "2",
+    "Type": "Toggle",
+    "registry": [
+      {
+        "Path": "HKCU:\\Control Panel\\Accessibility",
+        "Name": "DynamicScrollbars",
+        "Value": "0",
+        "Type": "DWord",
+        "OriginalValue": "1",
+        "DefaultState": "false",
+        "link": "https://winutil.christitus.com/dev/tweaks/customize-preferences/scrollbars"
+      }
+    ],
+    "link": "https://winutil.christitus.com/dev/tweaks/customize-preferences/scrollbars"
+  },
+  "WPFToggleShowExt": {
+    "Content": "文件资源管理器文件扩展名",
+    "Description": "在资源管理器中显示文件扩展名（.exe、.png 等）。",
+    "category": "自定义偏好",
+    "panel": "2",
+    "Type": "Toggle",
+    "registry": [
+      {
+        "Path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+        "Name": "HideFileExt",
+        "Value": "0",
+        "Type": "DWord",
+        "OriginalValue": "1",
+        "DefaultState": "false"
+      }
+    ],
+    "InvokeScript": [
+      "      Invoke-WinUtilExplorerUpdate -action \"restart\"      "
+    ],
+    "UndoScript": [
+      "      Invoke-WinUtilExplorerUpdate -action \"restart\"      "
+    ],
+    "link": "https://winutil.christitus.com/dev/tweaks/customize-preferences/showext"
+  },
+  "WPFToggleStandbyFix": {
+    "Content": "S0 睡眠网络连接",
+    "Description": "切换现代笔记本电脑低功耗空闲 (S0 睡眠) 期间的网络连接。",
+    "category": "自定义偏好",
+    "panel": "2",
+    "Type": "Toggle",
+    "registry": [
+      {
+        "Path": "HKCU:\\SOFTWARE\\Policies\\Microsoft\\Power\\PowerSettings\\f15576e8-98b7-4186-b944-eafa664402d9",
+        "Name": "ACSettingIndex",
+        "Value": "1",
+        "Type": "DWord",
+        "OriginalValue": "0",
+        "DefaultState": "true"
+      }
+    ],
+    "link": "https://winutil.christitus.com/dev/tweaks/customize-preferences/standbyfix"
+  },
+  "WPFToggleStartMenuRecommendations": {
+    "Content": "开始菜单推荐",
+    "Description": "切换开始菜单中的推荐部分。警告：这也会同时禁用锁屏上的 Windows 聚焦。",
+    "category": "自定义偏好",
+    "panel": "2",
+    "Type": "Toggle",
+    "registry": [
+      {
+        "Path": "HKLM:\\SOFTWARE\\Microsoft\\PolicyManager\\current\\device\\Start",
+        "Name": "HideRecommendedSection",
+        "Value": "0",
+        "Type": "DWord",
+        "OriginalValue": "1",
+        "DefaultState": "true"
+      },
+      {
+        "Path": "HKLM:\\SOFTWARE\\Microsoft\\PolicyManager\\current\\device\\Education",
+        "Name": "IsEducationEnvironment",
+        "Value": "0",
+        "Type": "DWord",
+        "OriginalValue": "1",
+        "DefaultState": "true"
+      },
+      {
+        "Path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\Explorer",
+        "Name": "HideRecommendedSection",
+        "Value": "0",
+        "Type": "DWord",
+        "OriginalValue": "1",
+        "DefaultState": "true"
+      }
+    ],
+    "InvokeScript": [
+      "      Invoke-WinUtilExplorerUpdate -action \"restart\"      "
+    ],
+    "UndoScript": [
+      "      Invoke-WinUtilExplorerUpdate -action \"restart\"      "
+    ],
+    "link": "https://winutil.christitus.com/dev/tweaks/customize-preferences/startmenurecommendations"
+  },
+  "WPFToggleStickyKeys": {
+    "Content": "粘滞键",
+    "Description": "切换粘滞键功能，该功能在快速点击 Shift 键时激活。",
+    "category": "自定义偏好",
+    "panel": "2",
+    "Type": "Toggle",
+    "registry": [
+      {
+        "Path": "HKCU:\\Control Panel\\Accessibility\\StickyKeys",
+        "Name": "Flags",
+        "Value": "506",
+        "Type": "DWord",
+        "OriginalValue": "58",
+        "DefaultState": "true"
+      }
+    ],
+    "link": "https://winutil.christitus.com/dev/tweaks/customize-preferences/stickykeys"
+  },
+  "WPFToggleTaskbarAlignment": {
+    "Content": "任务栏居中图标",
+    "Description": "切换任务栏图标左对齐或居中。",
+    "category": "自定义偏好",
+    "panel": "2",
+    "Type": "Toggle",
+    "registry": [
+      {
+        "Path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+        "Name": "TaskbarAl",
+        "Value": "1",
+        "Type": "DWord",
+        "OriginalValue": "0",
+        "DefaultState": "true"
+      }
+    ],
+    "InvokeScript": [
+      "      Invoke-WinUtilExplorerUpdate -action \"restart\"      "
+    ],
+    "UndoScript": [
+      "      Invoke-WinUtilExplorerUpdate -action \"restart\"      "
+    ],
+    "link": "https://winutil.christitus.com/dev/tweaks/customize-preferences/taskbaralignment"
+  },
+  "WPFToggleTaskbarSearch": {
+    "Content": "任务栏搜索图标",
+    "Description": "切换任务栏上的搜索按钮。",
+    "category": "自定义偏好",
+    "panel": "2",
+    "Type": "Toggle",
+    "registry": [
+      {
+        "Path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Search",
+        "Name": "SearchboxTaskbarMode",
+        "Value": "1",
+        "Type": "DWord",
+        "OriginalValue": "0",
+        "DefaultState": "true"
+      }
+    ],
+    "link": "https://winutil.christitus.com/dev/tweaks/customize-preferences/taskbarsearch"
+  },
+  "WPFToggleTaskView": {
+    "Content": "任务栏任务视图图标",
+    "Description": "切换任务栏中的任务视图按钮。",
+    "category": "自定义偏好",
+    "panel": "2",
+    "Type": "Toggle",
+    "registry": [
+      {
+        "Path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+        "Name": "ShowTaskViewButton",
+        "Value": "1",
+        "Type": "DWord",
+        "OriginalValue": "0",
+        "DefaultState": "true"
+      }
+    ],
+    "link": "https://winutil.christitus.com/dev/tweaks/customize-preferences/taskview"
+  },
+  "WPFToggleVerboseLogon": {
+    "Content": "登录详细模式",
+    "Description": "在启动/关机时显示详细信息。",
+    "category": "自定义偏好",
+    "panel": "2",
+    "Type": "Toggle",
+    "registry": [
+      {
+        "Path": "HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System",
+        "Name": "VerboseStatus",
+        "Value": "1",
+        "Type": "DWord",
+        "OriginalValue": "0",
+        "DefaultState": "false"
+      }
+    ],
+    "link": "https://winutil.christitus.com/dev/tweaks/customize-preferences/verboselogon"
+  },
+  "WPFToggleWindowSnapping": {
+    "Content": "窗口贴靠",
+    "Description": "切换拖动窗口时的窗口贴靠功能。",
+    "category": "自定义偏好",
+    "panel": "2",
+    "Type": "Toggle",
+    "registry": [
+      {
+        "Path": "HKCU:\\Control Panel\\Desktop",
+        "Name": "WindowArrangementActive",
+        "Value": "1",
+        "Type": "String",
+        "OriginalValue": "0",
+        "DefaultState": "true"
+      }
+    ],
+    "link": "https://winutil.christitus.com/dev/tweaks/customize-preferences/windowsnapping"
+  },
   "WPFTweaksActivity": {
     "Content": "活动历史记录 - 禁用",
     "Description": "清除最近的文档、剪贴板和运行历史记录。",
@@ -29,147 +653,41 @@
     ],
     "link": "https://winutil.christitus.com/dev/tweaks/essential-tweaks/activity"
   },
-  "WPFTweaksHiber": {
-    "Content": "休眠功能 - 禁用",
-    "Description": "休眠功能适用于笔记本电脑，在关机前保存内存内容。通常不推荐使用。",
-    "category": "基本优化",
+  "WPFTweaksBlockAdobeNet": {
+    "Content": "Adobe URL 阻止列表 - 启用",
+    "Description": "通过选择性阻止 Adobe 连接来减少不必要的用户干扰",
+    "category": "高级优化 - 谨慎操作",
     "panel": "1",
-    "registry": [
-      {
-        "Path": "HKLM:\\System\\CurrentControlSet\\Control\\Session Manager\\Power",
-        "Name": "HibernateEnabled",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "1"
-      },
-      {
-        "Path": "HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\FlyoutMenuSettings",
-        "Name": "ShowHibernateOption",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "1"
-      }
-    ],
     "InvokeScript": [
-      "powercfg.exe /hibernate off"
+      "      $hostsUrl = Invoke-RestMethod -Uri https://github.com/Ruddernation-Designs/Adobe-URL-Block-List/raw/refs/heads/master/hosts      Add-Content -Path \"$Env:SystemRoot\\System32\\drivers\\etc\\hosts\" -Value $hostsUrl      ipconfig /flushdns      Write-Host 'Added Adobe url block list from host file'      "
     ],
     "UndoScript": [
-      "powercfg.exe /hibernate on"
+      "      Set-Content \"$Env:SystemRoot\\System32\\drivers\\etc\\hosts\" (          (Get-Content \"$Env:SystemRoot\\System32\\drivers\\etc\\hosts\") -join \"`n\" -replace '(?s)#New Ver.*', ''      )      ipconfig /flushdns      Write-Host 'Removed Adobe url block list from host file'      "
     ],
-    "link": "https://winutil.christitus.com/dev/tweaks/essential-tweaks/hiber"
+    "link": "https://winutil.christitus.com/dev/tweaks/z--advanced-tweaks---caution/blockadobenet"
   },
-  "WPFTweaksWidget": {
-    "Content": "小组件 - 移除",
-    "Description": "移除任务栏左下角的烦人小组件。",
-    "category": "基本优化",
-    "panel": "1",
-    "InvokeScript": [
-      "      # Sometimes if you dont stop the Widgets process the removal may fail      Get-Process *Widget* | Stop-Process      Get-AppxPackage Microsoft.WidgetsPlatformRuntime -AllUsers | Remove-AppxPackage -AllUsers      Get-AppxPackage MicrosoftWindows.Client.WebExperience -AllUsers | Remove-AppxPackage -AllUsers      Invoke-WinUtilExplorerUpdate -action \"restart\"      Write-Host \"Removed widgets\"      "
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/essential-tweaks/widget"
-  },
-  "WPFTweaksRevertStartMenu": {
-    "Content": "开始菜单旧版布局 - 启用",
-    "Description": "恢复 25H2 新版本之前的旧开始菜单布局。在更新的 Windows 版本上此调整将不起作用。",
-    "category": "基本优化",
-    "panel": "1",
+  "WPFTweaksBlockWin11Upgrade": {
+    "Content": "Windows 大版本更新 - 禁止",
+    "Description": "禁止 Windows 自动升级大版本（如 23H2→24H2），只保留安全更新。",
+    "category": "高级优化 - 谨慎操作",
+    "panel": 1,
     "registry": [
       {
-        "Path": "HKLM:\\SYSTEM\\ControlSet001\\Control\\FeatureManagement\\Overrides\\8\\3036241548",
-        "Name": "EnabledState",
+        "Path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\WindowsUpdate",
+        "Name": "TargetReleaseVersion",
+        "Type": "DWord",
         "Value": "1",
-        "Type": "DWord",
-        "OriginalValue": "<RemoveEntry>"
-      }
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/essential-tweaks/revertstartmenu"
-  },
-  "WPFTweaksDisableStoreSearch": {
-    "Content": "Microsoft Store 推荐搜索结果 - 禁用",
-    "Description": "在开始菜单搜索应用时将不显示推荐的 Microsoft Store 应用。",
-    "category": "基本优化",
-    "panel": "1",
-    "InvokeScript": [
-      "icacls \"$Env:LocalAppData\\Packages\\Microsoft.WindowsStore_8wekyb3d8bbwe\\LocalState\\store.db\" /deny Everyone:F"
-    ],
-    "UndoScript": [
-      "icacls \"$Env:LocalAppData\\Packages\\Microsoft.WindowsStore_8wekyb3d8bbwe\\LocalState\\store.db\" /grant Everyone:F"
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/essential-tweaks/disablestoresearch"
-  },
-  "WPFTweaksLocation": {
-    "Content": "位置跟踪 - 禁用",
-    "Description": "禁用位置跟踪。",
-    "category": "基本优化",
-    "panel": "1",
-    "service": [
+        "OriginalValue": "0"
+      },
       {
-        "Name": "lfsvc",
-        "StartupType": "Disable",
-        "OriginalType": "Manual"
-      }
-    ],
-    "registry": [
-      {
-        "Path": "HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\CapabilityAccessManager\\ConsentStore\\location",
-        "Name": "Value",
-        "Value": "Deny",
+        "Path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\WindowsUpdate",
+        "Name": "ProductVersion",
         "Type": "String",
-        "OriginalValue": "Allow"
-      },
-      {
-        "Path": "HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Sensor\\Overrides\\{BFA794E4-F964-4FDB-90F6-51056BFE4B44}",
-        "Name": "SensorPermissionState",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "1"
-      },
-      {
-        "Path": "HKLM:\\SYSTEM\\Maps",
-        "Name": "AutoUpdateEnabled",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "1"
+        "Value": "Windows 11",
+        "OriginalValue": ""
       }
     ],
-    "link": "https://winutil.christitus.com/dev/tweaks/essential-tweaks/location"
-  },
-  "WPFTweaksServices": {
-    "Content": "服务 - 设为手动",
-    "Description": "将某些服务设为手动启动并调整注册表值以匹配系统内存，可显著减少 svchost.exe 进程数量。",
-    "category": "基本优化",
-    "panel": "1",
-    "service": [
-      {
-        "Name": "CscService",
-        "StartupType": "Disabled",
-        "OriginalType": "Manual"
-      },
-      {
-        "Name": "DiagTrack",
-        "StartupType": "Disabled",
-        "OriginalType": "Automatic"
-      },
-      {
-        "Name": "MapsBroker",
-        "StartupType": "Manual",
-        "OriginalType": "Automatic"
-      },
-      {
-        "Name": "StorSvc",
-        "StartupType": "Manual",
-        "OriginalType": "Automatic"
-      },
-      {
-        "Name": "SharedAccess",
-        "StartupType": "Disabled",
-        "OriginalType": "Automatic"
-      }
-    ],
-    "InvokeScript": [
-      "      $Memory = (Get-CimInstance Win32_PhysicalMemory | Measure-Object Capacity -Sum).Sum / 1KB      Set-ItemProperty -Path \"HKLM:\\SYSTEM\\CurrentControlSet\\Control\" -Name SvcHostSplitThresholdInKB -Value $Memory      "
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/essential-tweaks/services"
+    "link": "https://github.com/missyouling/winutil-chinese"
   },
   "WPFTweaksBraveDebloat": {
     "Content": "Brave 浏览器 - 精简",
@@ -264,6 +782,269 @@
     ],
     "link": "https://winutil.christitus.com/dev/tweaks/z--advanced-tweaks---caution/bravedebloat"
   },
+  "WPFTweaksClearEventLog": {
+    "Content": "清除系统日志",
+    "Description": "清除 Windows 事件查看器中的所有系统日志。",
+    "category": "基本优化",
+    "panel": 1,
+    "InvokeScript": [
+      "wevtutil el | ForEach-Object { wevtutil cl $_ 2>$null }"
+    ],
+    "UndoScript": [],
+    "link": "https://github.com/missyouling/winutil-chinese"
+  },
+  "WPFTweaksConsumerFeatures": {
+    "Content": "消费者功能 - 禁用",
+    "Description": "停止推广应用安装并减少 Microsoft Store 内容的应用建议。",
+    "category": "基本优化",
+    "panel": "1",
+    "registry": [
+      {
+        "Path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\CloudContent",
+        "Name": "DisableWindowsConsumerFeatures",
+        "Value": "1",
+        "Type": "DWord",
+        "OriginalValue": "<RemoveEntry>"
+      }
+    ],
+    "link": "https://winutil.christitus.com/dev/tweaks/essential-tweaks/consumerfeatures"
+  },
+  "WPFTweaksDeleteTempFiles": {
+    "Content": "临时文件 - 移除",
+    "Description": "清除临时文件夹。",
+    "category": "基本优化",
+    "panel": "1",
+    "InvokeScript": [
+      "      Remove-Item -Path \"$Env:Temp\\*\" -Recurse -Force      Remove-Item -Path \"$Env:SystemRoot\\Temp\\*\" -Recurse -Force      "
+    ],
+    "link": "https://winutil.christitus.com/dev/tweaks/essential-tweaks/deletetempfiles"
+  },
+  "WPFTweaksDeliveryOptimization": {
+    "Content": "传递优化 - 禁用",
+    "Description": "阻止 Windows 使用您的带宽向其他电脑上传更新。",
+    "category": "基本优化",
+    "panel": "1",
+    "registry": [
+      {
+        "Path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\DeliveryOptimization",
+        "Name": "DODownloadMode",
+        "Value": "0",
+        "Type": "DWord",
+        "OriginalValue": "<RemoveEntry>"
+      }
+    ],
+    "link": "https://winutil.christitus.com/dev/tweaks/essential-tweaks/deliveryoptimization"
+  },
+  "WPFTweaksDisableAdID": {
+    "Content": "广告 ID - 禁用",
+    "Description": "禁止应用使用广告 ID 展示个性化广告。",
+    "category": "基本优化",
+    "panel": 1,
+    "registry": [
+      {
+        "Path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\AdvertisingInfo",
+        "Name": "Enabled",
+        "Type": "DWord",
+        "Value": "0",
+        "OriginalValue": "1"
+      }
+    ],
+    "link": "https://github.com/missyouling/winutil-chinese"
+  },
+  "WPFTweaksDisableBGapps": {
+    "Content": "后台应用 - 禁用",
+    "Description": "禁用所有 Microsoft Store 应用在后台运行。",
+    "category": "高级优化 - 谨慎操作",
+    "panel": "1",
+    "registry": [
+      {
+        "Path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\BackgroundAccessApplications",
+        "Name": "GlobalUserDisabled",
+        "Value": "1",
+        "Type": "DWord",
+        "OriginalValue": "0"
+      }
+    ],
+    "link": "https://winutil.christitus.com/dev/tweaks/z--advanced-tweaks---caution/disablebgapps"
+  },
+  "WPFTweaksDisableBitLocker": {
+    "Content": "BitLocker - 禁用",
+    "Description": "禁用 BitLocker。",
+    "category": "基本优化",
+    "panel": "1",
+    "InvokeScript": [
+      "Disable-BitLocker -MountPoint $Env:SystemDrive"
+    ],
+    "UndoScript": [
+      "Enable-BitLocker -MountPoint $Env:SystemDrive"
+    ],
+    "link": "https://winutil.christitus.com/dev/tweaks/essential-tweaks/disablebitlocker"
+  },
+  "WPFTweaksDisableEdgeAutoUpdate": {
+    "Content": "Edge/WebView2 自动更新 - 禁止",
+    "Description": "禁止 Microsoft Edge 和 WebView2 Runtime 自动更新。",
+    "category": "高级优化 - 谨慎操作",
+    "panel": 1,
+    "registry": [
+      {
+        "Path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\EdgeUpdate",
+        "Name": "CreateDesktopShortcutDefault",
+        "Type": "DWord",
+        "Value": "0",
+        "OriginalValue": "1"
+      }
+    ],
+    "InvokeScript": [
+      "# 禁止 Edge 自动更新服务\n$services = @('edgeupdate', 'edgeupdatem', 'MicrosoftEdgeElevationService')\nforeach ($svc in $services) {\n    $s = Get-Service -Name $svc -ErrorAction SilentlyContinue\n    if ($s) {\n        Stop-Service -Name $svc -Force -ErrorAction SilentlyContinue\n        Set-Service -Name $svc -StartupType Disabled -ErrorAction SilentlyContinue\n    }\n}"
+    ],
+    "UndoScript": [
+      "# 恢复 Edge 自动更新服务\n$services = @('edgeupdate', 'edgeupdatem', 'MicrosoftEdgeElevationService')\nforeach ($svc in $services) {\n    $s = Get-Service -Name $svc -ErrorAction SilentlyContinue\n    if ($s) {\n        Set-Service -Name $svc -StartupType Manual -ErrorAction SilentlyContinue\n    }\n}"
+    ],
+    "link": "https://github.com/missyouling/winutil-chinese"
+  },
+  "WPFTweaksDisableEdgeBoost": {
+    "Content": "Microsoft Edge 启动增强 - 禁用",
+    "Description": "禁止 Edge 在开机时预启动和后台驻留，释放系统资源。",
+    "category": "基本优化",
+    "panel": 1,
+    "registry": [
+      {
+        "Path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\MicrosoftEdge\\Main",
+        "Name": "AllowPrelaunch",
+        "Type": "DWord",
+        "Value": "0",
+        "OriginalValue": "1"
+      },
+      {
+        "Path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\MicrosoftEdge\\TabPreloader",
+        "Name": "AllowTabPreloading",
+        "Type": "DWord",
+        "Value": "0",
+        "OriginalValue": "1"
+      }
+    ],
+    "link": "https://github.com/missyouling/winutil-chinese"
+  },
+  "WPFTweaksDisableExplorerAutoDiscovery": {
+    "Content": "文件资源管理器自动文件夹发现 - 禁用",
+    "Description": "Windows 资源管理器自动根据内容猜测文件夹类型。警告！将禁用文件资源管理器分组。",
+    "category": "基本优化",
+    "panel": "1",
+    "InvokeScript": [
+      "      # Previously detected folders      $bags = \"HKCU:\\Software\\Classes\\Local Settings\\Software\\Microsoft\\Windows\\Shell\\Bags\"      # Folder types lookup table      $bagMRU = \"HKCU:\\Software\\Classes\\Local Settings\\Software\\Microsoft\\Windows\\Shell\\BagMRU\"      # Flush Explorer view database      Remove-Item -Path $bags -Recurse -Force      Write-Host \"Removed $bags\"      Remove-Item -Path $bagMRU -Recurse -Force      Write-Host \"Removed $bagMRU\"      # Every folder      $allFolders = \"HKCU:\\Software\\Classes\\Local Settings\\Software\\Microsoft\\Windows\\Shell\\Bags\\AllFolders\\Shell\"      if (!(Test-Path $allFolders)) {        New-Item -Path $allFolders -Force        Write-Host \"Created $allFolders\"      }      # Generic view      New-ItemProperty -Path $allFolders -Name \"FolderType\" -Value \"NotSpecified\" -PropertyType String -Force      Write-Host \"Set FolderType to NotSpecified\"      Write-Host Please sign out and back in, or restart your computer to apply the changes!      "
+    ],
+    "UndoScript": [
+      "      # Previously detected folders      $bags = \"HKCU:\\Software\\Classes\\Local Settings\\Software\\Microsoft\\Windows\\Shell\\Bags\"      # Folder types lookup table      $bagMRU = \"HKCU:\\Software\\Classes\\Local Settings\\Software\\Microsoft\\Windows\\Shell\\BagMRU\"      # Flush Explorer view database      Remove-Item -Path $bags -Recurse -Force      Write-Host \"Removed $bags\"      Remove-Item -Path $bagMRU -Recurse -Force      Write-Host \"Removed $bagMRU\"      Write-Host Please sign out and back in, or restart your computer to apply the changes!      "
+    ],
+    "link": "https://winutil.christitus.com/dev/tweaks/essential-tweaks/disableexplorerautodiscovery"
+  },
+  "WPFTweaksDisableFSO": {
+    "Content": "全屏优化 - 禁用",
+    "Description": "禁用所有应用的全屏优化。注意：这将禁用独占全屏的色彩管理。",
+    "category": "高级优化 - 谨慎操作",
+    "panel": "1",
+    "registry": [
+      {
+        "Path": "HKCU:\\System\\GameConfigStore",
+        "Name": "GameDVR_DXGIHonorFSEWindowsCompatible",
+        "Value": "1",
+        "Type": "DWord",
+        "OriginalValue": "0"
+      }
+    ],
+    "link": "https://winutil.christitus.com/dev/tweaks/z--advanced-tweaks---caution/disablefso"
+  },
+  "WPFTweaksDisableIPv6": {
+    "Content": "IPv6 - 禁用",
+    "Description": "禁用 IPv6。",
+    "category": "高级优化 - 谨慎操作",
+    "panel": "1",
+    "registry": [
+      {
+        "Path": "HKLM:\\SYSTEM\\CurrentControlSet\\Services\\Tcpip6\\Parameters",
+        "Name": "DisabledComponents",
+        "Value": "255",
+        "Type": "DWord",
+        "OriginalValue": "0"
+      }
+    ],
+    "InvokeScript": [
+      "Disable-NetAdapterBinding -Name * -ComponentID ms_tcpip6"
+    ],
+    "UndoScript": [
+      "Enable-NetAdapterBinding -Name * -ComponentID ms_tcpip6"
+    ],
+    "link": "https://winutil.christitus.com/dev/tweaks/z--advanced-tweaks---caution/disableipv6"
+  },
+  "WPFTweaksDisableLockscreen": {
+    "Content": "锁定屏幕 - 禁用",
+    "Description": "完全跳过锁定屏幕，在启动和唤醒时直接进入登录屏幕。",
+    "category": "自定义偏好",
+    "panel": "2",
+    "Type": "Toggle",
+    "registry": [
+      {
+        "Path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\Personalization",
+        "Name": "NoLockScreen",
+        "Value": "1",
+        "Type": "DWord",
+        "OriginalValue": "<RemoveEntry>"
+      }
+    ],
+    "link": "https://winutil.christitus.com/dev/tweaks/customize-preferences/disablelockscreen"
+  },
+  "WPFTweaksDisableNotifications": {
+    "Content": "系统托盘通知和日历 - 禁用",
+    "Description": "禁用所有通知，包括日历。",
+    "category": "高级优化 - 谨慎操作",
+    "panel": "1",
+    "registry": [
+      {
+        "Path": "HKCU:\\Software\\Policies\\Microsoft\\Windows\\Explorer",
+        "Name": "DisableNotificationCenter",
+        "Value": "1",
+        "Type": "DWord",
+        "OriginalValue": "<RemoveEntry>"
+      },
+      {
+        "Path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\PushNotifications",
+        "Name": "ToastEnabled",
+        "Value": "0",
+        "Type": "DWord",
+        "OriginalValue": "1"
+      }
+    ],
+    "link": "https://winutil.christitus.com/dev/tweaks/z--advanced-tweaks---caution/disablenotifications"
+  },
+  "WPFTweaksDisableSearchHistoryLocal": {
+    "Content": "本地搜索历史记录 - 禁用",
+    "Description": "禁止 Windows 在本地存储搜索历史记录，保护隐私。",
+    "category": "基本优化",
+    "panel": 1,
+    "registry": [
+      {
+        "Path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Search",
+        "Name": "HistoryStoreEnabled",
+        "Type": "DWord",
+        "Value": "0",
+        "OriginalValue": "1"
+      }
+    ],
+    "link": "https://github.com/missyouling/winutil-chinese"
+  },
+  "WPFTweaksDisableStoreSearch": {
+    "Content": "Microsoft Store 推荐搜索结果 - 禁用",
+    "Description": "在开始菜单搜索应用时将不显示推荐的 Microsoft Store 应用。",
+    "category": "基本优化",
+    "panel": "1",
+    "InvokeScript": [
+      "icacls \"$Env:LocalAppData\\Packages\\Microsoft.WindowsStore_8wekyb3d8bbwe\\LocalState\\store.db\" /deny Everyone:F"
+    ],
+    "UndoScript": [
+      "icacls \"$Env:LocalAppData\\Packages\\Microsoft.WindowsStore_8wekyb3d8bbwe\\LocalState\\store.db\" /grant Everyone:F"
+    ],
+    "link": "https://winutil.christitus.com/dev/tweaks/essential-tweaks/disablestoresearch"
+  },
   "WPFTweaksDisableWarningForUnsignedRdp": {
     "Content": "RDP 未签名文件警告 - 禁用",
     "Description": "禁用启动未签名 RDP 文件时显示的警告。",
@@ -286,6 +1067,115 @@
       }
     ],
     "link": "https://winutil.christitus.com/dev/tweaks/z--advanced-tweaks---caution/disablewarningforunsignedrdp"
+  },
+  "WPFTweaksDiskCleanup": {
+    "Content": "磁盘清理 - 运行",
+    "Description": "在 C 盘运行磁盘清理并移除旧的 Windows 更新。",
+    "category": "基本优化",
+    "panel": "1",
+    "InvokeScript": [
+      "      cleanmgr.exe /d C: /VERYLOWDISK      Dism.exe /online /Cleanup-Image /StartComponentCleanup /ResetBase      "
+    ],
+    "link": "https://winutil.christitus.com/dev/tweaks/essential-tweaks/diskcleanup"
+  },
+  "WPFTweaksDisplay": {
+    "Content": "视觉效果 - 设置为最佳性能",
+    "Description": "将系统偏好设置为性能模式。",
+    "category": "高级优化 - 谨慎操作",
+    "panel": "1",
+    "registry": [
+      {
+        "Path": "HKCU:\\Control Panel\\Desktop",
+        "Name": "DragFullWindows",
+        "Value": "0",
+        "Type": "String",
+        "OriginalValue": "1"
+      },
+      {
+        "Path": "HKCU:\\Control Panel\\Desktop",
+        "Name": "MenuShowDelay",
+        "Value": "200",
+        "Type": "String",
+        "OriginalValue": "400"
+      },
+      {
+        "Path": "HKCU:\\Control Panel\\Desktop\\WindowMetrics",
+        "Name": "MinAnimate",
+        "Value": "0",
+        "Type": "String",
+        "OriginalValue": "1"
+      },
+      {
+        "Path": "HKCU:\\Control Panel\\Keyboard",
+        "Name": "KeyboardDelay",
+        "Value": "0",
+        "Type": "DWord",
+        "OriginalValue": "1"
+      },
+      {
+        "Path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+        "Name": "ListviewAlphaSelect",
+        "Value": "0",
+        "Type": "DWord",
+        "OriginalValue": "1"
+      },
+      {
+        "Path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+        "Name": "ListviewShadow",
+        "Value": "0",
+        "Type": "DWord",
+        "OriginalValue": "1"
+      },
+      {
+        "Path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+        "Name": "TaskbarAnimations",
+        "Value": "0",
+        "Type": "DWord",
+        "OriginalValue": "1"
+      },
+      {
+        "Path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\VisualEffects",
+        "Name": "VisualFXSetting",
+        "Value": "3",
+        "Type": "DWord",
+        "OriginalValue": "1"
+      },
+      {
+        "Path": "HKCU:\\Software\\Microsoft\\Windows\\DWM",
+        "Name": "EnableAeroPeek",
+        "Value": "0",
+        "Type": "DWord",
+        "OriginalValue": "1"
+      },
+      {
+        "Path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+        "Name": "TaskbarMn",
+        "Value": "0",
+        "Type": "DWord",
+        "OriginalValue": "1"
+      },
+      {
+        "Path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+        "Name": "ShowTaskViewButton",
+        "Value": "0",
+        "Type": "DWord",
+        "OriginalValue": "1"
+      },
+      {
+        "Path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Search",
+        "Name": "SearchboxTaskbarMode",
+        "Value": "0",
+        "Type": "DWord",
+        "OriginalValue": "1"
+      }
+    ],
+    "InvokeScript": [
+      "Set-ItemProperty -Path \"HKCU:\\Control Panel\\Desktop\" -Name \"UserPreferencesMask\" -Type Binary -Value ([byte[]](144,18,3,128,16,0,0,0))"
+    ],
+    "UndoScript": [
+      "Remove-ItemProperty -Path \"HKCU:\\Control Panel\\Desktop\" -Name \"UserPreferencesMask\""
+    ],
+    "link": "https://winutil.christitus.com/dev/tweaks/z--advanced-tweaks---caution/display"
   },
   "WPFTweaksEdgeDebloat": {
     "Content": "Microsoft Edge - 精简",
@@ -415,21 +1305,401 @@
     ],
     "link": "https://winutil.christitus.com/dev/tweaks/z--advanced-tweaks---caution/edgedebloat"
   },
-  "WPFTweaksConsumerFeatures": {
-    "Content": "消费者功能 - 禁用",
-    "Description": "停止推广应用安装并减少 Microsoft Store 内容的应用建议。",
+  "WPFTweaksEndTaskOnTaskbar": {
+    "Content": "右键结束任务 - 启用",
+    "Description": "启用右键单击任务栏程序时结束任务的选项。",
     "category": "基本优化",
     "panel": "1",
     "registry": [
       {
-        "Path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\CloudContent",
-        "Name": "DisableWindowsConsumerFeatures",
+        "Path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced\\TaskbarDeveloperSettings",
+        "Name": "TaskbarEndTask",
         "Value": "1",
         "Type": "DWord",
         "OriginalValue": "<RemoveEntry>"
       }
     ],
-    "link": "https://winutil.christitus.com/dev/tweaks/essential-tweaks/consumerfeatures"
+    "link": "https://winutil.christitus.com/dev/tweaks/essential-tweaks/endtaskontaskbar"
+  },
+  "WPFTweaksExplorerOpenThisPC": {
+    "Content": "资源管理器默认打开\"此电脑\"",
+    "Description": "将文件资源管理器的默认打开页面从快速访问改为\"此电脑\"。",
+    "category": "基本优化",
+    "panel": 1,
+    "registry": [
+      {
+        "Path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+        "Name": "LaunchTo",
+        "Type": "DWord",
+        "Value": "1",
+        "OriginalValue": "0"
+      }
+    ],
+    "link": "https://github.com/missyouling/winutil-chinese"
+  },
+  "WPFTweaksFlushDNS": {
+    "Content": "刷新 DNS 解析缓存",
+    "Description": "清除 DNS 解析缓存，解决域名解析问题。",
+    "category": "基本优化",
+    "panel": 1,
+    "InvokeScript": [
+      "ipconfig /flushdns"
+    ],
+    "link": "https://github.com/missyouling/winutil-chinese"
+  },
+  "WPFTweaksHiber": {
+    "Content": "休眠功能 - 禁用",
+    "Description": "休眠功能适用于笔记本电脑，在关机前保存内存内容。通常不推荐使用。",
+    "category": "基本优化",
+    "panel": "1",
+    "registry": [
+      {
+        "Path": "HKLM:\\System\\CurrentControlSet\\Control\\Session Manager\\Power",
+        "Name": "HibernateEnabled",
+        "Value": "0",
+        "Type": "DWord",
+        "OriginalValue": "1"
+      },
+      {
+        "Path": "HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\FlyoutMenuSettings",
+        "Name": "ShowHibernateOption",
+        "Value": "0",
+        "Type": "DWord",
+        "OriginalValue": "1"
+      }
+    ],
+    "InvokeScript": [
+      "powercfg.exe /hibernate off"
+    ],
+    "UndoScript": [
+      "powercfg.exe /hibernate on"
+    ],
+    "link": "https://winutil.christitus.com/dev/tweaks/essential-tweaks/hiber"
+  },
+  "WPFTweaksIPv46": {
+    "Content": "IPv6 - 设置 IPv4 为首选",
+    "Description": "在未配置 IPv6 的私有网络上设置 IPv4 首选项可带来延迟和安全方面的好处。",
+    "category": "高级优化 - 谨慎操作",
+    "panel": "1",
+    "registry": [
+      {
+        "Path": "HKLM:\\SYSTEM\\CurrentControlSet\\Services\\Tcpip6\\Parameters",
+        "Name": "DisabledComponents",
+        "Value": "32",
+        "Type": "DWord",
+        "OriginalValue": "0"
+      }
+    ],
+    "link": "https://winutil.christitus.com/dev/tweaks/z--advanced-tweaks---caution/ipv46"
+  },
+  "WPFTweaksLocation": {
+    "Content": "位置跟踪 - 禁用",
+    "Description": "禁用位置跟踪。",
+    "category": "基本优化",
+    "panel": "1",
+    "service": [
+      {
+        "Name": "lfsvc",
+        "StartupType": "Disable",
+        "OriginalType": "Manual"
+      }
+    ],
+    "registry": [
+      {
+        "Path": "HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\CapabilityAccessManager\\ConsentStore\\location",
+        "Name": "Value",
+        "Value": "Deny",
+        "Type": "String",
+        "OriginalValue": "Allow"
+      },
+      {
+        "Path": "HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Sensor\\Overrides\\{BFA794E4-F964-4FDB-90F6-51056BFE4B44}",
+        "Name": "SensorPermissionState",
+        "Value": "0",
+        "Type": "DWord",
+        "OriginalValue": "1"
+      },
+      {
+        "Path": "HKLM:\\SYSTEM\\Maps",
+        "Name": "AutoUpdateEnabled",
+        "Value": "0",
+        "Type": "DWord",
+        "OriginalValue": "1"
+      }
+    ],
+    "link": "https://winutil.christitus.com/dev/tweaks/essential-tweaks/location"
+  },
+  "WPFTweaksNoShortcutArrow": {
+    "Content": "快捷方式小箭头 - 移除",
+    "Description": "移除桌面快捷方式图标左下角的小箭头，使界面更干净。",
+    "category": "高级优化 - 谨慎操作",
+    "panel": 1,
+    "InvokeScript": [
+      "# 去除快捷方式小箭头\n$shell32 = \"$env:SystemRoot\\System32\\shell32.dll,-50\"\nif (-not (Test-Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Shell Icons')) { New-Item -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Shell Icons' -Force }'\nSet-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Shell Icons' -Name '29' -Value $shell32 -Type String"
+    ],
+    "UndoScript": [
+      "Remove-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Shell Icons' -Name '29' -ErrorAction SilentlyContinue"
+    ],
+    "link": "https://github.com/missyouling/winutil-chinese"
+  },
+  "WPFTweaksPreventDeviceMetadataFromNetwork": {
+    "Content": "阻止设备配套应用",
+    "Description": "防止插入设备时安装额外的软件。存在潜在安全风险。",
+    "category": "基本优化",
+    "panel": "1",
+    "registry": [
+      {
+        "Path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\Device Metadata",
+        "Name": "PreventDeviceMetadataFromNetwork",
+        "Value": "1",
+        "Type": "DWord",
+        "OriginalValue": "<RemoveEntry>"
+      }
+    ],
+    "link": "https://winutil.christitus.com/dev/tweaks/essential-tweaks/preventdevicemetadatafromnetwork"
+  },
+  "WPFTweaksQuickStartup": {
+    "Content": "快速启动 - 禁用",
+    "Description": "禁用 Windows 快速启动（混合关机），解决关机/休眠异常问题并释放磁盘空间。",
+    "category": "高级优化 - 谨慎操作",
+    "panel": 1,
+    "InvokeScript": [
+      "powercfg.exe /hibernate off"
+    ],
+    "UndoScript": [
+      "powercfg.exe /hibernate on"
+    ],
+    "link": "https://github.com/missyouling/winutil-chinese"
+  },
+  "WPFTweaksRazerBlock": {
+    "Content": "雷蛇软件自动安装 - 禁用",
+    "Description": "阻止所有雷蛇软件的安装。硬件无需任何软件即可正常工作。",
+    "category": "高级优化 - 谨慎操作",
+    "panel": "1",
+    "registry": [
+      {
+        "Path": "HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\DriverSearching",
+        "Name": "SearchOrderConfig",
+        "Value": "0",
+        "Type": "DWord",
+        "OriginalValue": "1"
+      },
+      {
+        "Path": "HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Device Installer",
+        "Name": "DisableCoInstallers",
+        "Value": "1",
+        "Type": "DWord",
+        "OriginalValue": "0"
+      }
+    ],
+    "InvokeScript": [
+      "      $RazerPath = \"$Env:SystemRoot\\Installer\\Razer\"      if (Test-Path $RazerPath) {        Remove-Item $RazerPath\\* -Recurse -Force      } else {        New-Item -Path $RazerPath -ItemType Directory      }      icacls $RazerPath /deny \"Everyone:(W)\"      "
+    ],
+    "UndoScript": [
+      "      icacls \"$Env:SystemRoot\\Installer\\Razer\" /remove:d Everyone      "
+    ],
+    "link": "https://winutil.christitus.com/dev/tweaks/z--advanced-tweaks---caution/razerblock"
+  },
+  "WPFTweaksRemoveEdge": {
+    "Content": "Microsoft Edge - 移除",
+    "Description": "通过创建虚拟 MicrosoftEdge.exe 文件解锁官方卸载程序，实现系统级移除 Microsoft Edge",
+    "category": "高级优化 - 谨慎操作",
+    "panel": "1",
+    "InvokeScript": [
+      "      $Path = Resolve-Path -Path \"$Env:ProgramFiles (x86)\\Microsoft\\Edge\\Application\\*\\Installer\\setup.exe\" | Select-Object -Last 1      if (Test-Path $Path) {          New-Item -Path \"$Env:SystemRoot\\SystemApps\\Microsoft.MicrosoftEdge_8wekyb3d8bbwe\\MicrosoftEdge.exe\" -Force          Start-Process -FilePath $Path -ArgumentList \"--uninstall --system-level --force-uninstall --delete-profile\" -Wait          Write-Host \"Microsoft Edge was removed\"      } else {          Write-Host \"Microsoft Edge is not installed\"      }      "
+    ],
+    "UndoScript": [
+      "      Write-Host \"Installing Microsoft Edge...\"      winget install Microsoft.Edge --source winget      "
+    ],
+    "link": "https://winutil.christitus.com/dev/tweaks/z--advanced-tweaks---caution/removeedge"
+  },
+  "WPFTweaksRemoveHomeAndGallery": {
+    "Content": "文件资源管理器主页和图库 - 禁用",
+    "Description": "从资源管理器中移除主页和图库，并将此电脑设为默认。",
+    "category": "高级优化 - 谨慎操作",
+    "panel": "1",
+    "registry": [
+      {
+        "Path": "HKCU:\\Software\\Classes\\CLSID\\{f874310e-b6b7-47dc-bc84-b9e6b38f5903}",
+        "Name": "System.IsPinnedToNameSpaceTree",
+        "Value": "0",
+        "Type": "DWord",
+        "OriginalValue": "<RemoveEntry>"
+      },
+      {
+        "Path": "HKCU:\\Software\\Classes\\CLSID\\{e88865ea-0e1c-4e20-9aa6-edcd0212c87c}",
+        "Name": "System.IsPinnedToNameSpaceTree",
+        "Value": "0",
+        "Type": "DWord",
+        "OriginalValue": "<RemoveEntry>"
+      },
+      {
+        "Path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+        "Name": "LaunchTo",
+        "Value": "1",
+        "Type": "DWord",
+        "OriginalValue": "<RemoveEntry>"
+      }
+    ],
+    "link": "https://winutil.christitus.com/dev/tweaks/z--advanced-tweaks---caution/removehomeandgallery"
+  },
+  "WPFTweaksRemoveOneDrive": {
+    "Content": "Microsoft OneDrive - 移除",
+    "Description": "拒绝删除 OneDrive 用户文件的权限，卸载后恢复原始权限。",
+    "category": "高级优化 - 谨慎操作",
+    "panel": "1",
+    "InvokeScript": [
+      "      # Deny permission to remove OneDrive folder      icacls $Env:OneDrive /deny \"Administrators:(D,DC)\"      Write-Host \"Uninstalling OneDrive...\"      Start-Process -FilePath (Join-Path $Env:SystemRoot \"System32\\OneDriveSetup.exe\") -ArgumentList '/uninstall' -Wait      # Some of OneDrive files use explorer, and OneDrive uses FileCoAuth      Write-Host \"Removing leftover OneDrive Files...\"      Stop-Process -Name FileCoAuth,Explorer      Remove-Item \"$Env:LocalAppData\\Microsoft\\OneDrive\" -Recurse -Force      Remove-Item \"$Env:ProgramData\\Microsoft OneDrive\" -Recurse -Force      # Grant back permission to access OneDrive folder      icacls $Env:OneDrive /grant \"Administrators:(D,DC)\"      if (-not (Get-ChildItem -Path $Env:OneDrive)) {          Remove-Item -Path $Env:OneDrive -Recurse          [Environment]::SetEnvironmentVariable('OneDrive', $null, 'User')      }      # Disable OneSyncSvc      Set-Service -Name OneSyncSvc -StartupType Disabled      "
+    ],
+    "UndoScript": [
+      "      Write-Host \"Installing OneDrive\"      winget install Microsoft.Onedrive --source winget      # Enabled OneSyncSvc      Set-Service -Name OneSyncSvc -StartupType Automatic      "
+    ],
+    "link": "https://winutil.christitus.com/dev/tweaks/z--advanced-tweaks---caution/removeonedrive"
+  },
+  "WPFTweaksReservedStorage": {
+    "Content": "禁用预留存储",
+    "Description": "禁用 Windows 预留存储（约 7-10 GB 用于更新和临时文件）。仅建议小容量硬盘使用",
+    "category": "高级优化 - 谨慎操作",
+    "panel": "1",
+    "InvokeScript": [
+      "DISM /Online /Set-ReservedStorageState /State:Disabled"
+    ],
+    "UndoScript": [
+      "DISM /Online /Set-ReservedStorageState /State:Enabled"
+    ],
+    "link": "https://winutil.christitus.com/dev/tweaks/z--advanced-tweaks---caution/reservedstorage"
+  },
+  "WPFTweaksRestorePoint": {
+    "Content": "还原点 - 创建",
+    "Description": "在运行时创建还原点，以便在需要时恢复 WinUtil 的修改。",
+    "category": "基本优化",
+    "panel": "1",
+    "Checked": "False",
+    "registry": [
+      {
+        "Path": "HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\SystemRestore",
+        "Name": "SystemRestorePointCreationFrequency",
+        "Value": "0",
+        "Type": "DWord",
+        "OriginalValue": "1440"
+      }
+    ],
+    "InvokeScript": [
+      "      if (-not (Get-ComputerRestorePoint)) {          Enable-ComputerRestore -Drive $Env:SystemDrive      }      Checkpoint-Computer -Description \"System Restore Point created by WinUtil\" -RestorePointType MODIFY_SETTINGS      Write-Host \"System Restore Point Created Successfully\" -ForegroundColor Green      "
+    ],
+    "link": "https://winutil.christitus.com/dev/tweaks/essential-tweaks/restorepoint"
+  },
+  "WPFTweaksRevertStartMenu": {
+    "Content": "开始菜单旧版布局 - 启用",
+    "Description": "恢复 25H2 新版本之前的旧开始菜单布局。在更新的 Windows 版本上此调整将不起作用。",
+    "category": "基本优化",
+    "panel": "1",
+    "registry": [
+      {
+        "Path": "HKLM:\\SYSTEM\\ControlSet001\\Control\\FeatureManagement\\Overrides\\8\\3036241548",
+        "Name": "EnabledState",
+        "Value": "1",
+        "Type": "DWord",
+        "OriginalValue": "<RemoveEntry>"
+      }
+    ],
+    "link": "https://winutil.christitus.com/dev/tweaks/essential-tweaks/revertstartmenu"
+  },
+  "WPFTweaksRightClickMenu": {
+    "Content": "右键菜单旧版布局 - 启用",
+    "Description": "恢复文件资源管理器中右键单击时的经典右键菜单。",
+    "category": "高级优化 - 谨慎操作",
+    "panel": "1",
+    "InvokeScript": [
+      "      New-Item -Path \"HKCU:\\Software\\Classes\\CLSID\\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}\" -Name InprocServer32 -Value \"\" -Force      Stop-Process -Name explorer      "
+    ],
+    "UndoScript": [
+      "Remove-Item -Path \"HKCU:\\Software\\Classes\\CLSID\\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}\" -Recurse"
+    ],
+    "link": "https://winutil.christitus.com/dev/tweaks/z--advanced-tweaks---caution/rightclickmenu"
+  },
+  "WPFTweaksServices": {
+    "Content": "服务 - 设为手动",
+    "Description": "将某些服务设为手动启动并调整注册表值以匹配系统内存，可显著减少 svchost.exe 进程数量。",
+    "category": "基本优化",
+    "panel": "1",
+    "service": [
+      {
+        "Name": "CscService",
+        "StartupType": "Disabled",
+        "OriginalType": "Manual"
+      },
+      {
+        "Name": "DiagTrack",
+        "StartupType": "Disabled",
+        "OriginalType": "Automatic"
+      },
+      {
+        "Name": "MapsBroker",
+        "StartupType": "Manual",
+        "OriginalType": "Automatic"
+      },
+      {
+        "Name": "StorSvc",
+        "StartupType": "Manual",
+        "OriginalType": "Automatic"
+      },
+      {
+        "Name": "SharedAccess",
+        "StartupType": "Disabled",
+        "OriginalType": "Automatic"
+      }
+    ],
+    "InvokeScript": [
+      "      $Memory = (Get-CimInstance Win32_PhysicalMemory | Measure-Object Capacity -Sum).Sum / 1KB      Set-ItemProperty -Path \"HKLM:\\SYSTEM\\CurrentControlSet\\Control\" -Name SvcHostSplitThresholdInKB -Value $Memory      "
+    ],
+    "link": "https://winutil.christitus.com/dev/tweaks/essential-tweaks/services"
+  },
+  "WPFTweaksShowSeconds": {
+    "Content": "系统托盘时间显示秒",
+    "Description": "在系统托盘时钟中显示秒数。",
+    "category": "基本优化",
+    "panel": 1,
+    "registry": [
+      {
+        "Path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+        "Name": "ShowSecondsInSystemClock",
+        "Type": "DWord",
+        "Value": "1",
+        "OriginalValue": "0"
+      }
+    ],
+    "link": "https://github.com/missyouling/winutil-chinese"
+  },
+  "WPFTweaksStorage": {
+    "Content": "存储感知 - 禁用",
+    "Description": "存储感知会自动删除临时文件。",
+    "category": "高级优化 - 谨慎操作",
+    "panel": "1",
+    "registry": [
+      {
+        "Path": "HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\StorageSense\\Parameters\\StoragePolicy",
+        "Name": "01",
+        "Value": "0",
+        "Type": "DWord",
+        "OriginalValue": "1"
+      }
+    ],
+    "link": "https://winutil.christitus.com/dev/tweaks/z--advanced-tweaks---caution/storage"
+  },
+  "WPFTweaksSysMain": {
+    "Content": "SysMain (Superfetch) - 禁用",
+    "Description": "禁用 SysMain 服务（Superfetch），减少内存占用和磁盘活动。建议 SSD 用户关闭。",
+    "category": "高级优化 - 谨慎操作",
+    "panel": 1,
+    "service": [
+      {
+        "Name": "SysMain",
+        "StartupType": "Disabled",
+        "OriginalType": "Automatic"
+      }
+    ],
+    "link": "https://github.com/missyouling/winutil-chinese"
   },
   "WPFTweaksTelemetry": {
     "Content": "遥测 - 禁用",
@@ -530,47 +1800,27 @@
     ],
     "link": "https://winutil.christitus.com/dev/tweaks/essential-tweaks/telemetry"
   },
-  "WPFTweaksDeliveryOptimization": {
-    "Content": "传递优化 - 禁用",
-    "Description": "阻止 Windows 使用您的带宽向其他电脑上传更新。",
-    "category": "基本优化",
+  "WPFTweaksTeredo": {
+    "Content": "Teredo - 禁用",
+    "Description": "Teredo 网络隧道是一种 IPv6 功能，可能导致额外延迟。",
+    "category": "高级优化 - 谨慎操作",
     "panel": "1",
     "registry": [
       {
-        "Path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\DeliveryOptimization",
-        "Name": "DODownloadMode",
-        "Value": "0",
+        "Path": "HKLM:\\SYSTEM\\CurrentControlSet\\Services\\Tcpip6\\Parameters",
+        "Name": "DisabledComponents",
+        "Value": "1",
         "Type": "DWord",
-        "OriginalValue": "<RemoveEntry>"
+        "OriginalValue": "0"
       }
     ],
-    "link": "https://winutil.christitus.com/dev/tweaks/essential-tweaks/deliveryoptimization"
-  },
-  "WPFTweaksRemoveEdge": {
-    "Content": "Microsoft Edge - 移除",
-    "Description": "通过创建虚拟 MicrosoftEdge.exe 文件解锁官方卸载程序，实现系统级移除 Microsoft Edge",
-    "category": "高级优化 - 谨慎操作",
-    "panel": "1",
     "InvokeScript": [
-      "      $Path = Resolve-Path -Path \"$Env:ProgramFiles (x86)\\Microsoft\\Edge\\Application\\*\\Installer\\setup.exe\" | Select-Object -Last 1      if (Test-Path $Path) {          New-Item -Path \"$Env:SystemRoot\\SystemApps\\Microsoft.MicrosoftEdge_8wekyb3d8bbwe\\MicrosoftEdge.exe\" -Force          Start-Process -FilePath $Path -ArgumentList \"--uninstall --system-level --force-uninstall --delete-profile\" -Wait          Write-Host \"Microsoft Edge was removed\"      } else {          Write-Host \"Microsoft Edge is not installed\"      }      "
+      "netsh interface teredo set state disabled"
     ],
     "UndoScript": [
-      "      Write-Host \"Installing Microsoft Edge...\"      winget install Microsoft.Edge --source winget      "
+      "netsh interface teredo set state default"
     ],
-    "link": "https://winutil.christitus.com/dev/tweaks/z--advanced-tweaks---caution/removeedge"
-  },
-  "WPFTweaksDisableBitLocker": {
-    "Content": "BitLocker - 禁用",
-    "Description": "禁用 BitLocker。",
-    "category": "基本优化",
-    "panel": "1",
-    "InvokeScript": [
-      "Disable-BitLocker -MountPoint $Env:SystemDrive"
-    ],
-    "UndoScript": [
-      "Enable-BitLocker -MountPoint $Env:SystemDrive"
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/essential-tweaks/disablebitlocker"
+    "link": "https://winutil.christitus.com/dev/tweaks/z--advanced-tweaks---caution/teredo"
   },
   "WPFTweaksUTC": {
     "Content": "日期和时间 - 设置为 UTC",
@@ -588,212 +1838,15 @@
     ],
     "link": "https://winutil.christitus.com/dev/tweaks/z--advanced-tweaks---caution/utc"
   },
-  "WPFTweaksRemoveOneDrive": {
-    "Content": "Microsoft OneDrive - 移除",
-    "Description": "拒绝删除 OneDrive 用户文件的权限，卸载后恢复原始权限。",
-    "category": "高级优化 - 谨慎操作",
-    "panel": "1",
-    "InvokeScript": [
-      "      # Deny permission to remove OneDrive folder      icacls $Env:OneDrive /deny \"Administrators:(D,DC)\"      Write-Host \"Uninstalling OneDrive...\"      Start-Process -FilePath (Join-Path $Env:SystemRoot \"System32\\OneDriveSetup.exe\") -ArgumentList '/uninstall' -Wait      # Some of OneDrive files use explorer, and OneDrive uses FileCoAuth      Write-Host \"Removing leftover OneDrive Files...\"      Stop-Process -Name FileCoAuth,Explorer      Remove-Item \"$Env:LocalAppData\\Microsoft\\OneDrive\" -Recurse -Force      Remove-Item \"$Env:ProgramData\\Microsoft OneDrive\" -Recurse -Force      # Grant back permission to access OneDrive folder      icacls $Env:OneDrive /grant \"Administrators:(D,DC)\"      if (-not (Get-ChildItem -Path $Env:OneDrive)) {          Remove-Item -Path $Env:OneDrive -Recurse          [Environment]::SetEnvironmentVariable('OneDrive', $null, 'User')      }      # Disable OneSyncSvc      Set-Service -Name OneSyncSvc -StartupType Disabled      "
-    ],
-    "UndoScript": [
-      "      Write-Host \"Installing OneDrive\"      winget install Microsoft.Onedrive --source winget      # Enabled OneSyncSvc      Set-Service -Name OneSyncSvc -StartupType Automatic      "
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/z--advanced-tweaks---caution/removeonedrive"
-  },
-  "WPFTweaksRemoveHomeAndGallery": {
-    "Content": "文件资源管理器主页和图库 - 禁用",
-    "Description": "从资源管理器中移除主页和图库，并将此电脑设为默认。",
-    "category": "高级优化 - 谨慎操作",
-    "panel": "1",
-    "registry": [
-      {
-        "Path": "HKCU:\\Software\\Classes\\CLSID\\{f874310e-b6b7-47dc-bc84-b9e6b38f5903}",
-        "Name": "System.IsPinnedToNameSpaceTree",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "<RemoveEntry>"
-      },
-      {
-        "Path": "HKCU:\\Software\\Classes\\CLSID\\{e88865ea-0e1c-4e20-9aa6-edcd0212c87c}",
-        "Name": "System.IsPinnedToNameSpaceTree",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "<RemoveEntry>"
-      },
-      {
-        "Path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
-        "Name": "LaunchTo",
-        "Value": "1",
-        "Type": "DWord",
-        "OriginalValue": "<RemoveEntry>"
-      }
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/z--advanced-tweaks---caution/removehomeandgallery"
-  },
-  "WPFTweaksDisplay": {
-    "Content": "视觉效果 - 设置为最佳性能",
-    "Description": "将系统偏好设置为性能模式。",
-    "category": "高级优化 - 谨慎操作",
-    "panel": "1",
-    "registry": [
-      {
-        "Path": "HKCU:\\Control Panel\\Desktop",
-        "Name": "DragFullWindows",
-        "Value": "0",
-        "Type": "String",
-        "OriginalValue": "1"
-      },
-      {
-        "Path": "HKCU:\\Control Panel\\Desktop",
-        "Name": "MenuShowDelay",
-        "Value": "200",
-        "Type": "String",
-        "OriginalValue": "400"
-      },
-      {
-        "Path": "HKCU:\\Control Panel\\Desktop\\WindowMetrics",
-        "Name": "MinAnimate",
-        "Value": "0",
-        "Type": "String",
-        "OriginalValue": "1"
-      },
-      {
-        "Path": "HKCU:\\Control Panel\\Keyboard",
-        "Name": "KeyboardDelay",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "1"
-      },
-      {
-        "Path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
-        "Name": "ListviewAlphaSelect",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "1"
-      },
-      {
-        "Path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
-        "Name": "ListviewShadow",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "1"
-      },
-      {
-        "Path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
-        "Name": "TaskbarAnimations",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "1"
-      },
-      {
-        "Path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\VisualEffects",
-        "Name": "VisualFXSetting",
-        "Value": "3",
-        "Type": "DWord",
-        "OriginalValue": "1"
-      },
-      {
-        "Path": "HKCU:\\Software\\Microsoft\\Windows\\DWM",
-        "Name": "EnableAeroPeek",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "1"
-      },
-      {
-        "Path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
-        "Name": "TaskbarMn",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "1"
-      },
-      {
-        "Path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
-        "Name": "ShowTaskViewButton",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "1"
-      },
-      {
-        "Path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Search",
-        "Name": "SearchboxTaskbarMode",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "1"
-      }
-    ],
-    "InvokeScript": [
-      "Set-ItemProperty -Path \"HKCU:\\Control Panel\\Desktop\" -Name \"UserPreferencesMask\" -Type Binary -Value ([byte[]](144,18,3,128,16,0,0,0))"
-    ],
-    "UndoScript": [
-      "Remove-ItemProperty -Path \"HKCU:\\Control Panel\\Desktop\" -Name \"UserPreferencesMask\""
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/z--advanced-tweaks---caution/display"
-  },
-  "WPFTweaksReservedStorage": {
-    "Content": "禁用预留存储",
-    "Description": "禁用 Windows 预留存储（约 7-10 GB 用于更新和临时文件）。仅建议小容量硬盘使用",
-    "category": "高级优化 - 谨慎操作",
-    "panel": "1",
-    "InvokeScript": [
-      "DISM /Online /Set-ReservedStorageState /State:Disabled"
-    ],
-    "UndoScript": [
-      "DISM /Online /Set-ReservedStorageState /State:Enabled"
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/z--advanced-tweaks---caution/reservedstorage"
-  },
-  "WPFTweaksRestorePoint": {
-    "Content": "还原点 - 创建",
-    "Description": "在运行时创建还原点，以便在需要时恢复 WinUtil 的修改。",
+  "WPFTweaksWidget": {
+    "Content": "小组件 - 移除",
+    "Description": "移除任务栏左下角的烦人小组件。",
     "category": "基本优化",
     "panel": "1",
-    "Checked": "False",
-    "registry": [
-      {
-        "Path": "HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\SystemRestore",
-        "Name": "SystemRestorePointCreationFrequency",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "1440"
-      }
-    ],
     "InvokeScript": [
-      "      if (-not (Get-ComputerRestorePoint)) {          Enable-ComputerRestore -Drive $Env:SystemDrive      }      Checkpoint-Computer -Description \"System Restore Point created by WinUtil\" -RestorePointType MODIFY_SETTINGS      Write-Host \"System Restore Point Created Successfully\" -ForegroundColor Green      "
+      "      # Sometimes if you dont stop the Widgets process the removal may fail      Get-Process *Widget* | Stop-Process      Get-AppxPackage Microsoft.WidgetsPlatformRuntime -AllUsers | Remove-AppxPackage -AllUsers      Get-AppxPackage MicrosoftWindows.Client.WebExperience -AllUsers | Remove-AppxPackage -AllUsers      Invoke-WinUtilExplorerUpdate -action \"restart\"      Write-Host \"Removed widgets\"      "
     ],
-    "link": "https://winutil.christitus.com/dev/tweaks/essential-tweaks/restorepoint"
-  },
-  "WPFTweaksEndTaskOnTaskbar": {
-    "Content": "右键结束任务 - 启用",
-    "Description": "启用右键单击任务栏程序时结束任务的选项。",
-    "category": "基本优化",
-    "panel": "1",
-    "registry": [
-      {
-        "Path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced\\TaskbarDeveloperSettings",
-        "Name": "TaskbarEndTask",
-        "Value": "1",
-        "Type": "DWord",
-        "OriginalValue": "<RemoveEntry>"
-      }
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/essential-tweaks/endtaskontaskbar"
-  },
-  "WPFTweaksStorage": {
-    "Content": "存储感知 - 禁用",
-    "Description": "存储感知会自动删除临时文件。",
-    "category": "高级优化 - 谨慎操作",
-    "panel": "1",
-    "registry": [
-      {
-        "Path": "HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\StorageSense\\Parameters\\StoragePolicy",
-        "Name": "01",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "1"
-      }
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/z--advanced-tweaks---caution/storage"
+    "link": "https://winutil.christitus.com/dev/tweaks/essential-tweaks/widget"
   },
   "WPFTweaksWindowsAI": {
     "Content": "Windows AI - 禁用并移除",
@@ -836,831 +1889,5 @@
       }
     ],
     "link": "https://winutil.christitus.com/dev/tweaks/essential-tweaks/wpbt"
-  },
-  "WPFTweaksPreventDeviceMetadataFromNetwork": {
-    "Content": "阻止设备配套应用",
-    "Description": "防止插入设备时安装额外的软件。存在潜在安全风险。",
-    "category": "基本优化",
-    "panel": "1",
-    "registry": [
-      {
-        "Path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\Device Metadata",
-        "Name": "PreventDeviceMetadataFromNetwork",
-        "Value": "1",
-        "Type": "DWord",
-        "OriginalValue": "<RemoveEntry>"
-      }
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/essential-tweaks/preventdevicemetadatafromnetwork"
-  },
-  "WPFTweaksRazerBlock": {
-    "Content": "雷蛇软件自动安装 - 禁用",
-    "Description": "阻止所有雷蛇软件的安装。硬件无需任何软件即可正常工作。",
-    "category": "高级优化 - 谨慎操作",
-    "panel": "1",
-    "registry": [
-      {
-        "Path": "HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\DriverSearching",
-        "Name": "SearchOrderConfig",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "1"
-      },
-      {
-        "Path": "HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Device Installer",
-        "Name": "DisableCoInstallers",
-        "Value": "1",
-        "Type": "DWord",
-        "OriginalValue": "0"
-      }
-    ],
-    "InvokeScript": [
-      "      $RazerPath = \"$Env:SystemRoot\\Installer\\Razer\"      if (Test-Path $RazerPath) {        Remove-Item $RazerPath\\* -Recurse -Force      } else {        New-Item -Path $RazerPath -ItemType Directory      }      icacls $RazerPath /deny \"Everyone:(W)\"      "
-    ],
-    "UndoScript": [
-      "      icacls \"$Env:SystemRoot\\Installer\\Razer\" /remove:d Everyone      "
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/z--advanced-tweaks---caution/razerblock"
-  },
-  "WPFTweaksDisableNotifications": {
-    "Content": "系统托盘通知和日历 - 禁用",
-    "Description": "禁用所有通知，包括日历。",
-    "category": "高级优化 - 谨慎操作",
-    "panel": "1",
-    "registry": [
-      {
-        "Path": "HKCU:\\Software\\Policies\\Microsoft\\Windows\\Explorer",
-        "Name": "DisableNotificationCenter",
-        "Value": "1",
-        "Type": "DWord",
-        "OriginalValue": "<RemoveEntry>"
-      },
-      {
-        "Path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\PushNotifications",
-        "Name": "ToastEnabled",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "1"
-      }
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/z--advanced-tweaks---caution/disablenotifications"
-  },
-  "WPFTweaksBlockAdobeNet": {
-    "Content": "Adobe URL 阻止列表 - 启用",
-    "Description": "通过选择性阻止 Adobe 连接来减少不必要的用户干扰",
-    "category": "高级优化 - 谨慎操作",
-    "panel": "1",
-    "InvokeScript": [
-      "      $hostsUrl = Invoke-RestMethod -Uri https://github.com/Ruddernation-Designs/Adobe-URL-Block-List/raw/refs/heads/master/hosts      Add-Content -Path \"$Env:SystemRoot\\System32\\drivers\\etc\\hosts\" -Value $hostsUrl      ipconfig /flushdns      Write-Host 'Added Adobe url block list from host file'      "
-    ],
-    "UndoScript": [
-      "      Set-Content \"$Env:SystemRoot\\System32\\drivers\\etc\\hosts\" (          (Get-Content \"$Env:SystemRoot\\System32\\drivers\\etc\\hosts\") -join \"`n\" -replace '(?s)#New Ver.*', ''      )      ipconfig /flushdns      Write-Host 'Removed Adobe url block list from host file'      "
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/z--advanced-tweaks---caution/blockadobenet"
-  },
-  "WPFTweaksRightClickMenu": {
-    "Content": "右键菜单旧版布局 - 启用",
-    "Description": "恢复文件资源管理器中右键单击时的经典右键菜单。",
-    "category": "高级优化 - 谨慎操作",
-    "panel": "1",
-    "InvokeScript": [
-      "      New-Item -Path \"HKCU:\\Software\\Classes\\CLSID\\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}\" -Name InprocServer32 -Value \"\" -Force      Stop-Process -Name explorer      "
-    ],
-    "UndoScript": [
-      "Remove-Item -Path \"HKCU:\\Software\\Classes\\CLSID\\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}\" -Recurse"
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/z--advanced-tweaks---caution/rightclickmenu"
-  },
-  "WPFTweaksDiskCleanup": {
-    "Content": "磁盘清理 - 运行",
-    "Description": "在 C 盘运行磁盘清理并移除旧的 Windows 更新。",
-    "category": "基本优化",
-    "panel": "1",
-    "InvokeScript": [
-      "      cleanmgr.exe /d C: /VERYLOWDISK      Dism.exe /online /Cleanup-Image /StartComponentCleanup /ResetBase      "
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/essential-tweaks/diskcleanup"
-  },
-  "WPFTweaksDeleteTempFiles": {
-    "Content": "临时文件 - 移除",
-    "Description": "清除临时文件夹。",
-    "category": "基本优化",
-    "panel": "1",
-    "InvokeScript": [
-      "      Remove-Item -Path \"$Env:Temp\\*\" -Recurse -Force      Remove-Item -Path \"$Env:SystemRoot\\Temp\\*\" -Recurse -Force      "
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/essential-tweaks/deletetempfiles"
-  },
-  "WPFTweaksIPv46": {
-    "Content": "IPv6 - 设置 IPv4 为首选",
-    "Description": "在未配置 IPv6 的私有网络上设置 IPv4 首选项可带来延迟和安全方面的好处。",
-    "category": "高级优化 - 谨慎操作",
-    "panel": "1",
-    "registry": [
-      {
-        "Path": "HKLM:\\SYSTEM\\CurrentControlSet\\Services\\Tcpip6\\Parameters",
-        "Name": "DisabledComponents",
-        "Value": "32",
-        "Type": "DWord",
-        "OriginalValue": "0"
-      }
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/z--advanced-tweaks---caution/ipv46"
-  },
-  "WPFTweaksTeredo": {
-    "Content": "Teredo - 禁用",
-    "Description": "Teredo 网络隧道是一种 IPv6 功能，可能导致额外延迟。",
-    "category": "高级优化 - 谨慎操作",
-    "panel": "1",
-    "registry": [
-      {
-        "Path": "HKLM:\\SYSTEM\\CurrentControlSet\\Services\\Tcpip6\\Parameters",
-        "Name": "DisabledComponents",
-        "Value": "1",
-        "Type": "DWord",
-        "OriginalValue": "0"
-      }
-    ],
-    "InvokeScript": [
-      "netsh interface teredo set state disabled"
-    ],
-    "UndoScript": [
-      "netsh interface teredo set state default"
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/z--advanced-tweaks---caution/teredo"
-  },
-  "WPFTweaksDisableIPv6": {
-    "Content": "IPv6 - 禁用",
-    "Description": "禁用 IPv6。",
-    "category": "高级优化 - 谨慎操作",
-    "panel": "1",
-    "registry": [
-      {
-        "Path": "HKLM:\\SYSTEM\\CurrentControlSet\\Services\\Tcpip6\\Parameters",
-        "Name": "DisabledComponents",
-        "Value": "255",
-        "Type": "DWord",
-        "OriginalValue": "0"
-      }
-    ],
-    "InvokeScript": [
-      "Disable-NetAdapterBinding -Name * -ComponentID ms_tcpip6"
-    ],
-    "UndoScript": [
-      "Enable-NetAdapterBinding -Name * -ComponentID ms_tcpip6"
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/z--advanced-tweaks---caution/disableipv6"
-  },
-  "WPFTweaksDisableBGapps": {
-    "Content": "后台应用 - 禁用",
-    "Description": "禁用所有 Microsoft Store 应用在后台运行。",
-    "category": "高级优化 - 谨慎操作",
-    "panel": "1",
-    "registry": [
-      {
-        "Path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\BackgroundAccessApplications",
-        "Name": "GlobalUserDisabled",
-        "Value": "1",
-        "Type": "DWord",
-        "OriginalValue": "0"
-      }
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/z--advanced-tweaks---caution/disablebgapps"
-  },
-  "WPFTweaksDisableFSO": {
-    "Content": "全屏优化 - 禁用",
-    "Description": "禁用所有应用的全屏优化。注意：这将禁用独占全屏的色彩管理。",
-    "category": "高级优化 - 谨慎操作",
-    "panel": "1",
-    "registry": [
-      {
-        "Path": "HKCU:\\System\\GameConfigStore",
-        "Name": "GameDVR_DXGIHonorFSEWindowsCompatible",
-        "Value": "1",
-        "Type": "DWord",
-        "OriginalValue": "0"
-      }
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/z--advanced-tweaks---caution/disablefso"
-  },
-  "WPFTweaksDisableExplorerAutoDiscovery": {
-    "Content": "文件资源管理器自动文件夹发现 - 禁用",
-    "Description": "Windows 资源管理器自动根据内容猜测文件夹类型。警告！将禁用文件资源管理器分组。",
-    "category": "基本优化",
-    "panel": "1",
-    "InvokeScript": [
-      "      # Previously detected folders      $bags = \"HKCU:\\Software\\Classes\\Local Settings\\Software\\Microsoft\\Windows\\Shell\\Bags\"      # Folder types lookup table      $bagMRU = \"HKCU:\\Software\\Classes\\Local Settings\\Software\\Microsoft\\Windows\\Shell\\BagMRU\"      # Flush Explorer view database      Remove-Item -Path $bags -Recurse -Force      Write-Host \"Removed $bags\"      Remove-Item -Path $bagMRU -Recurse -Force      Write-Host \"Removed $bagMRU\"      # Every folder      $allFolders = \"HKCU:\\Software\\Classes\\Local Settings\\Software\\Microsoft\\Windows\\Shell\\Bags\\AllFolders\\Shell\"      if (!(Test-Path $allFolders)) {        New-Item -Path $allFolders -Force        Write-Host \"Created $allFolders\"      }      # Generic view      New-ItemProperty -Path $allFolders -Name \"FolderType\" -Value \"NotSpecified\" -PropertyType String -Force      Write-Host \"Set FolderType to NotSpecified\"      Write-Host Please sign out and back in, or restart your computer to apply the changes!      "
-    ],
-    "UndoScript": [
-      "      # Previously detected folders      $bags = \"HKCU:\\Software\\Classes\\Local Settings\\Software\\Microsoft\\Windows\\Shell\\Bags\"      # Folder types lookup table      $bagMRU = \"HKCU:\\Software\\Classes\\Local Settings\\Software\\Microsoft\\Windows\\Shell\\BagMRU\"      # Flush Explorer view database      Remove-Item -Path $bags -Recurse -Force      Write-Host \"Removed $bags\"      Remove-Item -Path $bagMRU -Recurse -Force      Write-Host \"Removed $bagMRU\"      Write-Host Please sign out and back in, or restart your computer to apply the changes!      "
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/essential-tweaks/disableexplorerautodiscovery"
-  },
-  "WPFToggleDetailedBSoD": {
-    "Content": "蓝屏详细模式",
-    "Description": "蓝屏时提供更多信息。",
-    "category": "自定义偏好",
-    "panel": "2",
-    "Type": "Toggle",
-    "registry": [
-      {
-        "Path": "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\CrashControl",
-        "Name": "DisplayParameters",
-        "Value": "1",
-        "Type": "DWord",
-        "OriginalValue": "0",
-        "DefaultState": "false"
-      },
-      {
-        "Path": "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\CrashControl",
-        "Name": "DisableEmoticon",
-        "Value": "1",
-        "Type": "DWord",
-        "OriginalValue": "0",
-        "DefaultState": "false"
-      }
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/customize-preferences/detailedbsod"
-  },
-  "WPFToggleBatteryPercentage": {
-    "Content": "系统托盘电池百分比",
-    "Description": "在系统托盘中电池图标旁显示数字电池百分比。",
-    "category": "自定义偏好",
-    "panel": "2",
-    "Type": "Toggle",
-    "registry": [
-      {
-        "Path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
-        "Name": "IsBatteryPercentageEnabled",
-        "Value": "1",
-        "Type": "DWord",
-        "OriginalValue": "<RemoveEntry>",
-        "DefaultState": "false"
-      }
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/customize-preferences/batterypercentage"
-  },
-  "WPFToggleDarkMode": {
-    "Content": "Windows 深色主题",
-    "Description": "系统和应用的深色模式。",
-    "category": "自定义偏好",
-    "panel": "2",
-    "Type": "Toggle",
-    "registry": [
-      {
-        "Path": "HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
-        "Name": "AppsUseLightTheme",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "1",
-        "DefaultState": "false"
-      },
-      {
-        "Path": "HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
-        "Name": "SystemUsesLightTheme",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "1",
-        "DefaultState": "false"
-      }
-    ],
-    "InvokeScript": [
-      "      Invoke-WinUtilExplorerUpdate      if ($sync.ThemeButton.Content -eq [char]0xF08C) {        Invoke-WinutilThemeChange -theme \"Auto\"      }      "
-    ],
-    "UndoScript": [
-      "      Invoke-WinUtilExplorerUpdate      if ($sync.ThemeButton.Content -eq [char]0xF08C) {        Invoke-WinutilThemeChange -theme \"Auto\"      }      "
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/customize-preferences/darkmode"
-  },
-  "WPFToggleShowExt": {
-    "Content": "文件资源管理器文件扩展名",
-    "Description": "在资源管理器中显示文件扩展名（.exe、.png 等）。",
-    "category": "自定义偏好",
-    "panel": "2",
-    "Type": "Toggle",
-    "registry": [
-      {
-        "Path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
-        "Name": "HideFileExt",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "1",
-        "DefaultState": "false"
-      }
-    ],
-    "InvokeScript": [
-      "      Invoke-WinUtilExplorerUpdate -action \"restart\"      "
-    ],
-    "UndoScript": [
-      "      Invoke-WinUtilExplorerUpdate -action \"restart\"      "
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/customize-preferences/showext"
-  },
-  "WPFToggleHiddenFiles": {
-    "Content": "文件资源管理器隐藏文件",
-    "Description": "在资源管理器中显示隐藏文件。",
-    "category": "自定义偏好",
-    "panel": "2",
-    "Type": "Toggle",
-    "registry": [
-      {
-        "Path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
-        "Name": "Hidden",
-        "Value": "1",
-        "Type": "DWord",
-        "OriginalValue": "0",
-        "DefaultState": "false"
-      }
-    ],
-    "InvokeScript": [
-      "      Invoke-WinUtilExplorerUpdate -action \"restart\"      "
-    ],
-    "UndoScript": [
-      "      Invoke-WinUtilExplorerUpdate -action \"restart\"      "
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/customize-preferences/hiddenfiles"
-  },
-  "WPFToggleVerboseLogon": {
-    "Content": "登录详细模式",
-    "Description": "在启动/关机时显示详细信息。",
-    "category": "自定义偏好",
-    "panel": "2",
-    "Type": "Toggle",
-    "registry": [
-      {
-        "Path": "HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System",
-        "Name": "VerboseStatus",
-        "Value": "1",
-        "Type": "DWord",
-        "OriginalValue": "0",
-        "DefaultState": "false"
-      }
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/customize-preferences/verboselogon"
-  },
-  "WPFToggleNewOutlook": {
-    "Content": "Microsoft Outlook 新版",
-    "Description": "这将确保使用经典 Outlook 应用程序。",
-    "category": "自定义偏好",
-    "panel": "2",
-    "Type": "Toggle",
-    "registry": [
-      {
-        "Path": "HKCU:\\SOFTWARE\\Microsoft\\Office\\16.0\\Outlook\\Preferences",
-        "Name": "UseNewOutlook",
-        "Value": "1",
-        "Type": "DWord",
-        "OriginalValue": "0",
-        "DefaultState": "true"
-      },
-      {
-        "Path": "HKCU:\\Software\\Microsoft\\Office\\16.0\\Outlook\\Options\\General",
-        "Name": "HideNewOutlookToggle",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "1",
-        "DefaultState": "true"
-      },
-      {
-        "Path": "HKCU:\\Software\\Policies\\Microsoft\\Office\\16.0\\Outlook\\Options\\General",
-        "Name": "DoNewOutlookAutoMigration",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "0",
-        "DefaultState": "false"
-      },
-      {
-        "Path": "HKCU:\\Software\\Policies\\Microsoft\\Office\\16.0\\Outlook\\Preferences",
-        "Name": "NewOutlookMigrationUserSetting",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "<RemoveEntry>",
-        "DefaultState": "true"
-      }
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/customize-preferences/newoutlook"
-  },
-  "WPFToggleScrollbars": {
-    "Content": "滚动条始终可见",
-    "Description": "如果启用，滚动条将始终可见。如果禁用，Windows 将自动隐藏不使用的滚动条。",
-    "category": "自定义偏好",
-    "panel": "2",
-    "Type": "Toggle",
-    "registry": [
-      {
-        "Path": "HKCU:\\Control Panel\\Accessibility",
-        "Name": "DynamicScrollbars",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "1",
-        "DefaultState": "false",
-        "link": "https://winutil.christitus.com/dev/tweaks/customize-preferences/scrollbars"
-      }
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/customize-preferences/scrollbars"
-  },
-  "WPFToggleMultiplaneOverlay": {
-    "Content": "多平面覆盖",
-    "Description": "多平面覆盖合成多个图像层，有时可能导致显卡问题。",
-    "category": "自定义偏好",
-    "panel": "2",
-    "Type": "Toggle",
-    "registry": [
-      {
-        "Path": "HKLM:\\SOFTWARE\\Microsoft\\Windows\\Dwm",
-        "Name": "OverlayTestMode",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "5",
-        "DefaultState": "true"
-      },
-      {
-        "Path": "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers",
-        "Name": "DisableOverlays",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "1",
-        "DefaultState": "true"
-      }
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/customize-preferences/multiplaneoverlay"
-  },
-  "WPFToggleMouseAcceleration": {
-    "Content": "鼠标加速",
-    "Description": "使光标移动受物理鼠标移动速度的影响。",
-    "category": "自定义偏好",
-    "panel": "2",
-    "Type": "Toggle",
-    "registry": [
-      {
-        "Path": "HKCU:\\Control Panel\\Mouse",
-        "Name": "MouseSpeed",
-        "Value": "1",
-        "Type": "DWord",
-        "OriginalValue": "0",
-        "DefaultState": "true"
-      },
-      {
-        "Path": "HKCU:\\Control Panel\\Mouse",
-        "Name": "MouseThreshold1",
-        "Value": "6",
-        "Type": "DWord",
-        "OriginalValue": "0",
-        "DefaultState": "true"
-      },
-      {
-        "Path": "HKCU:\\Control Panel\\Mouse",
-        "Name": "MouseThreshold2",
-        "Value": "10",
-        "Type": "DWord",
-        "OriginalValue": "0",
-        "DefaultState": "true"
-      }
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/customize-preferences/mouseacceleration"
-  },
-  "WPFToggleNumLock": {
-    "Content": "开机 Num Lock 键状态",
-    "Description": "在计算机启动时切换 Num Lock 键状态。",
-    "category": "自定义偏好",
-    "panel": "2",
-    "Type": "Toggle",
-    "registry": [
-      {
-        "Path": "HKU:\\.Default\\Control Panel\\Keyboard",
-        "Name": "InitialKeyboardIndicators",
-        "Value": "2",
-        "Type": "String",
-        "OriginalValue": "0",
-        "DefaultState": "false"
-      },
-      {
-        "Path": "HKCU:\\Control Panel\\Keyboard",
-        "Name": "InitialKeyboardIndicators",
-        "Value": "2",
-        "Type": "String",
-        "OriginalValue": "0",
-        "DefaultState": "false"
-      }
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/customize-preferences/numlock"
-  },
-  "WPFToggleWindowSnapping": {
-    "Content": "窗口贴靠",
-    "Description": "切换拖动窗口时的窗口贴靠功能。",
-    "category": "自定义偏好",
-    "panel": "2",
-    "Type": "Toggle",
-    "registry": [
-      {
-        "Path": "HKCU:\\Control Panel\\Desktop",
-        "Name": "WindowArrangementActive",
-        "Value": "1",
-        "Type": "String",
-        "OriginalValue": "0",
-        "DefaultState": "true"
-      }
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/customize-preferences/windowsnapping"
-  },
-  "WPFToggleStandbyFix": {
-    "Content": "S0 睡眠网络连接",
-    "Description": "切换现代笔记本电脑低功耗空闲 (S0 睡眠) 期间的网络连接。",
-    "category": "自定义偏好",
-    "panel": "2",
-    "Type": "Toggle",
-    "registry": [
-      {
-        "Path": "HKCU:\\SOFTWARE\\Policies\\Microsoft\\Power\\PowerSettings\\f15576e8-98b7-4186-b944-eafa664402d9",
-        "Name": "ACSettingIndex",
-        "Value": "1",
-        "Type": "DWord",
-        "OriginalValue": "0",
-        "DefaultState": "true"
-      }
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/customize-preferences/standbyfix"
-  },
-  "WPFToggleS3Sleep": {
-    "Content": "S3 休眠",
-    "Description": "在现代待机和 S3 休眠之间切换。",
-    "category": "自定义偏好",
-    "panel": "2",
-    "Type": "Toggle",
-    "registry": [
-      {
-        "Path": "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Power",
-        "Name": "PlatformAoAcOverride",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "<RemoveEntry>",
-        "DefaultState": "false"
-      }
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/customize-preferences/s3sleep"
-  },
-  "WPFToggleHideSettingsHome": {
-    "Content": "设置主页",
-    "Description": "切换 Windows 设置应用中的主页。",
-    "category": "自定义偏好",
-    "panel": "2",
-    "Type": "Toggle",
-    "registry": [
-      {
-        "Path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer",
-        "Name": "SettingsPageVisibility",
-        "Value": "show:home",
-        "Type": "String",
-        "OriginalValue": "hide:home",
-        "DefaultState": "true"
-      }
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/customize-preferences/hidesettingshome"
-  },
-  "WPFToggleBingSearch": {
-    "Content": "开始菜单必应搜索",
-    "Description": "切换 Windows 搜索中的必应网页搜索结果。",
-    "category": "自定义偏好",
-    "panel": "2",
-    "Type": "Toggle",
-    "registry": [
-      {
-        "Path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Search",
-        "Name": "BingSearchEnabled",
-        "Value": "1",
-        "Type": "DWord",
-        "OriginalValue": "0",
-        "DefaultState": "true"
-      }
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/customize-preferences/bingsearch"
-  },
-  "WPFToggleLoginBlur": {
-    "Content": "登录屏幕亚克力模糊",
-    "Description": "切换登录屏幕背景上的亚克力模糊效果。",
-    "category": "自定义偏好",
-    "panel": "2",
-    "Type": "Toggle",
-    "registry": [
-      {
-        "Path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\System",
-        "Name": "DisableAcrylicBackgroundOnLogon",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "1",
-        "DefaultState": "true"
-      }
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/customize-preferences/loginblur"
-  },
-  "WPFTweaksDisableLockscreen": {
-    "Content": "锁定屏幕 - 禁用",
-    "Description": "完全跳过锁定屏幕，在启动和唤醒时直接进入登录屏幕。",
-    "category": "自定义偏好",
-    "panel": "2",
-    "Type": "Toggle",
-    "registry": [
-      {
-        "Path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\Personalization",
-        "Name": "NoLockScreen",
-        "Value": "1",
-        "Type": "DWord",
-        "OriginalValue": "<RemoveEntry>"
-      }
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/customize-preferences/disablelockscreen"
-  },
-  "WPFToggleStartMenuRecommendations": {
-    "Content": "开始菜单推荐",
-    "Description": "切换开始菜单中的推荐部分。警告：这也会同时禁用锁屏上的 Windows 聚焦。",
-    "category": "自定义偏好",
-    "panel": "2",
-    "Type": "Toggle",
-    "registry": [
-      {
-        "Path": "HKLM:\\SOFTWARE\\Microsoft\\PolicyManager\\current\\device\\Start",
-        "Name": "HideRecommendedSection",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "1",
-        "DefaultState": "true"
-      },
-      {
-        "Path": "HKLM:\\SOFTWARE\\Microsoft\\PolicyManager\\current\\device\\Education",
-        "Name": "IsEducationEnvironment",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "1",
-        "DefaultState": "true"
-      },
-      {
-        "Path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\Explorer",
-        "Name": "HideRecommendedSection",
-        "Value": "0",
-        "Type": "DWord",
-        "OriginalValue": "1",
-        "DefaultState": "true"
-      }
-    ],
-    "InvokeScript": [
-      "      Invoke-WinUtilExplorerUpdate -action \"restart\"      "
-    ],
-    "UndoScript": [
-      "      Invoke-WinUtilExplorerUpdate -action \"restart\"      "
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/customize-preferences/startmenurecommendations"
-  },
-  "WPFToggleStickyKeys": {
-    "Content": "粘滞键",
-    "Description": "切换粘滞键功能，该功能在快速点击 Shift 键时激活。",
-    "category": "自定义偏好",
-    "panel": "2",
-    "Type": "Toggle",
-    "registry": [
-      {
-        "Path": "HKCU:\\Control Panel\\Accessibility\\StickyKeys",
-        "Name": "Flags",
-        "Value": "506",
-        "Type": "DWord",
-        "OriginalValue": "58",
-        "DefaultState": "true"
-      }
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/customize-preferences/stickykeys"
-  },
-  "WPFToggleTaskbarAlignment": {
-    "Content": "任务栏居中图标",
-    "Description": "切换任务栏图标左对齐或居中。",
-    "category": "自定义偏好",
-    "panel": "2",
-    "Type": "Toggle",
-    "registry": [
-      {
-        "Path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
-        "Name": "TaskbarAl",
-        "Value": "1",
-        "Type": "DWord",
-        "OriginalValue": "0",
-        "DefaultState": "true"
-      }
-    ],
-    "InvokeScript": [
-      "      Invoke-WinUtilExplorerUpdate -action \"restart\"      "
-    ],
-    "UndoScript": [
-      "      Invoke-WinUtilExplorerUpdate -action \"restart\"      "
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/customize-preferences/taskbaralignment"
-  },
-  "WPFToggleTaskbarSearch": {
-    "Content": "任务栏搜索图标",
-    "Description": "切换任务栏上的搜索按钮。",
-    "category": "自定义偏好",
-    "panel": "2",
-    "Type": "Toggle",
-    "registry": [
-      {
-        "Path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Search",
-        "Name": "SearchboxTaskbarMode",
-        "Value": "1",
-        "Type": "DWord",
-        "OriginalValue": "0",
-        "DefaultState": "true"
-      }
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/customize-preferences/taskbarsearch"
-  },
-  "WPFToggleTaskView": {
-    "Content": "任务栏任务视图图标",
-    "Description": "切换任务栏中的任务视图按钮。",
-    "category": "自定义偏好",
-    "panel": "2",
-    "Type": "Toggle",
-    "registry": [
-      {
-        "Path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
-        "Name": "ShowTaskViewButton",
-        "Value": "1",
-        "Type": "DWord",
-        "OriginalValue": "0",
-        "DefaultState": "true"
-      }
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/customize-preferences/taskview"
-  },
-  "WPFToggleGameMode": {
-    "Content": "游戏模式",
-    "Description": "切换 Windows 通过分配系统资源给游戏来优先考虑游戏性能。",
-    "category": "自定义偏好",
-    "panel": "2",
-    "Type": "Toggle",
-    "registry": [
-      {
-        "Path": "HKCU:\\Software\\Microsoft\\GameBar",
-        "Name": "AllowAutoGameMode",
-        "Value": "1",
-        "Type": "DWord",
-        "OriginalValue": "0",
-        "DefaultState": "true"
-      },
-      {
-        "Path": "HKCU:\\Software\\Microsoft\\GameBar",
-        "Name": "AutoGameModeEnabled",
-        "Value": "1",
-        "Type": "DWord",
-        "OriginalValue": "0",
-        "DefaultState": "true"
-      }
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/customize-preferences/gamemode"
-  },
-  "WPFToggleLongPaths": {
-    "Content": "启用长路径",
-    "Description": "切换资源管理器中超过 260 个字符的文件路径支持。",
-    "category": "自定义偏好",
-    "panel": "2",
-    "Type": "Toggle",
-    "registry": [
-      {
-        "Path": "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\FileSystem",
-        "Name": "LongPathsEnabled",
-        "Value": "1",
-        "Type": "DWord",
-        "OriginalValue": "0",
-        "DefaultState": "false"
-      }
-    ],
-    "link": "https://winutil.christitus.com/dev/tweaks/customize-preferences/longpaths"
-  },
-  "WPFOOSUbutton": {
-    "Content": "O&O ShutUp10++ - 运行",
-    "category": "高级优化 - 谨慎操作",
-    "panel": "1",
-    "Type": "Button",
-    "link": "https://winutil.christitus.com/dev/tweaks/z--advanced-tweaks---caution/oosubutton"
-  },
-  "WPFchangedns": {
-    "Content": "DNS - 设置为：",
-    "category": "高级优化 - 谨慎操作",
-    "panel": "1",
-    "Type": "Combobox",
-    "ComboItems": "Default DHCP Google Cloudflare Cloudflare_Malware Cloudflare_Malware_Adult Open_DNS Quad9 AdGuard_Ads_Trackers AdGuard_Ads_Trackers_Malware_Adult",
-    "link": "https://winutil.christitus.com/dev/tweaks/z--advanced-tweaks---caution/changedns"
-  },
-  "WPFAddUltPerf": {
-    "Content": "卓越性能方案 - 启用",
-    "category": "性能计划 - 不适用于笔记本电脑",
-    "panel": "2",
-    "Type": "Button",
-    "ButtonWidth": "300",
-    "link": "https://winutil.christitus.com/dev/tweaks/performance-plans---not-for-laptops/addultperf"
-  },
-  "WPFRemoveUltPerf": {
-    "Content": "卓越性能方案 - 禁用",
-    "category": "性能计划 - 不适用于笔记本电脑",
-    "panel": "2",
-    "Type": "Button",
-    "ButtonWidth": "300",
-    "link": "https://winutil.christitus.com/dev/tweaks/performance-plans---not-for-laptops/removeultperf"
   }
 }
