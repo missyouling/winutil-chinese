@@ -5,7 +5,10 @@ Function Install-WinUtilProgramWinget {
         [string]$Action,
 
         [Parameter(Mandatory=$true)]
-        [string[]]$Programs
+        [string[]]$Programs,
+
+        [Parameter(Mandatory=$false)]
+        [System.Collections.ArrayList]$FailedPackages = $null
     )
 
     foreach ($program in $Programs) {
@@ -14,6 +17,7 @@ Function Install-WinUtilProgramWinget {
         }
 
         $source = "winget"
+        $originalId = $program
         if ($program.StartsWith("msstore:", [System.StringComparison]::OrdinalIgnoreCase)) {
             $source = "msstore"
             $program = $program.Substring("msstore:".Length)
@@ -28,5 +32,11 @@ Function Install-WinUtilProgramWinget {
         Write-WinUtilLog -Component "Package" -Message "$Action winget package: $program (source: $source)"
         $process = Start-Process -FilePath winget -ArgumentList $arguments -NoNewWindow -Wait -PassThru
         Write-WinUtilLog -Component "Package" -Message "$Action winget package completed: $program (exit code: $($process.ExitCode))"
+        if ($process.ExitCode -ne 0) {
+            Write-WinUtilLog -Level "ERROR" -Component "Package" -Message "$Action winget package failed: $program (exit code: $($process.ExitCode))"
+            if ($null -ne $FailedPackages) {
+                [void]$FailedPackages.Add("$originalId (winget)")
+            }
+        }
     }
 }

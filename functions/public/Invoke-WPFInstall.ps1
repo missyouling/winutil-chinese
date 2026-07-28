@@ -39,6 +39,7 @@ function Invoke-WPFInstall {
 
         try {
             $sync.ProcessRunning = $true
+            $failedPackages = [System.Collections.ArrayList]::new()
             if ($hasUI) {
                 Set-WinUtilTweaksProgressIndicator -Visible $true -Label "Preparing app install (0/$totalPackages)" -Percent 0
                 Invoke-WPFUIThread -ScriptBlock {
@@ -57,7 +58,7 @@ function Invoke-WPFInstall {
                         Set-WinUtilTweaksProgressIndicator -Visible $true -Label "Installing $program ($position/$totalPackages)" -Percent $startPercent
                     }
 
-                    Install-WinUtilProgramWinget -Action Install -Programs @($program)
+                    Install-WinUtilProgramWinget -Action Install -Programs @($program) -FailedPackages $failedPackages
                     $completedPackages++
                     $completedPercent = [int](($completedPackages / $totalPackages) * 100)
                     if ($hasUI) {
@@ -74,7 +75,7 @@ function Invoke-WPFInstall {
                 }
 
                 Install-WinUtilChoco
-                Install-WinUtilProgramChoco -Action Install -Programs $packagesChoco
+                Install-WinUtilProgramChoco -Action Install -Programs $packagesChoco -FailedPackages $failedPackages
                 $completedPackages += @($packagesChoco).Count
                 $completedPercent = [int](($completedPackages / $totalPackages) * 100)
                 if ($hasUI) {
@@ -90,7 +91,7 @@ function Invoke-WPFInstall {
                 }
 
                 Install-WinUtilScoop
-                Install-WinUtilProgramScoop -Action Install -Programs $packagesScoop
+                Install-WinUtilProgramScoop -Action Install -Programs $packagesScoop -FailedPackages $failedPackages
                 $completedPackages += @($packagesScoop).Count
                 $completedPercent = [int](($completedPackages / $totalPackages) * 100)
                 if ($hasUI) {
@@ -99,12 +100,23 @@ function Invoke-WPFInstall {
                 }
             }
             Write-Host "==========================================="
-            Write-Host "--      安装已完成          ---"
+            if ($failedPackages.Count -gt 0) {
+                Write-Host "--      安装完成（部分失败）  ---"
+                Write-Host "失败 ($($failedPackages.Count)): $($failedPackages -join ', ')"
+                Write-WinUtilLog -Level "ERROR" -Component "Install" -Message "Install workflow completed with failures: $($failedPackages -join ', ')"
+            } else {
+                Write-Host "--      安装已完成          ---"
+                Write-WinUtilLog -Component "Install" -Message "Install workflow completed."
+            }
             Write-Host "==========================================="
-            Write-WinUtilLog -Component "Install" -Message "Install workflow completed."
             if ($hasUI) {
-                Set-WinUtilTweaksProgressIndicator -Visible $true -Label $sync.configs.strings.msgInstallFinished -Percent 100
-                Invoke-WPFUIThread -ScriptBlock { Set-WinUtilTaskbaritem -state "None" -overlay "checkmark" }
+                if ($failedPackages.Count -gt 0) {
+                    Set-WinUtilTweaksProgressIndicator -Visible $true -Label "$($sync.configs.strings.msgInstallFinished)（$($failedPackages.Count) 个失败）" -Percent 100
+                    Invoke-WPFUIThread -ScriptBlock { Set-WinUtilTaskbaritem -state "Error" -overlay "warning" }
+                } else {
+                    Set-WinUtilTweaksProgressIndicator -Visible $true -Label $sync.configs.strings.msgInstallFinished -Percent 100
+                    Invoke-WPFUIThread -ScriptBlock { Set-WinUtilTaskbaritem -state "None" -overlay "checkmark" }
+                }
             }
         } catch {
             Write-Host "==========================================="
