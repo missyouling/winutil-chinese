@@ -133,7 +133,13 @@ function Invoke-WPFUIElements {
         $panelcount++
 
         # Now proceed with adding category labels and entries to $itemsControl
-        foreach ($category in ($organizedData[$panelKey].Keys | Sort-Object)) {
+        $categorySortOrder = @{
+            "基本优化" = 0
+            "高级优化 - 谨慎操作" = 1
+            "自定义偏好" = 2
+            "性能计划 - 不适用于笔记本电脑" = 3
+        }
+        foreach ($category in ($organizedData[$panelKey].Keys | Sort-Object { if ($categorySortOrder.ContainsKey($_)) { $categorySortOrder[$_] } else { 99 } })) {
             $count++
 
             $label = New-Object Windows.Controls.Label
