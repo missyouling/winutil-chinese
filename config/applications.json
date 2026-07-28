@@ -10,7 +10,7 @@
     "region": "foreign"
   },
   "360chrome": {
-    "category": "浏览器__办公/老网站兼容",
+    "category": "工具类__浏览器",
     "choco": "",
     "foss": false,
     "content": "360 极速浏览器 X",
@@ -30,7 +30,7 @@
     "region": "domestic"
   },
   "360se": {
-    "category": "浏览器__办公/老网站兼容",
+    "category": "工具类__浏览器",
     "choco": "",
     "foss": false,
     "content": "360安全浏览器",
@@ -450,7 +450,7 @@
     "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
   },
   "brave": {
-    "category": "浏览器__极简优先推荐",
+    "category": "工具类__浏览器",
     "choco": "brave",
     "content": "Brave 浏览器",
     "description": "Brave 是一款注重隐私的网页浏览器，可拦截广告和跟踪器，提供更快更安全的浏览体验。",
@@ -532,7 +532,7 @@
     "region": "foreign"
   },
   "centbrowser": {
-    "category": "浏览器__追求纯净无广告",
+    "category": "工具类__浏览器",
     "choco": "",
     "foss": true,
     "content": "百分浏览器",
@@ -562,7 +562,7 @@
     "region": "foreign"
   },
   "chrome": {
-    "category": "浏览器__极简优先推荐",
+    "category": "工具类__浏览器",
     "choco": "googlechrome",
     "content": "Chrome 浏览器",
     "description": "Google Chrome 是一款广泛使用的网页浏览器，以速度、简洁和与 Google 服务集成而闻名。",
@@ -572,7 +572,7 @@
     "region": "foreign"
   },
   "chromium": {
-    "category": "浏览器__极简优先推荐",
+    "category": "工具类__浏览器",
     "choco": "chromium",
     "content": "Chromium 浏览器",
     "description": "Chromium 是作为包括 Chrome 在内的多种浏览器基础的开源项目。",
@@ -1005,7 +1005,7 @@
     "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
   },
   "edge": {
-    "category": "浏览器__极简优先推荐",
+    "category": "工具类__浏览器",
     "choco": "microsoft-edge",
     "content": "Edge 浏览器",
     "description": "Microsoft Edge 是一款基于 Chromium 的现代网页浏览器。",
@@ -1139,7 +1139,7 @@
     "region": "foreign"
   },
   "firefox": {
-    "category": "浏览器__极简优先推荐",
+    "category": "工具类__浏览器",
     "choco": "firefox",
     "content": "Firefox 浏览器",
     "description": "Mozilla Firefox 是一款开源网页浏览器，以其定制选项、隐私功能和扩展而闻名。",
@@ -1149,7 +1149,7 @@
     "region": "foreign"
   },
   "firefoxesr": {
-    "category": "浏览器__其他",
+    "category": "工具类__浏览器",
     "choco": "FirefoxESR",
     "content": "Firefox ESR 长期支持版",
     "description": "Mozilla Firefox 是开源网页浏览器，ESR（扩展支持版）每 42 周收到一次主要更新。",
@@ -1159,7 +1159,7 @@
     "region": "foreign"
   },
   "floorp": {
-    "category": "浏览器__其他",
+    "category": "工具类__浏览器",
     "choco": "floorp",
     "content": "Floorp 浏览器",
     "description": "Floorp 是一款开源网页浏览器项目，旨在提供简单快速的浏览体验。",
@@ -1414,7 +1414,7 @@
     "region": "domestic"
   },
   "helium": {
-    "category": "浏览器__其他",
+    "category": "工具类__浏览器",
     "choco": "helium",
     "content": "Helium 浏览器",
     "description": "私密、快速、诚实的网页浏览器。",
@@ -1840,7 +1840,7 @@
     "region": "foreign"
   },
   "librewolf": {
-    "category": "浏览器__追求纯净无广告",
+    "category": "工具类__浏览器",
     "choco": "librewolf",
     "content": "LibreWolf 隐私浏览器",
     "description": "LibreWolf 是一款基于 Firefox 注重隐私的网页浏览器，具有额外的隐私和安全增强功能。",
@@ -1955,7 +1955,7 @@
     "region": "foreign"
   },
   "maxthon": {
-    "category": "浏览器__其他",
+    "category": "工具类__浏览器",
     "choco": "maxthon",
     "foss": false,
     "content": "遨游浏览器",
@@ -2099,7 +2099,7 @@
     "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
   },
   "mullvadbrowser": {
-    "category": "浏览器__追求纯净无广告",
+    "category": "工具类__浏览器",
     "choco": "na",
     "content": "Mullvad 隐私浏览器",
     "description": "Mullvad Browser 是一款注重隐私的网页浏览器，与 Tor 项目合作开发。",
@@ -2789,7 +2789,7 @@
     "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
   },
   "qqbrowser": {
-    "category": "浏览器__办公/老网站兼容",
+    "category": "工具类__浏览器",
     "choco": "",
     "foss": false,
     "content": "QQ 浏览器",
@@ -3158,7 +3158,7 @@
     "region": "foreign"
   },
   "stationbrowser": {
-    "category": "浏览器__电商多账号运营",
+    "category": "工具类__浏览器",
     "choco": "",
     "foss": false,
     "content": "站斧浏览器",
@@ -3381,7 +3381,7 @@
     "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
   },
   "tor": {
-    "category": "浏览器__其他",
+    "category": "工具类__浏览器",
     "choco": "tor-browser",
     "content": "Tor 匿名浏览器",
     "description": "Tor 浏览器专为匿名网页浏览而设计，利用 Tor 网络保护用户隐私和安全。",
@@ -3435,7 +3435,7 @@
     "choco": "",
     "content": "图鸟 (Tubao)",
     "description": "图鸟开发辅助工具。",
-    "link": "",
+    "link": "https://github.com/microsoft/winget-pkgs",
     "winget": "Tubao.Tubao",
     "foss": false,
     "region": "domestic"
@@ -3452,7 +3452,7 @@
     "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
   },
   "twinkstarbrowser": {
-    "category": "浏览器__追求纯净无广告",
+    "category": "工具类__浏览器",
     "choco": "",
     "foss": false,
     "content": "星愿浏览器",
@@ -3482,7 +3482,7 @@
     "region": "foreign"
   },
   "ungoogled": {
-    "category": "浏览器__追求纯净无广告",
+    "category": "工具类__浏览器",
     "choco": "ungoogled-chromium",
     "content": "Ungoogled Chromium 无谷歌版",
     "description": "Ungoogled Chromium 是不含 Google 集成的 Chromium 版本。",
@@ -3624,7 +3624,7 @@
     "region": "foreign"
   },
   "vivaldi": {
-    "category": "浏览器__其他",
+    "category": "工具类__浏览器",
     "choco": "vivaldi",
     "content": "Vivaldi 浏览器",
     "description": "Vivaldi 是一款高度可定制的网页浏览器。",
@@ -3728,7 +3728,7 @@
     "link": "https://github.com/microsoft/winget-pkgs/tree/master/manifests"
   },
   "waterfox": {
-    "category": "浏览器__追求纯净无广告",
+    "category": "工具类__浏览器",
     "choco": "waterfox",
     "content": "Waterfox 隐私浏览器",
     "description": "Waterfox 是一款基于 Firefox 的快速隐私浏览器。",
@@ -3777,7 +3777,8 @@
     "description": "WebView2 Runtime 是微软 Edge 浏览器内核的运行时组件，许多现代应用依赖它运行。",
     "foss": false,
     "region": "foreign",
-    "winget": "Microsoft.EdgeWebView2Runtime"
+    "winget": "Microsoft.EdgeWebView2Runtime",
+    "link": "https://developer.microsoft.com/en-us/microsoft-edge/webview2/"
   },
   "wechat": {
     "category": "通讯工具",
@@ -4899,7 +4900,7 @@
     "region": "foreign"
   },
   "ZenBrowser": {
-    "category": "浏览器__极简优先推荐",
+    "category": "工具类__浏览器",
     "choco": "zen-browser",
     "content": "Zen 浏览器",
     "description": "基于 Firefox 构建的现代、注重隐私、性能驱动的浏览器。",
