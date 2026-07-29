@@ -50,26 +50,7 @@ function Reset-WPFCheckBoxes {
     $sync.WPFselectedAppsButton.Content = "已选应用： $count"
 
     # Update button visual feedback
-    $installBtn = $sync.WPFInstall
-    $upgradeBtn = $sync.WPFInstallUpgrade
-    $clearBtn = $sync.WPFClearInstallSelection
-    $highlightBg = [System.Windows.Media.Brushes]::Black
-    $highlightFg = [System.Windows.Media.Brushes]::White
-    $defaultFg = [System.Windows.Media.Brushes]::White
-
-    if ($count -eq 0) {
-        if ($installBtn) { $installBtn.Background = $null; $installBtn.Foreground = $defaultFg }
-        if ($upgradeBtn) { $upgradeBtn.Background = $null; $upgradeBtn.Foreground = $defaultFg }
-        if ($clearBtn)  { $clearBtn.Background = $null; $clearBtn.Foreground = $defaultFg }
-    } elseif ($count -eq 1) {
-        if ($installBtn) { $installBtn.Background = $highlightBg; $installBtn.Foreground = $highlightFg }
-        if ($upgradeBtn) { $upgradeBtn.Background = $null; $upgradeBtn.Foreground = $defaultFg }
-        if ($clearBtn)  { $clearBtn.Background = $null; $clearBtn.Foreground = $defaultFg }
-    } else {
-        if ($installBtn) { $installBtn.Background = $highlightBg; $installBtn.Foreground = $highlightFg }
-        if ($upgradeBtn) { $upgradeBtn.Background = $highlightBg; $upgradeBtn.Foreground = $highlightFg }
-        if ($clearBtn)  { $clearBtn.Background = $highlightBg; $clearBtn.Foreground = $highlightFg }
-    }
+    Update-WinUtilInstallButtonFeedback -Count $count
 
     # On every change, remove all entries inside the Popup Menu. This is done, so we can keep the alphabetical order even if elements are selected in a random way
     $sync.selectedAppsstackPanel.Children.Clear()

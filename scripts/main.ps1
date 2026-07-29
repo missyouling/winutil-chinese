@@ -381,32 +381,27 @@ $sync["AboutMenuItem"].Add_Click({
     Invoke-WPFPopup -Action "Hide" -Popups @("Settings")
 
     $authorInfo = @"
-<b>WinUtil 中文版</b>
-<br>
+WinUtil 中文版
+
 WinUtil 是一个面向 Windows 系统的开源优化与应用安装工具，由 Chris Titus Tech 开发，本中文版由 missyouling 维护。
-<br><br>
-<b>项目目标</b>
-<br>
+
+项目目标
 • 一键安装常用软件（Winget / Chocolatey）
 • 系统优化与隐私设置（Tweaks）
 • Windows 功能配置（Features）
 • 提供简洁直观的桌面 GUI 界面
-<br><br>
-<b>主要功能</b>
-<br>
+
+主要功能
 • 应用中心 — 精选 300+ 常用应用，分类浏览一键安装
 • 系统优化 — 80+ 优化项，覆盖隐私、性能、自定义
 • Windows 功能 — 图形化开关系统组件
 • 预设方案 — 快速应用整组优化配置
-<br><br>
-<b>链接</b>
-<br>
+
+链接
 原项目: <a href="https://github.com/ChrisTitusTech/winutil">ChrisTitusTech/winutil</a>
-<br>
 中文版: <a href="https://github.com/missyouling/winutil-chinese">missyouling/winutil-chinese</a>
-<br>
 在线使用: <a href="https://win.mozuiapp.com/">win.mozuiapp.com</a>
-<br><br>
+
 当前版本: $($sync.version)
 "@
     Show-CustomDialog -Title "关于" -Message $authorInfo
