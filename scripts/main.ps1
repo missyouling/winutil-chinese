@@ -404,7 +404,7 @@ WinUtil 是一个面向 Windows 系统的开源优化与应用安装工具，由
 
 当前版本: $($sync.version)
 "@
-    Show-CustomDialog -Title "关于" -Message $authorInfo
+    Show-CustomDialog -Title "关于" -Message $authorInfo -Width 440 -Height 420
 })
 $sync["DocumentationMenuItem"].Add_Click({
     Invoke-WPFPopup -Action "Hide" -Popups @("Settings")

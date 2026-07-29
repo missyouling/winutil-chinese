@@ -8,6 +8,9 @@ function Update-WinUtilInstallButtonFeedback {
         - 0 selected: all buttons reset to theme default
         - 1 selected: only Install button highlighted (Black bg, White fg)
         - 2+ selected: Install, Upgrade, and Clear buttons all highlighted
+
+        Uses ClearValue to revert to theme's DynamicResource style instead of
+        setting $null, which avoids local-value override issues in WPF.
     #>
     param (
         [int]$Count = 0
@@ -18,22 +21,35 @@ function Update-WinUtilInstallButtonFeedback {
     $clearBtn = $sync.WPFClearInstallSelection
     $highlightBg = [System.Windows.Media.Brushes]::Black
     $highlightFg = [System.Windows.Media.Brushes]::White
+    $ctrlType = [Windows.Controls.Control]
 
-    # $null = let theme's DynamicResource style take over (default look)
-    $defaultBg = $null
-    $defaultFg = $null
+    # Helper to reset a button to theme default by clearing local values
+    $resetBtn = {
+        param($btn)
+        if (-not $btn) { return }
+        $btn.ClearValue($ctrlType::BackgroundProperty)
+        $btn.ClearValue($ctrlType::ForegroundProperty)
+    }
+
+    # Helper to highlight a button (black bg, white fg)
+    $highlightBtn = {
+        param($btn)
+        if (-not $btn) { return }
+        $btn.Background = $highlightBg
+        $btn.Foreground = $highlightFg
+    }
 
     if ($Count -eq 0) {
-        if ($installBtn) { $installBtn.Background = $defaultBg; $installBtn.Foreground = $defaultFg }
-        if ($upgradeBtn)  { $upgradeBtn.Background  = $defaultBg; $upgradeBtn.Foreground  = $defaultFg }
-        if ($clearBtn)   { $clearBtn.Background   = $defaultBg; $clearBtn.Foreground   = $defaultFg }
+        & $resetBtn $installBtn
+        & $resetBtn $upgradeBtn
+        & $resetBtn $clearBtn
     } elseif ($Count -eq 1) {
-        if ($installBtn) { $installBtn.Background = $highlightBg; $installBtn.Foreground = $highlightFg }
-        if ($upgradeBtn)  { $upgradeBtn.Background  = $defaultBg; $upgradeBtn.Foreground  = $defaultFg }
-        if ($clearBtn)   { $clearBtn.Background   = $defaultBg; $clearBtn.Foreground   = $defaultFg }
+        & $highlightBtn $installBtn
+        & $resetBtn $upgradeBtn
+        & $resetBtn $clearBtn
     } else {
-        if ($installBtn) { $installBtn.Background = $highlightBg; $installBtn.Foreground = $highlightFg }
-        if ($upgradeBtn)  { $upgradeBtn.Background  = $highlightBg; $upgradeBtn.Foreground  = $highlightFg }
-        if ($clearBtn)   { $clearBtn.Background   = $highlightBg; $clearBtn.Foreground   = $highlightFg }
+        & $highlightBtn $installBtn
+        & $highlightBtn $upgradeBtn
+        & $highlightBtn $clearBtn
     }
 }
