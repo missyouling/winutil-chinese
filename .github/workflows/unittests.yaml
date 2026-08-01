@@ -12,7 +12,7 @@ permissions:
 jobs:
   test:
     name: Pester 单元测试
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     steps:
       - name: 检出代码
         uses: actions/checkout@v4
