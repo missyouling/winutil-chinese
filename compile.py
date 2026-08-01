@@ -97,7 +97,7 @@ def compile_winutil(source_dir: str, output_path: str):
         + "[System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($__b64)) | iex\n"
     )
 
-    with open(output_path, "w", encoding="utf-8-sig") as f:
+    with open(output_path, "w", encoding="utf-8") as f:
         f.write(output)
 
     kb = len(output) / 1024
