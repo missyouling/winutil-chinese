@@ -1,4 +1,4 @@
-function Invoke-WinUtilAutoRun {
+﻿function Invoke-WinUtilAutoRun {
     <#
 
     .SYNOPSIS

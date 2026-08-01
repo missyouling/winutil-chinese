@@ -1,4 +1,4 @@
-function Invoke-WPFButton {
+﻿function Invoke-WPFButton {
 
     <#
 

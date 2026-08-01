@@ -1,4 +1,4 @@
-function Reset-WPFCheckBoxes {
+﻿function Reset-WPFCheckBoxes {
     <#
 
     .SYNOPSIS

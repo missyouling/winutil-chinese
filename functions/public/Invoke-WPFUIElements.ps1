@@ -1,4 +1,4 @@
-function Invoke-WPFUIElements {
+﻿function Invoke-WPFUIElements {
     <#
     .SYNOPSIS
         Adds UI elements to a specified Grid in the WinUtil GUI based on a JSON configuration.

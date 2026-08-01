@@ -1,4 +1,4 @@
-function Invoke-WPFundoall {
+﻿function Invoke-WPFundoall {
     <#
 
     .SYNOPSIS

@@ -1,4 +1,4 @@
-function Invoke-WinUtilUninstallPSProfile {
+﻿function Invoke-WinUtilUninstallPSProfile {
 
     if (Test-Path ($Profile + ".bak")) {
         Move-Item -Path ($Profile + ".bak") -Destination $Profile

@@ -1,4 +1,4 @@
-function Set-WinUtilRegistry {
+﻿function Set-WinUtilRegistry {
     <#
 
     .SYNOPSIS

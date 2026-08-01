@@ -1,4 +1,4 @@
-function Invoke-WinUtilScript {
+﻿function Invoke-WinUtilScript {
     <#
 
     .SYNOPSIS

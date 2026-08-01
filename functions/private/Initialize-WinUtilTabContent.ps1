@@ -1,4 +1,4 @@
-function Initialize-WinUtilTabContent {
+﻿function Initialize-WinUtilTabContent {
     param(
         [Parameter(Mandatory = $true)]
         [string]$TabName

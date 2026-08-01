@@ -1,4 +1,4 @@
-function Invoke-WPFtweaksbutton {
+﻿function Invoke-WPFtweaksbutton {
   <#
 
     .SYNOPSIS

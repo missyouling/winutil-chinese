@@ -1,4 +1,4 @@
-function Install-WinUtilWinget {
+﻿function Install-WinUtilWinget {
     <#
 
     .SYNOPSIS

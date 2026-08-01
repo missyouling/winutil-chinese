@@ -1,4 +1,4 @@
-function Invoke-WPFUnInstall {
+﻿function Invoke-WPFUnInstall {
     param(
         [Parameter(Mandatory=$false)]
         [PSObject[]]$PackagesToUninstall = $($sync.selectedApps | Foreach-Object { $sync.configs.applicationsHashtable.$_ })

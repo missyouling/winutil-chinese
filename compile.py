@@ -14,7 +14,7 @@ def compile_winutil(source_dir: str, output_path: str):
     body_parts = []
 
     # 1. scripts/start.ps1
-    with open(os.path.join(source_dir, "scripts", "start.ps1"), "r", encoding="utf-8") as f:
+    with open(os.path.join(source_dir, "scripts", "start.ps1"), "r", encoding="utf-8-sig") as f:
         body_parts.append(f.read().replace("#{replaceme}", version))
     print("✅ scripts/start.ps1")
 
@@ -23,7 +23,7 @@ def compile_winutil(source_dir: str, output_path: str):
     for root, _, files in os.walk(os.path.join(source_dir, "functions")):
         for f in sorted(files):
             if f.endswith(".ps1"):
-                with open(os.path.join(root, f), "r", encoding="utf-8") as fh:
+                with open(os.path.join(root, f), "r", encoding="utf-8-sig") as fh:
                     body_parts.append(fh.read())
                 func_count += 1
     print(f"✅ functions/ — {func_count} 个文件")
@@ -33,7 +33,7 @@ def compile_winutil(source_dir: str, output_path: str):
     configs = {}
     for jf in sorted(glob.glob(os.path.join(config_dir, "*.json"))):
         name = os.path.splitext(os.path.basename(jf))[0]
-        with open(jf, "r", encoding="utf-8") as f:
+        with open(jf, "r", encoding="utf-8-sig") as f:
             data = f.read()
         if name == "applications":
             parsed = json.loads(data)
@@ -63,13 +63,13 @@ def compile_winutil(source_dir: str, output_path: str):
     # 5. autounattend.xml
     aupath = os.path.join(source_dir, "tools", "autounattend.xml")
     if os.path.exists(aupath):
-        with open(aupath, "r", encoding="utf-8") as f:
+        with open(aupath, "r", encoding="utf-8-sig") as f:
             autounattend = f.read()
         body_parts.append(f"\n$WinUtilAutounattendXml = @'\n{autounattend}\n'@\n")
         print("✅ tools/autounattend.xml")
 
     # 6. scripts/main.ps1
-    with open(os.path.join(source_dir, "scripts", "main.ps1"), "r", encoding="utf-8") as f:
+    with open(os.path.join(source_dir, "scripts", "main.ps1"), "r", encoding="utf-8-sig") as f:
         body_parts.append(f.read())
     print("✅ scripts/main.ps1")
 
@@ -97,7 +97,7 @@ def compile_winutil(source_dir: str, output_path: str):
         + "[System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($__b64)) | iex\n"
     )
 
-    with open(output_path, "w", encoding="utf-8") as f:
+    with open(output_path, "w", encoding="utf-8-sig") as f:
         f.write(output)
 
     kb = len(output) / 1024

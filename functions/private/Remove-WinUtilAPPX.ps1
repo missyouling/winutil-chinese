@@ -1,4 +1,4 @@
-function Remove-WinUtilAPPX {
+﻿function Remove-WinUtilAPPX {
     <#
 
     .SYNOPSIS

@@ -1,4 +1,4 @@
-function Invoke-WPFFixesUpdate {
+﻿function Invoke-WPFFixesUpdate {
 
     <#
 

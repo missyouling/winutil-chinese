@@ -1,4 +1,4 @@
-function Invoke-WPFToggleAllCategories {
+﻿function Invoke-WPFToggleAllCategories {
     <#
         .SYNOPSIS
             Expands or collapses all categories in the Install tab

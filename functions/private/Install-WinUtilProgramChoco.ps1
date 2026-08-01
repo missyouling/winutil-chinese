@@ -1,4 +1,4 @@
-function Install-WinUtilProgramChoco {
+﻿function Install-WinUtilProgramChoco {
     param (
         [Parameter(Mandatory=$true)]
         [ValidateSet("Install", "Uninstall")]

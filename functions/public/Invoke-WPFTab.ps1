@@ -1,4 +1,4 @@
-function Invoke-WPFTab {
+﻿function Invoke-WPFTab {
 
     <#
 

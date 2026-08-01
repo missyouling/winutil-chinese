@@ -1,4 +1,4 @@
-function Invoke-WPFFeatureInstall {
+﻿function Invoke-WPFFeatureInstall {
     <#
 
     .SYNOPSIS

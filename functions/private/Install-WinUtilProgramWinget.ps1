@@ -1,4 +1,4 @@
-function Install-WinUtilProgramWinget {
+﻿function Install-WinUtilProgramWinget {
     param (
         [Parameter(Mandatory=$true)]
         [ValidateSet("Install", "Uninstall")]

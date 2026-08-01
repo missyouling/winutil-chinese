@@ -1,4 +1,4 @@
-function Set-WinUtilDNS {
+﻿function Set-WinUtilDNS {
     <#
 
     .SYNOPSIS

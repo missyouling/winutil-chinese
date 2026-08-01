@@ -1,4 +1,4 @@
-function Find-AppsByNameOrDescription {
+﻿function Find-AppsByNameOrDescription {
     <#
         .SYNOPSIS
             Searches through the Apps on the Install Tab and hides all entries that do not match the string

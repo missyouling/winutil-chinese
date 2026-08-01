@@ -1,4 +1,4 @@
-Function Set-WinUtilService {
+﻿Function Set-WinUtilService {
     <#
 
     .SYNOPSIS

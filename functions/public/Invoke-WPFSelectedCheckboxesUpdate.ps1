@@ -1,4 +1,4 @@
-function Invoke-WPFSelectedCheckboxesUpdate ($type, $checkboxName) {
+﻿function Invoke-WPFSelectedCheckboxesUpdate ($type, $checkboxName) {
     $listName = switch -Regex ($checkboxName) {
         '^WPFInstall' { 'selectedApps' }
         '^WPFTweaks'  { 'selectedTweaks' }

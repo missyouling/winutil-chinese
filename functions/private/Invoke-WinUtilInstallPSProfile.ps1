@@ -1,4 +1,4 @@
-function Invoke-WinUtilInstallPSProfile {
+﻿function Invoke-WinUtilInstallPSProfile {
     if (-not (Get-Command wt)) {
         Write-Host "未找到 Windows Terminal。正在安装..."
         Install-WinUtilWinget

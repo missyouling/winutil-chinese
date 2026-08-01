@@ -1,4 +1,4 @@
-function Invoke-WinUtilAssets {
+﻿function Invoke-WinUtilAssets {
   param (
       $type,
       $Size,

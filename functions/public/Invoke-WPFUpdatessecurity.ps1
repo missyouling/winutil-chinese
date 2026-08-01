@@ -1,4 +1,4 @@
-function Invoke-WPFUpdatessecurity {
+﻿function Invoke-WPFUpdatessecurity {
     <#
 
     .SYNOPSIS

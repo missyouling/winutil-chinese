@@ -1,4 +1,4 @@
-function Invoke-WPFFixesNTPPool {
+﻿function Invoke-WPFFixesNTPPool {
     <#
     .SYNOPSIS
         Configures Windows to use pool.ntp.org for NTP synchronization

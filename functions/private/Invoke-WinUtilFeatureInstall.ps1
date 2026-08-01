@@ -1,4 +1,4 @@
-function Invoke-WinUtilFeatureInstall ($CheckBox) {
+﻿function Invoke-WinUtilFeatureInstall ($CheckBox) {
     Write-WinUtilLog -Component "Feature" -Message "Applying feature action: $CheckBox"
 
     if ($sync.configs.feature.$CheckBox.feature) {

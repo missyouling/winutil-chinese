@@ -1,4 +1,4 @@
-function Invoke-WPFGetInstalled {
+﻿function Invoke-WPFGetInstalled {
     <#
     .SYNOPSIS
         Invokes the function that gets the checkboxes to check in a new runspace

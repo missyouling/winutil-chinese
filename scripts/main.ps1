@@ -1,4 +1,4 @@
-Write-Host @"
+﻿Write-Host @"
     CCCCCCCCCCCCCTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT
  CCC::::::::::::CT:::::::::::::::::::::TT:::::::::::::::::::::T
 CC:::::::::::::::CT:::::::::::::::::::::TT:::::::::::::::::::::T

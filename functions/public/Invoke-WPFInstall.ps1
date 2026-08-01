@@ -1,4 +1,4 @@
-function Invoke-WPFInstall {
+﻿function Invoke-WPFInstall {
     <#
     .SYNOPSIS
         Installs the selected programs using winget, choco, or scoop with automatic

@@ -1,4 +1,4 @@
-function Invoke-WPFUpdatesdisable {
+﻿function Invoke-WPFUpdatesdisable {
     <#
 
     .SYNOPSIS

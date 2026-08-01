@@ -1,4 +1,4 @@
-function Invoke-WPFUpdatesdefault {
+﻿function Invoke-WPFUpdatesdefault {
     <#
 
     .SYNOPSIS

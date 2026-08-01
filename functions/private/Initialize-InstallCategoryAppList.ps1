@@ -1,4 +1,4 @@
-function Initialize-InstallCategoryAppList {
+﻿function Initialize-InstallCategoryAppList {
     <#
         .SYNOPSIS
             Clears the Target Element and sets up a "Loading" message. This is done, because loading of all apps can take a bit of time in some scenarios
