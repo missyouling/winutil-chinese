@@ -4,67 +4,91 @@
     "Content": "WinGet 包管理器",
     "GroupName": "PackageManagerGroup",
     "Category": "选择",
-    "Region": "domestic"
+    "Region": "domestic",
+    "Order": "1",
+    "Description": "WinGet 包管理器",
+    "Checked": true
   },
   "ChocoRadioButton": {
     "Type": "RadioButton",
     "Content": "Chocolatey 包管理器",
     "GroupName": "PackageManagerGroup",
     "Category": "选择",
-    "Region": "foreign"
+    "Region": "foreign",
+    "Order": "1",
+    "Description": "Chocolatey 包管理器",
+    "Checked": false
   },
   "WPFInstallFOSSInfo": {
     "Type": "Note",
     "Content": "免费开源软件",
     "Category": "选择",
-    "Region": "foreign"
+    "Region": "foreign",
+    "Order": "1",
+    "Description": "免费开源软件"
   },
   "WPFInstall": {
     "Type": "Button",
     "Content": "安装/升级应用",
     "Category": "操作",
-    "Region": "domestic"
+    "Region": "domestic",
+    "Order": "1",
+    "Description": "安装/升级应用"
   },
   "WPFInstallUpgrade": {
     "Type": "Button",
     "Content": "升级所有应用",
     "Category": "操作",
-    "Region": "domestic"
+    "Region": "domestic",
+    "Order": "1",
+    "Description": "升级所有应用"
   },
   "WPFUninstall": {
     "Type": "Button",
     "Content": "卸载应用",
     "Category": "操作",
-    "Region": "domestic"
+    "Region": "domestic",
+    "Order": "1",
+    "Description": "卸载应用"
   },
   "WPFClearInstallSelection": {
     "Type": "Button",
     "Content": "清除选择",
     "Category": "操作",
-    "Region": "foreign"
+    "Region": "foreign",
+    "Order": "1",
+    "Description": "清除选择"
   },
   "WPFGetInstalled": {
     "Type": "Button",
     "Content": "显示已安装应用",
     "Category": "操作",
-    "Region": "foreign"
+    "Region": "foreign",
+    "Order": "1",
+    "Description": "显示已安装应用"
   },
   "WPFselectedAppsButton": {
     "Type": "Button",
     "Content": "已选应用：0",
     "Category": "操作",
-    "Region": "foreign"
+    "Region": "foreign",
+    "Order": "1",
+    "Description": "已选应用：0"
   },
   "WPFExpandAllCategories": {
     "Type": "Button",
     "Content": "展开所有分类",
     "Category": "操作",
-    "Region": "foreign"
+    "Region": "foreign",
+    "Order": "1",
+    "Description": "展开所有分类"
   },
   "WPFCollapseAllCategories": {
     "Type": "Button",
     "Content": "折叠所有分类",
     "Category": "操作",
-    "Region": "foreign"
+    "Region": "foreign",
+    "Order": "1",
+    "Description": "折叠所有分类"
   }
 }

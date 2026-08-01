@@ -44,7 +44,7 @@ Describe "Get-WinUtilSelectedPackages" {
         (@($result["Winget"]) -join "|") | Should -Be "VideoLAN.VLC|Mozilla.Firefox"
     }
 
-    It "skips blank, na, and missing package IDs" {
+    It "falls back to choco for packages missing winget IDs" {
         $packages = @(
             [pscustomobject]@{ winget = ""; choco = "" }
             [pscustomobject]@{ winget = "na"; choco = "na" }
@@ -55,7 +55,7 @@ Describe "Get-WinUtilSelectedPackages" {
         $result = Get-WinUtilSelectedPackages -PackageList $packages -Preference "Winget"
 
         @($result["Winget"]).Count | Should -Be 0
-        @($result["Choco"]).Count | Should -Be 0
+        (@($result["Choco"]) -join "|") | Should -Be "only-choco"
     }
 
     It "deduplicates package IDs" {
@@ -112,7 +112,11 @@ Describe "Test-WinUtilPackageManager" {
 Describe "Install-WinUtilProgramWinget" {
     BeforeEach {
         Mock Write-WinUtilLog { }
-        Mock Start-Process { [pscustomobject]@{ ExitCode = 0 } }
+        Mock Start-Process {
+            $p = [pscustomobject]@{ ExitCode = 0 }
+            $p | Add-Member -MemberType ScriptMethod -Name WaitForExit -Value { param($timeout) $true } -Force
+            $p
+        }
     }
 
     It "starts winget with install arguments" {
@@ -146,7 +150,11 @@ Describe "Install-WinUtilProgramWinget" {
 Describe "Install-WinUtilProgramChoco" {
     BeforeEach {
         Mock Write-WinUtilLog { }
-        Mock Start-Process { [pscustomobject]@{ ExitCode = 0 } }
+        Mock Start-Process {
+            $p = [pscustomobject]@{ ExitCode = 0 }
+            $p | Add-Member -MemberType ScriptMethod -Name WaitForExit -Value { param($timeout) $true } -Force
+            $p
+        }
     }
 
     It "starts choco with install arguments" {

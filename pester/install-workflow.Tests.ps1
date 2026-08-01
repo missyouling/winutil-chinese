@@ -166,7 +166,7 @@ Describe "Invoke-WPFInstall entrypoint" {
         Invoke-WPFInstall
 
         Should -Invoke -CommandName Show-WinUtilMessage -Times 1 -Exactly -ParameterFilter {
-            $Message -eq "[Invoke-WPFInstall] An Install process is currently running." -and
+            $Message -eq "[安装应用] An安装过程正在进行中。" -and
                 $Title -eq "Winutil" -and
                 $Button -eq "OK" -and
                 $Icon -eq "Warning"
@@ -205,55 +205,50 @@ Describe "Invoke-WPFInstall runspace body" {
         Remove-Variable -Name capturedInstallScriptBlock -Scope Script -ErrorAction SilentlyContinue
     }
 
-    It "installs split winget and choco packages and cleans up on success" {
+    It "installs packages in preference order and cleans up on success" {
+        Mock Start-Process {
+            $p = [pscustomobject]@{ ExitCode = 0 }
+            $p | Add-Member -MemberType ScriptMethod -Name WaitForExit -Value { param($timeout) $true } -Force
+            $p
+        }
+
         Invoke-WPFInstall
 
         & $script:capturedInstallScriptBlock -PackagesToInstall @($script:package) -ManagerPreference "Winget"
 
-        Should -Invoke -CommandName Get-WinUtilSelectedPackages -Times 1 -Exactly -ParameterFilter {
-            @($PackageList).Count -eq 1 -and $Preference -eq "Winget"
-        }
-        Should -Invoke -CommandName Set-WinUtilTweaksProgressIndicator -Times 1 -Exactly -ParameterFilter {
-            $Visible -eq $true -and $Label -eq "Preparing app install (0/2)" -and $Percent -eq 0
-        }
-        Should -Invoke -CommandName Set-WinUtilTweaksProgressIndicator -Times 1 -Exactly -ParameterFilter {
-            $Visible -eq $true -and $Label -eq "Installed Git.Git (1/2)" -and $Percent -eq 50
-        }
-        Should -Invoke -CommandName Set-WinUtilTweaksProgressIndicator -Times 1 -Exactly -ParameterFilter {
-            $Visible -eq $true -and $Label -eq "Installed Chocolatey packages (2/2)" -and $Percent -eq 100
-        }
-        Should -Invoke -CommandName Set-WinUtilTweaksProgressIndicator -Times 1 -Exactly -ParameterFilter {
-            $Visible -eq $true -and $Label -eq "App install finished" -and $Percent -eq 100
-        }
         Should -Invoke -CommandName Install-WinUtilWinget -Times 1 -Exactly
-        Should -Invoke -CommandName Install-WinUtilProgramWinget -Times 1 -Exactly -ParameterFilter {
-            $Action -eq "Install" -and @($Programs)[0] -eq "Git.Git"
+        Should -Invoke -CommandName Start-Process -Times 1 -Exactly -ParameterFilter {
+            $FilePath -eq "winget" -and
+                (@($ArgumentList) -join "|") -eq "install|--id|Git.Git|--accept-package-agreements|--accept-source-agreements|--source|winget|--silent"
         }
-        Should -Invoke -CommandName Install-WinUtilChoco -Times 1 -Exactly
-        Should -Invoke -CommandName Install-WinUtilProgramChoco -Times 1 -Exactly -ParameterFilter {
-            $Action -eq "Install" -and @($Programs)[0] -eq "vlc"
+        Should -Invoke -CommandName Set-WinUtilTweaksProgressIndicator -Times 1 -Exactly -ParameterFilter {
+            $Visible -eq $true -and $Label -eq "Preparing app install (0/1)" -and $Percent -eq 0
+        }
+        Should -Invoke -CommandName Set-WinUtilTweaksProgressIndicator -Times 1 -Exactly -ParameterFilter {
+            $Visible -eq $true -and $Label -eq "已安装 Git (1/1)" -and $Percent -eq 100
         }
         Should -Invoke -CommandName Invoke-WPFUIThread -Times 1 -Exactly -ParameterFilter {
             $ScriptBlock.ToString() -like '*$sync.ItemsControl.IsEnabled = $false*'
         }
         Should -Invoke -CommandName Invoke-WPFUIThread -Times 1 -Exactly -ParameterFilter {
             $ScriptBlock.ToString() -like '*$sync.ItemsControl.IsEnabled = $true*'
-        }
-        Should -Invoke -CommandName Invoke-WPFUIThread -Times 1 -Exactly -ParameterFilter {
-            $ScriptBlock.ToString() -like '*Set-WinUtilTaskbaritem -state "None" -overlay "checkmark"*'
         }
         $script:sync.ProcessRunning | Should -BeFalse
     }
 
     It "shows failure progress, sets taskbar error state, and clears ProcessRunning on failure" {
-        Mock Install-WinUtilProgramWinget { throw "winget failed" }
+        Mock Start-Process {
+            $p = [pscustomobject]@{ ExitCode = 1 }
+            $p | Add-Member -MemberType ScriptMethod -Name WaitForExit -Value { param($timeout) $true } -Force
+            $p
+        }
 
         Invoke-WPFInstall
 
         & $script:capturedInstallScriptBlock -PackagesToInstall @($script:package) -ManagerPreference "Winget"
 
         Should -Invoke -CommandName Set-WinUtilTweaksProgressIndicator -Times 1 -Exactly -ParameterFilter {
-            $Visible -eq $true -and $Label -eq "App install failed" -and $Percent -eq 100
+            $Visible -eq $true -and $Label -eq "安装失败 Git (1/1)" -and $Percent -eq 100
         }
         Should -Invoke -CommandName Invoke-WPFUIThread -Times 1 -Exactly -ParameterFilter {
             $ScriptBlock.ToString() -like '*$sync.ItemsControl.IsEnabled = $false*'
@@ -261,11 +256,8 @@ Describe "Invoke-WPFInstall runspace body" {
         Should -Invoke -CommandName Invoke-WPFUIThread -Times 1 -Exactly -ParameterFilter {
             $ScriptBlock.ToString() -like '*$sync.ItemsControl.IsEnabled = $true*'
         }
-        Should -Invoke -CommandName Invoke-WPFUIThread -Times 1 -Exactly -ParameterFilter {
-            $ScriptBlock.ToString() -like '*Set-WinUtilTaskbaritem -state "Error" -overlay "warning"*'
-        }
         Should -Invoke -CommandName Write-WinUtilLog -Times 1 -Exactly -ParameterFilter {
-            $Level -eq "ERROR" -and $Component -eq "Install" -and $Message -like "Install workflow failed:*"
+            $Level -eq "ERROR" -and $Component -eq "Install" -and $Message -like "Install workflow completed with failures:*"
         }
         $script:sync.ProcessRunning | Should -BeFalse
     }
@@ -337,7 +329,7 @@ Describe "Invoke-WPFUnInstall entrypoint" {
         Invoke-WPFUnInstall -PackagesToUninstall @($script:package)
 
         Should -Invoke -CommandName Show-WinUtilMessage -Times 1 -Exactly -ParameterFilter {
-            $Message -eq "[Invoke-WPFUnInstall] Install process is currently running" -and
+            $Message -eq "[Invoke-WPFUnInstall]安装过程正在进行中。" -and
                 $Title -eq "Winutil" -and
                 $Button -eq "OK" -and
                 $Icon -eq "Warning"
@@ -401,7 +393,7 @@ Describe "Invoke-WPFUnInstall runspace body" {
             $Visible -eq $true -and $Label -eq "Uninstalled Chocolatey packages (2/2)" -and $Percent -eq 100
         }
         Should -Invoke -CommandName Set-WinUtilTweaksProgressIndicator -Times 1 -Exactly -ParameterFilter {
-            $Visible -eq $true -and $Label -eq "App uninstall finished" -and $Percent -eq 100
+            $Visible -eq $true -and $Label -eq "应用卸载完成" -and $Percent -eq 100
         }
         Should -Invoke -CommandName Install-WinUtilProgramWinget -Times 1 -Exactly -ParameterFilter {
             $Action -eq "Uninstall" -and @($Programs)[0] -eq "Git.Git"

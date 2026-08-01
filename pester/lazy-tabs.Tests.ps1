@@ -24,6 +24,14 @@ Describe "Initialize-WinUtilTabContent" {
                 tweaks = [pscustomobject]@{}
                 feature = [pscustomobject]@{}
                 appx = [pscustomobject]@{}
+                strings = [pscustomobject]@{
+                    tabInstall = "Install"
+                    tabTweaks  = "Tweaks"
+                    tabConfig  = "Config"
+                    tabUpdates = "Updates"
+                    tabWin11   = "Win11ISO"
+                    tabAppX    = "AppX"
+                }
             }
         })
 

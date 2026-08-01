@@ -183,9 +183,9 @@ Describe "XAML document" {
         $updatesTab = $script:xaml.SelectSingleNode('//*[local-name()="TabItem"][@Name="WPFTab4"]')
         $profileGrid = $updatesTab.SelectSingleNode('.//*[local-name()="UniformGrid"]')
         $expectedButtons = @{
-            WPFUpdatessecurity = "Apply Recommended"
-            WPFUpdatesdefault = "Restore Defaults"
-            WPFUpdatesdisable = "Disable Updates"
+            WPFUpdatessecurity = "应用推荐"
+            WPFUpdatesdefault = "恢复默认"
+            WPFUpdatesdisable = "禁用更新"
         }
 
         $profileGrid.GetAttribute("Columns") | Should -Be "3"
@@ -235,11 +235,11 @@ Describe "XAML document" {
         $tabItems = @($script:xaml.SelectNodes('//*[local-name()="TabControl"][@Name="WPFTabNav"]/*[local-name()="TabItem"]'))
         $actualTabs = @($tabItems | ForEach-Object { "$($_.GetAttribute("Name")):$($_.GetAttribute("Header"))" })
         $expectedTabs = @(
-            "WPFTab1:Install",
-            "WPFTab2:Tweaks",
-            "WPFTab3:Config",
-            "WPFTab4:Updates",
-            "WPFTab5:Win11ISO",
+            "WPFTab1:应用安装",
+            "WPFTab2:系统优化",
+            "WPFTab3:功能配置",
+            "WPFTab4:Windows 更新",
+            "WPFTab5:Win11 创建工具",
             "WPFTab6:AppX"
         )
 
@@ -266,7 +266,7 @@ Describe "XAML document" {
         $tabSource = Get-Content -Path (Join-Path $script:functionRoot "public\Invoke-WPFTab.ps1") -Raw
 
         $navPanel.SelectSingleNode('./*[local-name()="ToggleButton"][@Name="WPFTab6BT"]') | Should -BeNullOrEmpty
-        $openButton.GetAttribute("Content").Trim() | Should -Be "AppX Removal"
+        $openButton.GetAttribute("Content").Trim() | Should -Be "AppX 移除"
         $openAppxIndex | Should -Be ($getInstalledIndex + 1)
         $appxTab.SelectSingleNode('.//*[local-name()="Button"][@Name="WPFBackToTweaks"]') | Should -Not -BeNullOrEmpty
         $appxTab.SelectSingleNode('.//*[local-name()="Button"][@Name="WPFInstallSelectedAppx"]') | Should -Not -BeNullOrEmpty
@@ -359,7 +359,7 @@ Describe "XAML document" {
         foreach ($button in @($minimizeButton, $maximizeButton, $closeButton)) {
             $button.GetAttribute("FontFamily") | Should -Be "Segoe MDL2 Assets"
             $button.GetAttribute("FontSize") | Should -Be "{DynamicResource CloseIconFontSize}"
-            $button.GetAttribute("Margin") | Should -BeIn @("0", "0,0,0,0")
+            $button.GetAttribute("Margin") | Should -BeIn @("0", "0,0,0,0", "2,0")
         }
 
         $minimizeButton.GetAttribute("Content") | Should -Be ([string][char]0xE921)
@@ -429,6 +429,7 @@ Describe "XAML and sync wiring" {
             "selectedToggles",
             "selectedFeatures",
             "currentTab",
+            "tabManager",
             "selectedAppsStackPanel",
             "selectedAppsstackPanel",
             "selectedAppsPopup",

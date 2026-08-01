@@ -59,6 +59,7 @@ namespace System.Windows.Controls
 "@
     }
 
+    . (Join-Path $script:repoRoot "functions\private\Update-WinUtilInstallButtonFeedback.ps1")
     . (Join-Path $script:repoRoot "functions\private\Update-WinUtilSelections.ps1")
     . (Join-Path $script:repoRoot "functions\private\Reset-WPFCheckBoxes.ps1")
     . (Join-Path $script:repoRoot "functions\public\Invoke-WPFGetInstalled.ps1")
@@ -401,7 +402,7 @@ Describe "Invoke-WPFToggleAllCategories" {
         Invoke-WPFToggleAllCategories -Action "Expand"
 
         Should -Invoke -CommandName Write-Warning -Times 1 -Exactly -ParameterFilter {
-            $Message -eq "ItemsControl not initialized"
+            $Message -eq "ItemsControl 未初始化"
         }
     }
 }

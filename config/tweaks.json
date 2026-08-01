@@ -684,7 +684,7 @@
         "Name": "ProductVersion",
         "Type": "String",
         "Value": "Windows 11",
-        "OriginalValue": ""
+        "OriginalValue": "<RemoveEntry>"
       }
     ],
     "link": "https://github.com/missyouling/winutil-chinese"
@@ -1435,7 +1435,7 @@
     "category": "高级优化 - 谨慎操作",
     "panel": "1",
     "InvokeScript": [
-      "# 去除快捷方式小箭头\n$shell32 = \"$env:SystemRoot\\System32\\shell32.dll,-50\"\nif (-not (Test-Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Shell Icons')) { New-Item -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Shell Icons' -Force }'\nSet-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Shell Icons' -Name '29' -Value $shell32 -Type String"
+      "# 去除快捷方式小箭头\n$shell32 = \"$env:SystemRoot\\System32\\shell32.dll,-50\"\nif (-not (Test-Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Shell Icons')) { New-Item -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Shell Icons' -Force }\nSet-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Shell Icons' -Name '29' -Value $shell32 -Type String"
     ],
     "UndoScript": [
       "Remove-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Shell Icons' -Name '29' -ErrorAction SilentlyContinue"

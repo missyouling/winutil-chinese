@@ -433,7 +433,7 @@ Describe "Invoke-WPFAppxInstall" {
             $Visible -eq $true -and $Label -eq "Installed Example App (1/1)" -and $Percent -eq 100
         }
         Should -Invoke -CommandName Set-WinUtilTweaksProgressIndicator -Times 1 -Exactly -ParameterFilter {
-            $Visible -eq $true -and $Label -eq "AppX install finished" -and $Percent -eq 100
+            $Visible -eq $true -and $Label -eq "AppX 安装完成" -and $Percent -eq 100
         }
         Should -Invoke -CommandName Invoke-WPFUIThread -Times 1 -Exactly -ParameterFilter {
             $ScriptBlock.ToString() -like '*Set-WinUtilTaskbaritem -state "None" -overlay "checkmark"*'
