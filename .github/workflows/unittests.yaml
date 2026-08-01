@@ -17,8 +17,9 @@ jobs:
       - name: 检出代码
         uses: actions/checkout@v4
 
-      - name: 设置 PowerShell
-        uses: actions/setup-powershell@v1
+      - name: 确认 PowerShell 版本
+        shell: pwsh
+        run: $PSVersionTable.PSVersion.ToString()
 
       - name: 安装 Pester 5.8.0
         shell: pwsh

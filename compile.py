@@ -113,6 +113,8 @@ def compile_winutil(source_dir: str, output_path: str):
 
 
 if __name__ == "__main__":
-    s = sys.argv[1] if len(sys.argv) > 1 else "/opt/data/winutil-zh"
-    o = sys.argv[2] if len(sys.argv) > 2 else "/opt/data/winutil-zh/winutil.ps1"
+    # 默认路径基于脚本所在目录（兼容本地与 CI 环境）
+    base = os.path.dirname(os.path.abspath(__file__))
+    s = sys.argv[1] if len(sys.argv) > 1 else base
+    o = sys.argv[2] if len(sys.argv) > 2 else os.path.join(base, "winutil.ps1")
     compile_winutil(s, o)
