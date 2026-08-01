@@ -1,0 +1,37 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: 构建并发布 Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 设置 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: 编译 winutil.ps1
+        run: python3 compile.py
+
+      - name: 验证编译产物
+        run: |
+          test -s winutil.ps1 && echo "✅ winutil.ps1 已生成 ($(stat -c%s winutil.ps1) bytes)"
+
+      - name: 创建 GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: winutil.ps1
+          generate_release_notes: true
+          draft: false
+          prerelease: false

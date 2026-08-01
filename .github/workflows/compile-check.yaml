@@ -1,0 +1,38 @@
+name: Compile Check
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+permissions:
+  contents: read
+
+jobs:
+  compile:
+    name: 编译检查 (python3 compile.py)
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 设置 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: 编译 winutil.ps1
+        run: python3 compile.py
+
+      - name: 验证编译产物
+        run: |
+          test -s winutil.ps1 && echo "✅ winutil.ps1 已生成"
+          python3 - <<'EOF'
+          with open('winutil.ps1', encoding='utf-8') as f:
+              content = f.read()
+          assert len(content) > 500_000, f"winutil.ps1 过小: {len(content)} bytes"
+          assert '__b64' in content, "缺少 Base64 body 标记"
+          assert content.isascii(), "编译产物含非 ASCII 字符（应为纯 ASCII Base64 包裹）"
+          print(f"✅ 产物 {len(content)} bytes，纯 ASCII，结构完整")
+          EOF

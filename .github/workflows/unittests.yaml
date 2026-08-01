@@ -1,0 +1,41 @@
+name: Pester Tests
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Pester 单元测试
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 设置 PowerShell
+        uses: actions/setup-powershell@v1
+
+      - name: 安装 Pester 5.8.0
+        shell: pwsh
+        run: |
+          if (-not (Get-Module -ListAvailable Pester | Where-Object { $_.Version -eq '5.8.0' })) {
+            Install-Module Pester -RequiredVersion 5.8.0 -Force -SkipPublisherCheck -Scope CurrentUser
+          }
+          Import-Module Pester -RequiredVersion 5.8.0 -Force
+          (Get-Module Pester).Version.ToString()
+
+      - name: 运行全部测试
+        shell: pwsh
+        run: |
+          Import-Module Pester -RequiredVersion 5.8.0 -Force
+          $result = Invoke-Pester -Path 'pester/*.Tests.ps1' -Output Detailed -PassThru
+          if ($result.FailedCount -gt 0) {
+            Write-Host "❌ 失败 $($result.FailedCount) 项 / 通过 $($result.PassedCount) 项"
+            exit 1
+          }
+          Write-Host "✅ 全部通过: $($result.PassedCount) 项 (跳过 $($result.SkippedCount) 项)"
