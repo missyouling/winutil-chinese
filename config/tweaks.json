@@ -12,7 +12,7 @@
     "category": "高级优化 - 谨慎操作",
     "panel": "1",
     "Type": "Combobox",
-    "ComboItems": "Default DHCP Google Cloudflare Cloudflare_Malware Cloudflare_Malware_Adult Open_DNS Quad9 AdGuard_Ads_Trackers AdGuard_Ads_Trackers_Malware_Adult",
+    "ComboItems": "阿里DNS 阿里DNS加密 腾讯DNS 腾讯DNS加密 百度DNS 百度DNS加密 114DNS 114DNS加密 Default DHCP Google Cloudflare Cloudflare_Malware Cloudflare_Malware_Adult Open_DNS Quad9 AdGuard_Ads_Trackers AdGuard_Ads_Trackers_Malware_Adult",
     "link": "https://winutil.christitus.com/dev/tweaks/z--advanced-tweaks---caution/changedns"
   },
   "WPFOOSUbutton": {

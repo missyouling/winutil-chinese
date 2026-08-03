@@ -44,6 +44,27 @@
                 Set-DnsClientServerAddress -InterfaceIndex $Adapter.ifIndex -ServerAddresses ($dns.Primary, $dns.Secondary)
                 Write-WinUtilLog -Component "DNS" -Message "Setting IPv6 DNS on adapter $($Adapter.Name) (ifIndex: $($Adapter.ifIndex)) to $($dns.Primary6), $($dns.Secondary6)."
                 Set-DnsClientServerAddress -InterfaceIndex $Adapter.ifIndex -ServerAddresses ($dns.Primary6, $dns.Secondary6)
+
+                # 加密 DNS（DoH）支持：配置了 DoH 模板时启用 DNS over HTTPS
+                if ($dns.DoH) {
+                    Write-WinUtilLog -Component "DNS" -Message "Enabling DoH for $($dns.Primary) with template $($dns.DoH)."
+                    try {
+                        # Windows 11 22H2+ / Server 2022+ 支持 Add-DnsClientDohServerAddress
+                        if (Get-Command Add-DnsClientDohServerAddress -ErrorAction SilentlyContinue) {
+                            Add-DnsClientDohServerAddress -ServerAddress $dns.Primary -DohTemplate $dns.DoH -AllowFallbackToUdp $false -AutoUpgrade $true -ErrorAction Stop
+                            if ($dns.Secondary -and $dns.Secondary -ne $dns.Primary) {
+                                Add-DnsClientDohServerAddress -ServerAddress $dns.Secondary -DohTemplate $dns.DoH -AllowFallbackToUdp $false -AutoUpgrade $true -ErrorAction Stop
+                            }
+                            Write-Host "已为 ${DNSProvider} 启用加密 DNS（DoH）。"
+                        } else {
+                            Write-Warning "当前系统不支持 DoH 加密 DNS（需 Windows 11 22H2 或更高版本），已使用普通 DNS。"
+                            Write-WinUtilLog -Component "DNS" -Message "DoH not supported on this system; plain DNS used."
+                        }
+                    } catch {
+                        Write-Warning "启用 DoH 加密失败，已回退为普通 DNS：$($psitem.Exception.Message)"
+                        Write-WinUtilLog -Level "ERROR" -Component "DNS" -Message "DoH enable failed for $DNSProvider`: $($psitem.Exception.Message)"
+                    }
+                }
             }
         }
         Write-WinUtilLog -Component "DNS" -Message "DNS provider change completed: $DNSProvider"

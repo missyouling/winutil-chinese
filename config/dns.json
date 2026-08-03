@@ -1,4 +1,56 @@
 {
+  "阿里DNS": {
+    "Primary": "223.5.5.5",
+    "Secondary": "223.6.6.6",
+    "Primary6": "2400:3200::1",
+    "Secondary6": "2400:3200:baba::1"
+  },
+  "阿里DNS加密": {
+    "Primary": "223.5.5.5",
+    "Secondary": "223.6.6.6",
+    "Primary6": "2400:3200::1",
+    "Secondary6": "2400:3200:baba::1",
+    "DoH": "https://dns.alidns.com/dns-query"
+  },
+  "腾讯DNS": {
+    "Primary": "119.29.29.29",
+    "Secondary": "119.28.28.28",
+    "Primary6": "2402:4e00::",
+    "Secondary6": "2402:4e00:1::"
+  },
+  "腾讯DNS加密": {
+    "Primary": "119.29.29.29",
+    "Secondary": "119.28.28.28",
+    "Primary6": "2402:4e00::",
+    "Secondary6": "2402:4e00:1::",
+    "DoH": "https://doh.pub/dns-query"
+  },
+  "百度DNS": {
+    "Primary": "180.76.76.76",
+    "Secondary": "180.76.76.77",
+    "Primary6": "2400:da00::6666",
+    "Secondary6": "2400:da00::6666"
+  },
+  "百度DNS加密": {
+    "Primary": "180.76.76.76",
+    "Secondary": "180.76.76.77",
+    "Primary6": "2400:da00::6666",
+    "Secondary6": "2400:da00::6666",
+    "DoH": "https://doh.baidu.com/dns-query"
+  },
+  "114DNS": {
+    "Primary": "114.114.114.114",
+    "Secondary": "114.114.115.115",
+    "Primary6": "240C::6666",
+    "Secondary6": "240C::6644"
+  },
+  "114DNS加密": {
+    "Primary": "114.114.114.114",
+    "Secondary": "114.114.115.115",
+    "Primary6": "240C::6666",
+    "Secondary6": "240C::6644",
+    "DoH": "https://doh.114dns.com/dns-query"
+  },
   "Google": {
     "Primary": "8.8.8.8",
     "Secondary": "8.8.4.4",
