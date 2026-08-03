@@ -9,7 +9,7 @@
 在 **Windows PowerShell（管理员身份）** 中运行：
 
 ```powershell
-irm https://你的域名/win | iex
+irm https://win.mozuiapp.com/win | iex
 ```
 
 - `https://你的域名/` 为欢迎页面（浏览器访问），macOS 风格毛玻璃设计，自动适配 Bing 每日壁纸背景
