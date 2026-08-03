@@ -30,7 +30,7 @@ Describe "Initialize-WinUtilTabContent" {
                     tabConfig  = "Config"
                     tabUpdates = "Updates"
                     tabWin11   = "Win11ISO"
-                    tabAppX    = "AppX"
+                    tabAppX    = "AppX 移除"
                 }
             }
         })

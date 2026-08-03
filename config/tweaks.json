@@ -108,10 +108,10 @@
       }
     ],
     "InvokeScript": [
-      "      Invoke-WinUtilExplorerUpdate      if ($sync.ThemeButton.Content -eq [char]0xF08C) {        Invoke-WinutilThemeChange -theme \"Auto\"      }      "
+      "      Invoke-WinUtilExplorerUpdate\n      if ($sync.ThemeButton.Content -eq [char]0xF08C) {        Invoke-WinutilThemeChange -theme \"Auto\"\n      }"
     ],
     "UndoScript": [
-      "      Invoke-WinUtilExplorerUpdate      if ($sync.ThemeButton.Content -eq [char]0xF08C) {        Invoke-WinutilThemeChange -theme \"Auto\"      }      "
+      "      Invoke-WinUtilExplorerUpdate\n      if ($sync.ThemeButton.Content -eq [char]0xF08C) {        Invoke-WinutilThemeChange -theme \"Auto\"\n      }"
     ],
     "link": "https://winutil.christitus.com/dev/tweaks/customize-preferences/darkmode"
   },
@@ -659,10 +659,10 @@
     "category": "高级优化 - 谨慎操作",
     "panel": "1",
     "InvokeScript": [
-      "      $hostsUrl = Invoke-RestMethod -Uri https://github.com/Ruddernation-Designs/Adobe-URL-Block-List/raw/refs/heads/master/hosts      Add-Content -Path \"$Env:SystemRoot\\System32\\drivers\\etc\\hosts\" -Value $hostsUrl      ipconfig /flushdns      Write-Host 'Added Adobe url block list from host file'      "
+      "      $hostsUrl = Invoke-RestMethod -Uri https://github.com/Ruddernation-Designs/Adobe-URL-Block-List/raw/refs/heads/master/hosts\n      Add-Content -Path \"$Env:SystemRoot\\System32\\drivers\\etc\\hosts\" -Value $hostsUrl\n      ipconfig /flushdns\n      Write-Host 'Added Adobe url block list from host file'"
     ],
     "UndoScript": [
-      "      Set-Content \"$Env:SystemRoot\\System32\\drivers\\etc\\hosts\" (          (Get-Content \"$Env:SystemRoot\\System32\\drivers\\etc\\hosts\") -join \"`n\" -replace '(?s)#New Ver.*', ''      )      ipconfig /flushdns      Write-Host 'Removed Adobe url block list from host file'      "
+      "      Set-Content \"$Env:SystemRoot\\System32\\drivers\\etc\\hosts\" (          (Get-Content \"$Env:SystemRoot\\System32\\drivers\\etc\\hosts\") -join \"`n\" -replace '(?s)#New Ver.*', ''\n      )\n      ipconfig /flushdns\n      Write-Host 'Removed Adobe url block list from host file'"
     ],
     "link": "https://winutil.christitus.com/dev/tweaks/z--advanced-tweaks---caution/blockadobenet"
   },
@@ -815,7 +815,7 @@
     "category": "基本优化",
     "panel": "1",
     "InvokeScript": [
-      "      Remove-Item -Path \"$Env:Temp\\*\" -Recurse -Force      Remove-Item -Path \"$Env:SystemRoot\\Temp\\*\" -Recurse -Force      "
+      "      Remove-Item -Path \"$Env:Temp\\*\" -Recurse -Force\n      Remove-Item -Path \"$Env:SystemRoot\\Temp\\*\" -Recurse -Force"
     ],
     "link": "https://winutil.christitus.com/dev/tweaks/essential-tweaks/deletetempfiles"
   },
@@ -931,10 +931,10 @@
     "category": "基本优化",
     "panel": "1",
     "InvokeScript": [
-      "      # Previously detected folders      $bags = \"HKCU:\\Software\\Classes\\Local Settings\\Software\\Microsoft\\Windows\\Shell\\Bags\"      # Folder types lookup table      $bagMRU = \"HKCU:\\Software\\Classes\\Local Settings\\Software\\Microsoft\\Windows\\Shell\\BagMRU\"      # Flush Explorer view database      Remove-Item -Path $bags -Recurse -Force      Write-Host \"Removed $bags\"      Remove-Item -Path $bagMRU -Recurse -Force      Write-Host \"Removed $bagMRU\"      # Every folder      $allFolders = \"HKCU:\\Software\\Classes\\Local Settings\\Software\\Microsoft\\Windows\\Shell\\Bags\\AllFolders\\Shell\"      if (!(Test-Path $allFolders)) {        New-Item -Path $allFolders -Force        Write-Host \"Created $allFolders\"      }      # Generic view      New-ItemProperty -Path $allFolders -Name \"FolderType\" -Value \"NotSpecified\" -PropertyType String -Force      Write-Host \"Set FolderType to NotSpecified\"      Write-Host Please sign out and back in, or restart your computer to apply the changes!      "
+      "      # Previously detected folders\n      $bags = \"HKCU:\\Software\\Classes\\Local Settings\\Software\\Microsoft\\Windows\\Shell\\Bags\"\n      # Folder types lookup table\n      $bagMRU = \"HKCU:\\Software\\Classes\\Local Settings\\Software\\Microsoft\\Windows\\Shell\\BagMRU\"\n      # Flush Explorer view database\n      Remove-Item -Path $bags -Recurse -Force\n      Write-Host \"Removed $bags\"\n      Remove-Item -Path $bagMRU -Recurse -Force\n      Write-Host \"Removed $bagMRU\"\n      # Every folder\n      $allFolders = \"HKCU:\\Software\\Classes\\Local Settings\\Software\\Microsoft\\Windows\\Shell\\Bags\\AllFolders\\Shell\"\n      if (!(Test-Path $allFolders)) {        New-Item -Path $allFolders -Force        Write-Host \"Created $allFolders\"\n      }\n      # Generic view\n      New-ItemProperty -Path $allFolders -Name \"FolderType\" -Value \"NotSpecified\" -PropertyType String -Force\n      Write-Host \"Set FolderType to NotSpecified\"\n      Write-Host Please sign out and back in, or restart your computer to apply the changes!"
     ],
     "UndoScript": [
-      "      # Previously detected folders      $bags = \"HKCU:\\Software\\Classes\\Local Settings\\Software\\Microsoft\\Windows\\Shell\\Bags\"      # Folder types lookup table      $bagMRU = \"HKCU:\\Software\\Classes\\Local Settings\\Software\\Microsoft\\Windows\\Shell\\BagMRU\"      # Flush Explorer view database      Remove-Item -Path $bags -Recurse -Force      Write-Host \"Removed $bags\"      Remove-Item -Path $bagMRU -Recurse -Force      Write-Host \"Removed $bagMRU\"      Write-Host Please sign out and back in, or restart your computer to apply the changes!      "
+      "      # Previously detected folders\n      $bags = \"HKCU:\\Software\\Classes\\Local Settings\\Software\\Microsoft\\Windows\\Shell\\Bags\"\n      # Folder types lookup table\n      $bagMRU = \"HKCU:\\Software\\Classes\\Local Settings\\Software\\Microsoft\\Windows\\Shell\\BagMRU\"\n      # Flush Explorer view database\n      Remove-Item -Path $bags -Recurse -Force\n      Write-Host \"Removed $bags\"\n      Remove-Item -Path $bagMRU -Recurse -Force\n      Write-Host \"Removed $bagMRU\"\n      Write-Host Please sign out and back in, or restart your computer to apply the changes!"
     ],
     "link": "https://winutil.christitus.com/dev/tweaks/essential-tweaks/disableexplorerautodiscovery"
   },
@@ -1074,7 +1074,7 @@
     "category": "基本优化",
     "panel": "1",
     "InvokeScript": [
-      "      cleanmgr.exe /d C: /VERYLOWDISK      Dism.exe /online /Cleanup-Image /StartComponentCleanup /ResetBase      "
+      "      cleanmgr.exe /d C: /VERYLOWDISK\n      Dism.exe /online /Cleanup-Image /StartComponentCleanup /ResetBase"
     ],
     "link": "https://winutil.christitus.com/dev/tweaks/essential-tweaks/diskcleanup"
   },
@@ -1493,7 +1493,7 @@
       }
     ],
     "InvokeScript": [
-      "      $RazerPath = \"$Env:SystemRoot\\Installer\\Razer\"      if (Test-Path $RazerPath) {        Remove-Item $RazerPath\\* -Recurse -Force      } else {        New-Item -Path $RazerPath -ItemType Directory      }      icacls $RazerPath /deny \"Everyone:(W)\"      "
+      "      $RazerPath = \"$Env:SystemRoot\\Installer\\Razer\"\n      if (Test-Path $RazerPath) {\n      Remove-Item $RazerPath\\* -Recurse -Force\n      } else {\n      New-Item -Path $RazerPath -ItemType Directory\n      }\n      icacls $RazerPath /deny \"Everyone:(W)\""
     ],
     "UndoScript": [
       "      icacls \"$Env:SystemRoot\\Installer\\Razer\" /remove:d Everyone      "
@@ -1506,10 +1506,10 @@
     "category": "高级优化 - 谨慎操作",
     "panel": "1",
     "InvokeScript": [
-      "      $Path = Resolve-Path -Path \"$Env:ProgramFiles (x86)\\Microsoft\\Edge\\Application\\*\\Installer\\setup.exe\" | Select-Object -Last 1      if (Test-Path $Path) {          New-Item -Path \"$Env:SystemRoot\\SystemApps\\Microsoft.MicrosoftEdge_8wekyb3d8bbwe\\MicrosoftEdge.exe\" -Force          Start-Process -FilePath $Path -ArgumentList \"--uninstall --system-level --force-uninstall --delete-profile\" -Wait          Write-Host \"Microsoft Edge was removed\"      } else {          Write-Host \"Microsoft Edge is not installed\"      }      "
+      "      $Path = Resolve-Path -Path \"$Env:ProgramFiles (x86)\\Microsoft\\Edge\\Application\\*\\Installer\\setup.exe\" | Select-Object -Last 1\n      if (Test-Path $Path) {          New-Item -Path \"$Env:SystemRoot\\SystemApps\\Microsoft.MicrosoftEdge_8wekyb3d8bbwe\\MicrosoftEdge.exe\" -Force          Start-Process -FilePath $Path -ArgumentList \"--uninstall --system-level --force-uninstall --delete-profile\" -Wait          Write-Host \"Microsoft Edge was removed\"\n      } else {          Write-Host \"Microsoft Edge is not installed\"\n      }"
     ],
     "UndoScript": [
-      "      Write-Host \"Installing Microsoft Edge...\"      winget install Microsoft.Edge --source winget      "
+      "      Write-Host \"Installing Microsoft Edge...\"\n      winget install Microsoft.Edge --source winget"
     ],
     "link": "https://winutil.christitus.com/dev/tweaks/z--advanced-tweaks---caution/removeedge"
   },
@@ -1549,10 +1549,10 @@
     "category": "高级优化 - 谨慎操作",
     "panel": "1",
     "InvokeScript": [
-      "      # Deny permission to remove OneDrive folder      icacls $Env:OneDrive /deny \"Administrators:(D,DC)\"      Write-Host \"Uninstalling OneDrive...\"      Start-Process -FilePath (Join-Path $Env:SystemRoot \"System32\\OneDriveSetup.exe\") -ArgumentList '/uninstall' -Wait      # Some of OneDrive files use explorer, and OneDrive uses FileCoAuth      Write-Host \"Removing leftover OneDrive Files...\"      Stop-Process -Name FileCoAuth,Explorer      Remove-Item \"$Env:LocalAppData\\Microsoft\\OneDrive\" -Recurse -Force      Remove-Item \"$Env:ProgramData\\Microsoft OneDrive\" -Recurse -Force      # Grant back permission to access OneDrive folder      icacls $Env:OneDrive /grant \"Administrators:(D,DC)\"      if (-not (Get-ChildItem -Path $Env:OneDrive)) {          Remove-Item -Path $Env:OneDrive -Recurse          [Environment]::SetEnvironmentVariable('OneDrive', $null, 'User')      }      # Disable OneSyncSvc      Set-Service -Name OneSyncSvc -StartupType Disabled      "
+      "      # Deny permission to remove OneDrive folder\n      icacls $Env:OneDrive /deny \"Administrators:(D,DC)\"\n      Write-Host \"Uninstalling OneDrive...\"\n      Start-Process -FilePath (Join-Path $Env:SystemRoot \"System32\\OneDriveSetup.exe\") -ArgumentList '/uninstall' -Wait\n      # Some of OneDrive files use explorer, and OneDrive uses FileCoAuth\n      Write-Host \"Removing leftover OneDrive Files...\"\n      Stop-Process -Name FileCoAuth,Explorer\n      Remove-Item \"$Env:LocalAppData\\Microsoft\\OneDrive\" -Recurse -Force\n      Remove-Item \"$Env:ProgramData\\Microsoft OneDrive\" -Recurse -Force\n      # Grant back permission to access OneDrive folder\n      icacls $Env:OneDrive /grant \"Administrators:(D,DC)\"\n      if (-not (Get-ChildItem -Path $Env:OneDrive)) {          Remove-Item -Path $Env:OneDrive -Recurse          [Environment]::SetEnvironmentVariable('OneDrive', $null, 'User')\n      }\n      # Disable OneSyncSvc\n      Set-Service -Name OneSyncSvc -StartupType Disabled"
     ],
     "UndoScript": [
-      "      Write-Host \"Installing OneDrive\"      winget install Microsoft.Onedrive --source winget      # Enabled OneSyncSvc      Set-Service -Name OneSyncSvc -StartupType Automatic      "
+      "      Write-Host \"Installing OneDrive\"\n      winget install Microsoft.Onedrive --source winget\n      # Enabled OneSyncSvc\n      Set-Service -Name OneSyncSvc -StartupType Automatic"
     ],
     "link": "https://winutil.christitus.com/dev/tweaks/z--advanced-tweaks---caution/removeonedrive"
   },
@@ -1585,7 +1585,7 @@
       }
     ],
     "InvokeScript": [
-      "      if (-not (Get-ComputerRestorePoint)) {          Enable-ComputerRestore -Drive $Env:SystemDrive      }      Checkpoint-Computer -Description \"System Restore Point created by WinUtil\" -RestorePointType MODIFY_SETTINGS      Write-Host \"System Restore Point Created Successfully\" -ForegroundColor Green      "
+      "      if (-not (Get-ComputerRestorePoint)) {          Enable-ComputerRestore -Drive $Env:SystemDrive\n      }\n      Checkpoint-Computer -Description \"System Restore Point created by WinUtil\" -RestorePointType MODIFY_SETTINGS\n      Write-Host \"System Restore Point Created Successfully\" -ForegroundColor Green"
     ],
     "link": "https://winutil.christitus.com/dev/tweaks/essential-tweaks/restorepoint"
   },
@@ -1611,7 +1611,7 @@
     "category": "高级优化 - 谨慎操作",
     "panel": "1",
     "InvokeScript": [
-      "      New-Item -Path \"HKCU:\\Software\\Classes\\CLSID\\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}\" -Name InprocServer32 -Value \"\" -Force      Stop-Process -Name explorer      "
+      "      New-Item -Path \"HKCU:\\Software\\Classes\\CLSID\\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}\" -Name InprocServer32 -Value \"\" -Force\n      Stop-Process -Name explorer"
     ],
     "UndoScript": [
       "Remove-Item -Path \"HKCU:\\Software\\Classes\\CLSID\\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}\" -Recurse"
@@ -1651,7 +1651,7 @@
       }
     ],
     "InvokeScript": [
-      "      $Memory = (Get-CimInstance Win32_PhysicalMemory | Measure-Object Capacity -Sum).Sum / 1KB      Set-ItemProperty -Path \"HKLM:\\SYSTEM\\CurrentControlSet\\Control\" -Name SvcHostSplitThresholdInKB -Value $Memory      "
+      "      $Memory = (Get-CimInstance Win32_PhysicalMemory | Measure-Object Capacity -Sum).Sum / 1KB\n      Set-ItemProperty -Path \"HKLM:\\SYSTEM\\CurrentControlSet\\Control\" -Name SvcHostSplitThresholdInKB -Value $Memory"
     ],
     "link": "https://winutil.christitus.com/dev/tweaks/essential-tweaks/services"
   },
@@ -1793,10 +1793,10 @@
       }
     ],
     "InvokeScript": [
-      "      # Disable Defender Auto Sample Submission      Set-MpPreference -SubmitSamplesConsent 2      # Disable (Connected User Experiences and Telemetry) Service      Set-Service -Name diagtrack -StartupType Disabled      # Disable (Windows Error Reporting Manager) Service      Set-Service -Name wermgr -StartupType Disabled      # Disable PowerShell 7 telemetry      [Environment]::SetEnvironmentVariable('POWERSHELL_TELEMETRY_OPTOUT', '1', 'Machine')      Remove-ItemProperty -Path \"HKCU:\\Software\\Microsoft\\Siuf\\Rules\" -Name PeriodInNanoSeconds      "
+      "      # Disable Defender Auto Sample Submission\n      Set-MpPreference -SubmitSamplesConsent 2\n      # Disable (Connected User Experiences and Telemetry) Service\n      Set-Service -Name diagtrack -StartupType Disabled\n      # Disable (Windows Error Reporting Manager) Service\n      Set-Service -Name wermgr -StartupType Disabled\n      # Disable PowerShell 7 telemetry\n      [Environment]::SetEnvironmentVariable('POWERSHELL_TELEMETRY_OPTOUT', '1', 'Machine')\n      Remove-ItemProperty -Path \"HKCU:\\Software\\Microsoft\\Siuf\\Rules\" -Name PeriodInNanoSeconds"
     ],
     "UndoScript": [
-      "      # Enable Defender Auto Sample Submission      Set-MpPreference -SubmitSamplesConsent 1      # Enable (Connected User Experiences and Telemetry) Service      Set-Service -Name diagtrack -StartupType Automatic      # Enable (Windows Error Reporting Manager) Service      Set-Service -Name wermgr -StartupType Automatic      # Enable PowerShell 7 telemetry      [Environment]::SetEnvironmentVariable('POWERSHELL_TELEMETRY_OPTOUT', '', 'Machine')      "
+      "      # Enable Defender Auto Sample Submission\n      Set-MpPreference -SubmitSamplesConsent 1\n      # Enable (Connected User Experiences and Telemetry) Service\n      Set-Service -Name diagtrack -StartupType Automatic\n      # Enable (Windows Error Reporting Manager) Service\n      Set-Service -Name wermgr -StartupType Automatic\n      # Enable PowerShell 7 telemetry\n      [Environment]::SetEnvironmentVariable('POWERSHELL_TELEMETRY_OPTOUT', '', 'Machine')"
     ],
     "link": "https://winutil.christitus.com/dev/tweaks/essential-tweaks/telemetry"
   },
@@ -1844,7 +1844,7 @@
     "category": "基本优化",
     "panel": "1",
     "InvokeScript": [
-      "      # Sometimes if you dont stop the Widgets process the removal may fail      Get-Process *Widget* | Stop-Process      Get-AppxPackage Microsoft.WidgetsPlatformRuntime -AllUsers | Remove-AppxPackage -AllUsers      Get-AppxPackage MicrosoftWindows.Client.WebExperience -AllUsers | Remove-AppxPackage -AllUsers      Invoke-WinUtilExplorerUpdate -action \"restart\"      Write-Host \"Removed widgets\"      "
+      "      # Sometimes if you dont stop the Widgets process the removal may fail\n      Get-Process *Widget* | Stop-Process\n      Get-AppxPackage Microsoft.WidgetsPlatformRuntime -AllUsers | Remove-AppxPackage -AllUsers\n      Get-AppxPackage MicrosoftWindows.Client.WebExperience -AllUsers | Remove-AppxPackage -AllUsers\n      Invoke-WinUtilExplorerUpdate -action \"restart\"\n      Write-Host \"Removed widgets\""
     ],
     "link": "https://winutil.christitus.com/dev/tweaks/essential-tweaks/widget"
   },
@@ -1870,7 +1870,7 @@
       }
     ],
     "InvokeScript": [
-      "      $Appx = (Get-AppxPackage MicrosoftWindows.Client.CoreAI).PackageFullName      $Sid = (Get-LocalUser $Env:UserName).Sid.Value      New-Item \"HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Appx\\AppxAllUserStore\\EndOfLife\\$Sid\\$Appx\" -Force      Get-AppxPackage -AllUsers \"*Copilot*\" | Remove-AppxPackage -AllUsers      winget uninstall -e --name \"Copilot\" --silent --force --accept-source-agreements 2>$null      Get-AppxPackage -AllUsers Microsoft.MicrosoftOfficeHub | Remove-AppxPackage -AllUsers      if ($Appx) {          Remove-AppxPackage $Appx      }      Set-Service -Name WSAIFabricSvc -StartupType Disabled      Disable-WindowsOptionalFeature -FeatureName Recall -Online -NoRestart      Write-Host \"Windows AI Disabled\"      "
+      "      $Appx = (Get-AppxPackage MicrosoftWindows.Client.CoreAI).PackageFullName\n      $Sid = (Get-LocalUser $Env:UserName).Sid.Value\n      New-Item \"HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Appx\\AppxAllUserStore\\EndOfLife\\$Sid\\$Appx\" -Force\n      Get-AppxPackage -AllUsers \"*Copilot*\" | Remove-AppxPackage -AllUsers\n      winget uninstall -e --name \"Copilot\" --silent --force --accept-source-agreements 2>$null\n      Get-AppxPackage -AllUsers Microsoft.MicrosoftOfficeHub | Remove-AppxPackage -AllUsers\n      if ($Appx) {          Remove-AppxPackage $Appx\n      }\n      Set-Service -Name WSAIFabricSvc -StartupType Disabled\n      Disable-WindowsOptionalFeature -FeatureName Recall -Online -NoRestart\n      Write-Host \"Windows AI Disabled\""
     ],
     "link": "https://winutil.christitus.com/dev/tweaks/z--advanced-tweaks---caution/windowsai"
   },

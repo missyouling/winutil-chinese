@@ -55,6 +55,35 @@ namespace System.Windows.Controls
     {
         public System.Collections.ArrayList Children { get; } = new System.Collections.ArrayList();
     }
+
+    public class Control
+    {
+        public static object BackgroundProperty { get; } = new object();
+        public static object ForegroundProperty { get; } = new object();
+        public static object BorderBrushProperty { get; } = new object();
+        public static object BorderThicknessProperty { get; } = new object();
+        public static object FontSizeProperty { get; } = new object();
+        public static object FontFamilyProperty { get; } = new object();
+        public static object HeightProperty { get; } = new object();
+        public static object WidthProperty { get; } = new object();
+        public object Background { get; set; }
+        public object Foreground { get; set; }
+        public void ClearValue(object dp) { }
+        public void SetResourceReference(object dp, object key) { }
+    }
+
+    public class Button : Control
+    {
+    }
+}
+
+namespace System.Windows.Media
+{
+    public static class Brushes
+    {
+        public static object Black { get; } = new object();
+        public static object White { get; } = new object();
+    }
 }
 "@
     }

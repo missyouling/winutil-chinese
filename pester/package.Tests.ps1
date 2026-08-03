@@ -126,7 +126,6 @@ Describe "Install-WinUtilProgramWinget" {
             $FilePath -eq "winget" -and
                 (@($ArgumentList) -join "|") -eq "install|--id|Git.Git|--accept-package-agreements|--accept-source-agreements|--source|winget|--silent" -and
                 $NoNewWindow -eq $true -and
-                $Wait -eq $true -and
                 $PassThru -eq $true
         }
     }
