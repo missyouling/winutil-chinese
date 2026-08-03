@@ -165,6 +165,11 @@ Describe "Applications config" {
                 }
             }
 
+            # 无包管理器源但提供官网链接的应用视为有效（UI 展示链接供手动下载）
+            if (-not $hasInstallSource -and $entryFields -contains "link" -and -not [string]::IsNullOrWhiteSpace([string]$entry.Value.link)) {
+                $hasInstallSource = $true
+            }
+
             if (-not $hasInstallSource) {
                 $invalidEntries.Add("$($entry.Name) missing winget/choco install source")
             }
