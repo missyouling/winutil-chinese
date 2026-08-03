@@ -45,6 +45,7 @@ BeforeAll {
 
         [pscustomobject]@{
             Name = $Name
+            content = $Name
             Description = "$Name package"
             winget = $Winget
             choco = $Choco

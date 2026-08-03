@@ -55,7 +55,15 @@ namespace System.Windows.Controls
     {
         public System.Collections.ArrayList Children { get; } = new System.Collections.ArrayList();
     }
+}
+"@
+    }
 
+    # Control/Brushes 单独无条件加载（其他测试文件可能已定义 CheckBox 导致上面的块被跳过）
+    if (-not ("System.Windows.Controls.Control" -as [type])) {
+        Add-Type @"
+namespace System.Windows.Controls
+{
     public class Control
     {
         public static object BackgroundProperty { get; } = new object();

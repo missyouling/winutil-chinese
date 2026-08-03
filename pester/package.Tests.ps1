@@ -163,7 +163,6 @@ Describe "Install-WinUtilProgramChoco" {
             $FilePath -eq "choco" -and
                 $ArgumentList -eq "install git vlc -y" -and
                 $NoNewWindow -eq $true -and
-                $Wait -eq $true -and
                 $PassThru -eq $true
         }
     }

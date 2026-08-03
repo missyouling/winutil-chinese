@@ -105,16 +105,43 @@ Describe "Compiled WinUtil sanity" {
     BeforeAll {
         $script:compiledPath = Join-Path $script:repoRoot "winutil.ps1"
 
+        # 用官方编译脚本 compile.py 生成产物（Base64 纯 ASCII 方案）
         Push-Location $script:repoRoot
         try {
-            & (Join-Path $script:repoRoot "Compile.ps1")
+            python3 compile.py | Out-Null
         } finally {
             Pop-Location
+        }
+
+        # 解码 Base64 body，用于内容断言
+        function script:Get-WinUtilCompiledBody {
+            $content = Get-Content -Path $script:compiledPath -Raw
+            $bodyMarker = "`$__b64 = @'"
+            $b64Start = $content.IndexOf($bodyMarker) + $bodyMarker.Length
+            $b64End = $content.IndexOf("'@", $b64Start)
+            if ($b64Start -lt 0 -or $b64End -lt 0) {
+                throw "Compiled script is missing Base64 body marker."
+            }
+            $b64 = $content.Substring($b64Start, $b64End - $b64Start).Trim()
+            [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($b64))
         }
     }
 
     It "generates winutil.ps1" {
         Test-Path -Path $script:compiledPath | Should -BeTrue
+    }
+
+    It "wraps the body in pure ASCII Base64" {
+        $content = Get-Content -Path $script:compiledPath -Raw
+        $content.IsNormalized([System.Text.NormalizationForm]::FormC) | Should -BeTrue
+        ($content -match '^\uFEFF') | Should -BeFalse
+        # Base64 包裹层必须纯 ASCII
+        $wrapper = $content -replace "(?s)\`$__b64 = @'.*?'@", ''
+        foreach ($ch in $wrapper.ToCharArray()) {
+            if ([int]$ch -gt 127) {
+                throw "Wrapper contains non-ASCII character: U+$([int]$ch.ToString('X4'))"
+            }
+        }
     }
 
     It "parses compiled winutil.ps1 with the current PowerShell parser" {
@@ -126,11 +153,12 @@ Describe "Compiled WinUtil sanity" {
     }
 
     It "contains embedded configs, XAML, autounattend XML, and runspace bootstrap" {
-        $content = Get-Content -Path $script:compiledPath -Raw
+        $body = Get-WinUtilCompiledBody
         $requiredSnippets = @(
-            ('$sync.configs.applications = @' + "'"),
-            ('$inputXML = @' + "'"),
-            ('$WinUtilAutounattendXml = @' + "'"),
+            '$sync.configs.applications =',
+            '$sync.configs.appx =',
+            '$inputXML =',
+            '$WinUtilAutounattendXml =',
             "SessionStateVariableEntry -ArgumentList 'sync'",
             "SessionStateFunctionEntry",
             "[runspacefactory]::CreateRunspacePool",
@@ -138,17 +166,17 @@ Describe "Compiled WinUtil sanity" {
         )
 
         foreach ($snippet in $requiredSnippets) {
-            if (-not $content.Contains($snippet)) {
+            if (-not $body.Contains($snippet)) {
                 throw "Compiled script is missing expected content: $snippet"
             }
         }
     }
 
     It "transforms applications config keys with WPFInstall prefixes" {
-        $content = Get-Content -Path $script:compiledPath -Raw
+        $body = Get-WinUtilCompiledBody
         $configMatch = [regex]::Match(
-            $content,
-            "(?s)\`$sync\.configs\.applications = @'\r?\n(?<json>.*?)\r?\n'@ \| ConvertFrom-Json"
+            $body,
+            "(?s)\`$sync\.configs\.applications = \[System\.Text\.Encoding\]::UTF8\.GetString\(\[System\.Convert\]::FromBase64String\('(?<b64>[^']+)'\)\) \| ConvertFrom-Json"
         )
 
         if (-not $configMatch.Success) {
@@ -156,7 +184,8 @@ Describe "Compiled WinUtil sanity" {
         }
 
         $sourceApps = Get-Content -Path (Join-Path $script:repoRoot "config\applications.json") -Raw | ConvertFrom-Json
-        $compiledApps = $configMatch.Groups["json"].Value | ConvertFrom-Json
+        $compiledJson = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($configMatch.Groups["b64"].Value))
+        $compiledApps = $compiledJson | ConvertFrom-Json
 
         foreach ($sourceApp in $sourceApps.PSObject.Properties) {
             $compiledKey = "WPFInstall$($sourceApp.Name)"
@@ -170,19 +199,19 @@ Describe "Compiled WinUtil sanity" {
     }
 
     It "preserves compile source ordering" {
-        $content = Get-Content -Path $script:compiledPath -Raw
+        $body = Get-WinUtilCompiledBody
         $orderedSnippets = @(
             '$sync.version =',
             'function Add-SelectedAppsMenuItem',
-            ('$sync.configs.applications = @' + "'"),
-            ('$inputXML = @' + "'"),
+            '$sync.configs.applications = [System.Text.Encoding]::UTF8.GetString(',
+            '$inputXML = [System.Text.Encoding]::UTF8.GetString(',
             ('$WinUtilAutounattendXml = @' + "'"),
             '$sync.SearchBarClearButton.Add_Click({'
         )
 
         $lastIndex = -1
         foreach ($snippet in $orderedSnippets) {
-            $index = $content.IndexOf($snippet)
+            $index = $body.IndexOf($snippet)
             if ($index -lt 0) {
                 throw "Compiled script is missing expected ordered content: $snippet"
             }
@@ -195,11 +224,11 @@ Describe "Compiled WinUtil sanity" {
     }
 
     It "replaces the generated build date placeholder" {
-        $content = Get-Content -Path $script:compiledPath -Raw
+        $body = Get-WinUtilCompiledBody
         $expectedBuildDate = Get-Date -Format "yy.MM.dd"
 
-        $content | Should -Not -Match ([regex]::Escape("#{replaceme}"))
-        $content | Should -Match ([regex]::Escape('$sync.version = "' + $expectedBuildDate + '"'))
+        $body | Should -Not -Match ([regex]::Escape("#{replaceme}"))
+        $body | Should -Match ([regex]::Escape('$sync.version = "' + $expectedBuildDate + '"'))
     }
 }
 
