@@ -1,178 +1,182 @@
-# 🎯 WinUtil 中文版 / Chinese Edition
+# 🎯 WinUtil 中文版
 
-> 全中文化的 Windows 系统优化工具 — 基于 [Chris Titus Tech WinUtil](https://github.com/ChrisTitusTech/winutil)
->
-> Fully localized Chinese edition of the Windows Utility Toolbox
+> 全中文化的 Windows 系统优化工具，基于 [Chris Titus Tech WinUtil](https://github.com/ChrisTitusTech/winutil)，界面、配置、提示信息全部中文化。
 
 ---
 
-## 🚀 快速使用 / Quick Start
-
-### 中文
+## 🚀 快速使用
 
 在 **Windows PowerShell（管理员身份）** 中运行：
 
 ```powershell
-irm https://win.mozuiapp.com/win | iex
+irm https://你的域名/win | iex
 ```
 
-> `https://win.mozuiapp.com/` 为欢迎页面（浏览器访问）— 采用 **macOS 风格毛玻璃设计**，自动适配 Bing 每日壁纸背景
->
-> `https://win.mozuiapp.com/win` 返回 PowerShell 脚本（`irm` 专用）
+- `https://你的域名/` 为欢迎页面（浏览器访问），macOS 风格毛玻璃设计，自动适配 Bing 每日壁纸背景
+- `https://你的域名/win` 返回编译好的 PowerShell 脚本（`irm` 专用）
+- 脚本整体 Base64 编码，完全避免 `irm` 在中文系统上的 ANSI 解码乱码问题
 
-### English
-
-Run the following command in **Windows PowerShell (as Administrator)**:
-
-```powershell
-irm https://win.mozuiapp.com/win | iex
-```
-
-> `https://win.mozuiapp.com/` serves a welcome page (for browsers) — **macOS-style glassmorphism design** with Bing daily wallpaper background
->
-> `https://win.mozuiapp.com/win` serves the PowerShell script (for `irm`)
-
-> **注意 / Note**: Replace `win.mozuiapp.com` with your actual domain if self-hosting
+> 自托管部署方法见下方「自托管部署」章节。
 
 ---
 
-## 📦 功能特性 / Features
-
-### 中文
+## 📦 功能特性
 
 | 功能 | 说明 |
 |:---|:---|
-| 🖥️ **应用安装** | 一键安装常用软件（浏览器、开发工具、多媒体工具等） |
-| ⚙️ **系统优化** | 调整 Windows 设置，优化系统性能与隐私 |
-| 📋 **功能配置** | 启用或禁用 Windows 功能 |
-| 📱 **AppX 管理** | 管理 Windows 内置应用包 |
-| 🎯 **预设方案** | Standard / Minimal / Advanced 一键应用 |
-| 🌙 **主题切换** | 自动 / 深色 / 浅色主题 |
-| 🌐 **完全中文** | 界面、按钮、提示、配置全部中文化 |
+| 🖥️ **应用安装** | 一键安装常用软件，内置 **344 个应用**、29 个分类（浏览器、开发工具、多媒体、通讯、办公、游戏等） |
+| ⚙️ **系统优化** | 81 项优化/撤销优化，覆盖性能、隐私、Windows 更新策略 |
+| 📋 **功能配置** | 启用或禁用 33 项 Windows 功能 |
+| 📱 **AppX 管理** | 管理 33 项 Windows 内置应用包（移除/恢复） |
+| 🌐 **DNS 切换** | 一键切换 8 组公共 DNS（Google、Cloudflare、OpenDNS、Quad9、AdGuard 等） |
+| 🎯 **预设方案** | Standard / Minimal / Advanced / AppxDefault 一键应用 |
+| 🌙 **主题切换** | 自动 / 浅色 / 深色主题 |
+| 💿 **Win11 创建工具** | 下载、挂载、验证并保存 Windows 11 ISO |
+| 🔄 **Windows 更新** | 更新设置与安全策略管理 |
+| 🌐 **完全中文** | XAML 界面、JSON 配置、PowerShell 提示全部中文化 |
 
-### English
+### 命令行参数
 
-| Feature | Description |
+```powershell
+irm https://你的域名/win | iex            # 打开图形界面
+irm https://你的域名/win | iex -Preset Standard   # 直接应用预设
+irm https://你的域名/win | iex -Config xxx.json   # 导入配置
+irm https://你的域名/win | iex -Offline           # 离线模式
+```
+
+| 参数 | 说明 |
 |:---|:---|
-| 🖥️ **App Install** | One-click install of popular apps (browsers, dev tools, media tools, etc.) |
-| ⚙️ **Tweaks** | Adjust Windows settings, optimize performance & privacy |
-| 📋 **Config** | Enable or disable Windows features |
-| 📱 **AppX Manager** | Manage built-in Windows app packages |
-| 🎯 **Presets** | Standard / Minimal / Advanced — apply with one click |
-| 🌙 **Theme** | Auto / Dark / Light mode |
-| 🌐 **Chinese UI** | Full Chinese localization (XAML UI, configs, prompts) |
+| `-Preset` | 预设方案：`Standard` / `Minimal` / `Advanced` |
+| `-Config` | 导入 JSON 配置文件（导出/导入功能对应） |
+| `-Offline` | 离线模式（跳过联网检测） |
 
 ---
 
-## 🛠️ 自托管部署 / Self-Hosting Deployment
+## 🛠️ 自托管部署
 
-### 方案一：Cloudflare Workers（推荐）
+### 方案一：Cloudflare Pages（推荐，自动从 GitHub 部署）
+
+1. 在 Cloudflare Pages 中点击 **"Create a project"** → **"Connect Git"**
+2. 选择本仓库，构建设置：**无构建命令**，输出目录留空
+3. 部署后绑定自定义域名
+4. 每次 `git push` 后自动重新部署
+5. 推送前需手动将编译好的 `winutil.ps1` 同步到 `cloudflare-pages/` 目录
+
+### 方案二：Cloudflare Workers
 
 1. 在 Cloudflare Dashboard 创建一个 **Worker**
 2. 打开 `cloudflare-worker/src/worker.js`，复制全部内容
 3. 粘贴到 Worker 编辑器，点击 **"Save and Deploy"**
-4. 绑定自定义域名（如 `win.mozuiapp.com`）
-5. 完成！访问即可看到欢迎页，运行 `irm .../win \| iex` 即可使用
-
-### 方案二：Cloudflare Pages（自动从 GitHub 部署）
-
-1. 在 Cloudflare Pages 中点击 **"Create a project"** → **"Connect Git"**
-2. 选择 `missyouling/winutil-chinese` 仓库
-3. 构建设置：**无构建命令**，输出目录留空
-4. 部署后绑定自定义域名
-5. 每次 `git push` 后自动重新部署
+4. 绑定自定义域名，运行 `irm https://你的域名/win | iex` 即可使用
 
 ### 方案三：自建 Web 服务器
 
 ```bash
-# 1. 编译脚本
+# 1. 编译脚本（生成 winutil.ps1）
 python3 compile.py
 
-# 2. 启动 HTTP 服务
+# 2. 启动 HTTP 服务（Node.js）
+node server.js
+# 或 Python
 python3 -m http.server 8080 --bind 0.0.0.0
 
-# 3. 访问 http://your-ip:8080/ 查看欢迎页
-# 4. 运行 irm http://your-ip:8080/win | iex 使用工具
+# 3. 运行 irm http://你的IP:8080/win | iex 使用工具
 ```
+
+> 自定义域名部署：将 `winutil.ps1` 放到任意 Web 服务器，确保响应头包含 `Content-Type: text/plain; charset=utf-8` 与 `Access-Control-Allow-Origin: *` 即可。
 
 ---
 
-## 📁 项目结构 / Project Structure
-
-```
-├── winutil.ps1                  # 编译好的完整脚本（UTF-8 BOM，~635KB）
-├── xaml/
-│   └── inputXML.xaml            # 中文化 XAML 界面（1923 行）
-├── config/
-│   ├── applications.json        # 应用配置（已全部翻译）
-│   ├── tweaks.json              # 系统优化配置（已全部翻译）
-│   ├── feature.json             # Windows 功能配置（已翻译）
-│   ├── appx.json                # AppX 管理配置（已翻译）
-│   ├── preset.json              # 预设方案（已翻译）
-│   ├── appnavigation.json       # 导航配置
-│   ├── dns.json                 # DNS 配置
-│   └── themes.json              # 主题配置
-├── functions/
-│   ├── public/                  # 公开函数（Write-Host 信息已中文化）
-│   └── private/                 # 私有函数（提示信息已中文化）
-├── scripts/
-│   ├── main.ps1                 # 主入口
-│   └── start.ps1                # 启动脚本
-├── tools/
-│   └── autounattend.xml         # 无人值守安装模板
-├── cloudflare-worker/           # Workers 部署
-│   ├── src/worker.js            # 含嵌入脚本（~700KB）
-│   ├── worker.js.template       # Worker 模板
-│   ├── wrangler.toml            # Wrangler 配置
-│   └── deploy.sh                # 本地编译部署脚本
-├── cloudflare-pages/            # Pages 部署
-│   ├── index.html               # macOS 风格欢迎页（毛玻璃设计）
-│   ├── _redirects               # 路由规则
-│   ├── _headers                 # 响应头（UTF-8 + CORS）
-│   └── winutil.ps1              # 脚本副本
-└── compile.py                   # Linux 编译脚本
-```
-
----
-
-## 🔧 本地开发 / Local Development
+## 🔧 本地开发
 
 ```bash
 # 克隆仓库
 git clone https://github.com/missyouling/winutil-chinese.git
 cd winutil-chinese
 
-# 编译（生成 winutil.ps1）
+# 编译（生成 winutil.ps1，整体 Base64 编码输出纯 ASCII 文件）
 python3 compile.py
 
 # 本地测试
 python3 -m http.server 8080
-# 浏览器: http://localhost:8080/          → 欢迎页面
-# PowerShell: irm http://localhost:8080/win | iex  → 运行工具
+# 浏览器: http://localhost:8080/            → 欢迎页面
+# PowerShell: irm http://localhost:8080/win | iex → 运行工具
 ```
 
-### 自定义域名
+### 编译模型
 
-1. 编译 `python3 compile.py`
-2. 将 `winutil.ps1` 部署到你的 Web 服务器
-3. 确保响应头包含 `Content-Type: text/plain; charset=utf-8`
-4. 用户在 PowerShell 中运行 `irm https://你的域名/win | iex`
+`compile.py` 按以下顺序组装 `winutil.ps1`：
+
+1. `scripts/start.ps1` — 替换 `#{replaceme}` 为当前日期版本号（如 `26.08.03`）
+2. `functions/`（public 33 个 + private 52 个）— 全部函数递归拼接
+3. `config/*.json`（9 个）— Base64 编码内嵌为 `$sync.configs.*`；`applications.json` 的键自动加 `WPFInstall` 前缀
+4. `xaml/inputXML.xaml`（1924 行）— Base64 编码内嵌为 `$inputXML`
+5. `tools/autounattend.xml` — 内嵌无人值守安装模板
+6. `scripts/main.ps1` — 主入口与 GUI 初始化逻辑
+7. 合并后的 body 整体 Base64 编码，输出为纯 ASCII 文件（`irm | iex` 无乱码）
+
+> 也可用 `Compile.ps1`（PowerShell 版，支持 `-Run` 直接启动 GUI）。
+
+### 运行测试
+
+```powershell
+# Pester 单元测试（23 个测试文件，CI 上 468 项断言）
+Import-Module Pester -MinimumVersion 5.0
+Invoke-Pester -Path 'pester/*.Tests.ps1' -Output Detailed
+```
+
+### 持续集成（GitHub Actions）
+
+| Workflow | 触发 | 内容 |
+|:---|:---|:---|
+| **Compile Check** | push/PR 到 main | Ubuntu 上运行 `python3 compile.py`，校验编译产物 |
+| **Pester Tests** | push/PR 到 main | Windows 上运行全部 Pester 单元测试 |
+| **Release** | 推送 `v*` 标签 | 构建 Release，附带编译好的 `winutil.ps1` 资产 |
 
 ---
 
-## 📜 翻译范围 / Translation Scope
+## 📁 项目结构
 
-| 文件 / File | 范围 / Scope | 翻译项 / Items |
-|:---|:---:|:---:|
-| `xaml/inputXML.xaml` | 按钮标签、工具提示全部中文化 | 1,923 行 |
-| `config/*.json` (×8) | Content/Description 字段中文化 | 970+ 字段 |
-| `functions/*.ps1` | Write-Host 提示信息中文化 | ~40 条 |
-| 编码 | UTF-8 BOM | 兼容 PowerShell 5.x |
-| 变量安全 | `$Var:` → `${Var}:` | 避免歧义解析 |
+```
+├── winutil.ps1                  # 编译产物（Base64 编码纯 ASCII，约 1.1 MB，不提交）
+├── compile.py                   # Linux/Python 编译脚本（推荐）
+├── Compile.ps1                  # PowerShell 编译脚本（-Run 可直接启动 GUI）
+├── server.js                    # Node.js 本地 HTTP 服务
+├── xaml/
+│   └── inputXML.xaml            # 中文化 WPF 界面（1924 行）
+├── config/                      # 全部配置（中文）
+│   ├── applications.json        # 344 个应用（29 分类，winget/choco 双源）
+│   ├── tweaks.json              # 81 项系统优化
+│   ├── feature.json             # 33 项 Windows 功能
+│   ├── appx.json                # 33 项 AppX 管理
+│   ├── preset.json              # 4 套预设方案
+│   ├── dns.json                 # 8 组 DNS
+│   ├── appnavigation.json       # 导航配置
+│   ├── themes.json              # 主题配置
+│   └── strings.json             # 界面字符串
+├── functions/
+│   ├── public/                  # 33 个公开函数
+│   └── private/                 # 52 个私有函数
+├── scripts/
+│   ├── start.ps1                # 启动脚本（管理员提权、参数处理）
+│   └── main.ps1                 # 主入口与 GUI 初始化
+├── pester/                      # 23 个 Pester 测试文件
+├── tools/
+│   └── autounattend.xml         # 无人值守安装模板
+├── cloudflare-pages/            # CF Pages 部署目录
+│   ├── index.html               # 欢迎页（macOS 风格毛玻璃）
+│   ├── winutil.ps1              # 脚本副本（部署用）
+│   ├── _redirects               # /win → /winutil.ps1
+│   └── _headers                 # UTF-8 + CORS 响应头
+├── cloudflare-worker/           # CF Workers 部署（备选）
+├── docs/                        # Hugo 文档站
+├── lint/                        # PSScriptAnalyzer 规则
+└── .github/workflows/           # CI/CD（compile-check / unittests / release）
+```
 
 ---
 
-## 🙏 致谢 / Credits
+## 🙏 致谢
 
 - **[Chris Titus Tech](https://github.com/ChrisTitusTech)** — 原始 WinUtil 作者
 - **[MyDrift-user](https://github.com/MyDrift-user)** — UI 贡献
@@ -181,6 +185,6 @@ python3 -m http.server 8080
 
 ---
 
-## 📄 许可证 / License
+## 📄 许可证
 
 MIT License — 与 [ChrisTitusTech/winutil](https://github.com/ChrisTitusTech/winutil) 一致
