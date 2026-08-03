@@ -28,7 +28,7 @@ irm https://win.mozuiapp.com/win | iex
 | ⚙️ **系统优化** | 81 项优化/撤销优化，覆盖性能、隐私、Windows 更新策略 |
 | 📋 **功能配置** | 启用或禁用 33 项 Windows 功能 |
 | 📱 **AppX 管理** | 管理 33 项 Windows 内置应用包（移除/恢复） |
-| 🌐 **DNS 切换** | 一键切换 8 组公共 DNS（Google、Cloudflare、OpenDNS、Quad9、AdGuard 等） |
+| 🌐 **DNS 切换** | 一键切换 16 组公共 DNS（阿里/腾讯/百度/114 国内主流 + Google/Cloudflare/OpenDNS/Quad9/AdGuard，支持 DoH 加密） |
 | 🎯 **预设方案** | Standard / Minimal / Advanced / AppxDefault 一键应用 |
 | 🌙 **主题切换** | 自动 / 浅色 / 深色主题 |
 | 💿 **Win11 创建工具** | 下载、挂载、验证并保存 Windows 11 ISO |
@@ -150,7 +150,7 @@ Invoke-Pester -Path 'pester/*.Tests.ps1' -Output Detailed
 │   ├── feature.json             # 33 项 Windows 功能
 │   ├── appx.json                # 33 项 AppX 管理
 │   ├── preset.json              # 4 套预设方案
-│   ├── dns.json                 # 8 组 DNS
+│   ├── dns.json                 # 16 组 DNS（国内主流 + 国际，支持 DoH 加密）
 │   ├── appnavigation.json       # 导航配置
 │   ├── themes.json              # 主题配置
 │   └── strings.json             # 界面字符串
