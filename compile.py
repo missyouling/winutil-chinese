@@ -6,6 +6,11 @@
 import json, os, glob, sys, base64
 from datetime import datetime
 
+# Windows 控制台默认 GBK 编码，无法输出 ✅ 等非 GBK 字符，强制 UTF-8
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
 def compile_winutil(source_dir: str, output_path: str):
     version = datetime.now().strftime("%y.%m.%d")
     print(f"编译 WinUtil 中文版 v{version}")

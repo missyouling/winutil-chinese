@@ -121,6 +121,9 @@ Describe "Compiled WinUtil sanity" {
         Push-Location $script:repoRoot
         try {
             & $python compile.py | Out-Null
+            if ($LASTEXITCODE -ne 0) {
+                throw "compile.py 编译失败，退出码 $LASTEXITCODE。"
+            }
         } finally {
             Pop-Location
         }
