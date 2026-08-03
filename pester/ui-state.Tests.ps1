@@ -237,7 +237,7 @@ Describe "Invoke-WPFSelectedCheckboxesUpdate" {
         @($script:sync.selectedToggles) | Should -Be @("WPFToggleDarkMode")
         @($script:sync.selectedFeatures) | Should -Be @("WPFFeatureSandbox")
         @($script:sync.selectedAppx) | Should -Be @("WPFAppxExample")
-        $script:sync.WPFselectedAppsButton.Content | Should -Be "Selected Apps: 1"
+        $script:sync.WPFselectedAppsButton.Content | Should -Be "已选应用： 1"
         $script:sync.selectedAppsstackPanel.Children.Count | Should -Be 1
         $script:sync.selectedAppsstackPanel.Children[0].Key | Should -Be "WPFInstallGit"
     }
@@ -260,7 +260,7 @@ Describe "Invoke-WPFSelectedCheckboxesUpdate" {
         $script:sync.selectedToggles.Count | Should -Be 0
         $script:sync.selectedFeatures.Count | Should -Be 0
         $script:sync.selectedAppx.Count | Should -Be 0
-        $script:sync.WPFselectedAppsButton.Content | Should -Be "Selected Apps: 0"
+        $script:sync.WPFselectedAppsButton.Content | Should -Be "已选应用： 0"
         $script:sync.selectedAppsstackPanel.Children.Count | Should -Be 0
     }
 }
@@ -312,7 +312,7 @@ Describe "Invoke-WPFGetInstalled selection state" {
 
         @($script:sync.selectedApps) | Should -Be @("WPFInstallGit")
         $script:sync.WPFInstallGit.IsChecked | Should -BeTrue
-        $script:sync.WPFselectedAppsButton.Content | Should -Be "Selected Apps: 1"
+        $script:sync.WPFselectedAppsButton.Content | Should -Be "已选应用： 1"
         $script:sync.selectedAppsstackPanel.Children.Count | Should -Be 1
         $script:sync.selectedAppsstackPanel.Children[0].Key | Should -Be "WPFInstallGit"
     }
@@ -384,7 +384,7 @@ Describe "Reset-WPFCheckBoxes" {
         $script:sync.WPFFeatureSandbox.IsChecked | Should -BeTrue
         $script:sync.WPFAppxExample.IsChecked | Should -BeTrue
         $script:sync.WPFToggleDarkMode.IsChecked | Should -BeFalse
-        $script:sync.WPFselectedAppsButton.Content | Should -Be "Selected Apps: 1"
+        $script:sync.WPFselectedAppsButton.Content | Should -Be "已选应用： 1"
         $script:sync.selectedAppsstackPanel.Children.Count | Should -Be 1
         $script:sync.selectedAppsstackPanel.Children[0].Name | Should -Be "Git"
         $script:sync.selectedAppsstackPanel.Children[0].Key | Should -Be "WPFInstallGit"

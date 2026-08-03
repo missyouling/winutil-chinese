@@ -106,9 +106,21 @@ Describe "Compiled WinUtil sanity" {
         $script:compiledPath = Join-Path $script:repoRoot "winutil.ps1"
 
         # 用官方编译脚本 compile.py 生成产物（Base64 纯 ASCII 方案）
+        # windows-latest 上 python3 命令不存在，需回退到 python
+        $python = $null
+        foreach ($candidate in @("python3", "python")) {
+            if (Get-Command $candidate -ErrorAction SilentlyContinue) {
+                $python = $candidate
+                break
+            }
+        }
+        if ($null -eq $python) {
+            throw "python3/python 均不可用，无法生成编译产物。"
+        }
+
         Push-Location $script:repoRoot
         try {
-            python3 compile.py | Out-Null
+            & $python compile.py | Out-Null
         } finally {
             Pop-Location
         }
