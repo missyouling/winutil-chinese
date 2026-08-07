@@ -29,7 +29,7 @@ jobs:
           test -s winutil.ps1 && echo "✅ winutil.ps1 已生成 ($(stat -c%s winutil.ps1) bytes)"
 
       - name: 创建 GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: winutil.ps1
           generate_release_notes: true
